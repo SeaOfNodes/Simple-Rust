@@ -1,0 +1,10 @@
+directory: tests/test_0008_puts_string
+
+command: ro "main.ro"
+status: 0
+
+command: main
+status: 12
+stdout: Hello, World!
+stdout: Another string to check if the null byte was added after the first one.
+stdout: 

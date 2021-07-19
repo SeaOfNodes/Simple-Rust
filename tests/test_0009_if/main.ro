@@ -1,0 +1,33 @@
+fun puts(s: NullTerminatedString) -> I32;
+
+fun main() -> I32 {
+    if true {
+        puts("if");
+    }
+    if false {
+        puts("error");
+    }
+
+    foo(false, false);
+    foo(false, true);
+    foo(true, false);
+    foo(true, true);
+    return 0;
+}
+
+fun foo(first_parameter: Boolean, second_parameter: Boolean) {
+    puts("foo:");
+    if first_parameter {
+        if second_parameter {
+           puts("both are true");
+        } else {
+           puts("only the first one is true");
+        }
+        puts("first_parameter was true");
+    } else if second_parameter {
+        puts("only the second parameter is true");
+    } else {
+        puts("both parameters are false");
+    }
+    puts(":oof");
+}

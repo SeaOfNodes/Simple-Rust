@@ -1,0 +1,7 @@
+directory: tests/test_0001_return_0
+
+command: ro "main.ro"
+status: 0
+
+command: main
+status: 0

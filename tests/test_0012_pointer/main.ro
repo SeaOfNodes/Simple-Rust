@@ -1,0 +1,23 @@
+fun puts(s: NullTerminatedString) -> I32;
+
+fun main() -> I32 {
+    var x: I32 = 5;
+    var y: I32 = 9;
+
+    foo(&x, &y);
+
+    if x == 3 {
+        puts("success");
+    }
+
+    if x == 4 {
+        puts("failure");
+    }
+
+    return y;
+}
+
+fun foo(x: ^I32, y: ^I32) {
+    *x = 3;
+    *y = 2;
+}

@@ -1,0 +1,10 @@
+directory: tests/test_0013_enums
+
+command: ro "main.ro"
+status: 0
+
+command: main
+status: 5
+stdout: first
+stdout: second
+stdout: 

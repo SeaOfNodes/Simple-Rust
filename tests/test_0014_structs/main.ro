@@ -1,0 +1,41 @@
+fun puts(s: NullTerminatedString) -> I32;
+
+struct Test {
+    x: I32,
+    y: NullTerminatedString,
+}
+
+fun main() -> I32 {
+    var t: Test = new_test("initial");
+
+    print_by_value(t, 3);
+    t.x = t.x + 1;
+    print_by_value(t, 4);
+    print_by_pointer(&t, 4);
+    print_by_value(t, 5);
+
+    return t.x;
+}
+
+fun new_test(y: NullTerminatedString) -> Test {
+    var result: Test = Test [ x: 3, y ];
+    return result;
+}
+
+fun print_by_value(t: Test, expected: I32) {
+    puts(t.y);
+    if t.x == expected {
+        puts("ok");
+    }
+    t.x = 999;
+    t.y = "ignored";
+}
+
+fun print_by_pointer(t: ^Test, expected: I32) {
+    puts(t.y);
+    if t.x == expected {
+        puts("ok");
+    }
+    t.x = t.x + 1;
+    t.y = "modified";
+}

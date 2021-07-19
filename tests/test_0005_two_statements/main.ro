@@ -1,0 +1,12 @@
+fun main() -> I32 {
+    foo();
+    return bar();
+}
+
+fun foo() -> I32 {
+    return 99;
+}
+
+fun bar() -> I32 {
+    return 192 + 3;
+}

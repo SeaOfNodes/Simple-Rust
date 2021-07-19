@@ -1,0 +1,7 @@
+directory: tests/test_0006_params_and_args
+
+command: ro "main.ro"
+status: 0
+
+command: main
+status: 5

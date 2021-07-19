@@ -1,0 +1,12 @@
+fun puts(s: NullTerminatedString) -> I32;
+
+fun main() -> I32 {
+    var i = 0;
+    while i < 10 {
+        puts("a");
+    }
+
+    puts("b");
+
+    return 0;
+}

@@ -1,0 +1,7 @@
+directory: tests/test_0004_function_call
+
+command: ro "main.ro"
+status: 0
+
+command: main
+status: 99

@@ -1,0 +1,9 @@
+directory: tests/test_0012_pointer
+
+command: ro "main.ro"
+status: 0
+
+command: main
+status: 2
+stdout: success
+stdout: 

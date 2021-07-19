@@ -1,0 +1,7 @@
+fun main() -> I32 {
+    return foo(1, 2);
+}
+
+fun foo(first_parameter: I32, second_parameter: I32) -> I32 {
+    return first_parameter + second_parameter + second_parameter;
+}

@@ -1,0 +1,25 @@
+fun puts(s: NullTerminatedString) -> I32;
+
+fun main() -> I32 {
+    if foo(true) {
+        puts("1 true");
+    } else {
+        puts("1 false");
+    }
+    if foo(false) {
+        puts("2 true");
+    } else {
+        puts("2 false");
+    }
+    return 0;
+}
+
+fun foo(first_parameter: Boolean) -> Boolean {
+    puts("begin foo");
+    if first_parameter {
+        puts("return false from foo");
+        return false;
+    }
+    puts("return true from foo");
+    return true;
+}

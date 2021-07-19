@@ -1,0 +1,11 @@
+directory: tests/test_0011_variable
+
+command: ro "main.ro"
+status: 0
+
+command: main
+status: 0
+stdout: Hello
+stdout: World
+stdout: Bye
+stdout: 

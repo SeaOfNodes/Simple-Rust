@@ -1,0 +1,7 @@
+directory: tests/test_0003_return_addition
+
+command: ro "main.ro"
+status: 0
+
+command: main
+status: 82

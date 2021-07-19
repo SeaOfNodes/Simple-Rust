@@ -1,0 +1,9 @@
+directory: tests/test_0007_call_putchar
+
+command: ro "main.ro"
+status: 0
+
+command: main
+status: 12
+stdout: Hello, World!
+stdout: 

@@ -1,0 +1,7 @@
+fun main() -> I32 {
+    return foo();
+}
+
+fun foo() -> I32 {
+    return 99;
+}
