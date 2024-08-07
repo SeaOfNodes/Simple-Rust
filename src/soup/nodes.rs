@@ -62,6 +62,11 @@ impl<'t> Nodes<'t> {
             .unwrap();
         self.nodes.push(f(id));
         self.node_ty.push(None);
+        let inputs = self[id].base().inputs.clone(); // TODO expensive clone!
+        for input in inputs.iter().flatten() {
+            self[*input].base_mut().add_use(id);
+        }
+
         debug_assert_eq!(self[id].id(), id);
         debug_assert_eq!(self.nodes.len(), self.node_ty.len());
         id
