@@ -6,7 +6,7 @@ use std::ops::{Index, IndexMut};
 
 use crate::bit_set;
 use crate::bit_set::BitSet;
-use crate::soup::types::Ty;
+use crate::soup::types::{Ty, Types};
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub struct NodeId(NonZeroU32);
@@ -58,6 +58,67 @@ impl<'t> Nodes<'t> {
         self.nodes.push(f(id));
         debug_assert_eq!(self[id].id(), id);
         id
+    }
+
+    pub fn get_many<const N: usize>(&self, nodes: [Option<NodeId>; N]) -> [Option<&Node>; N] {
+        nodes.map(|n| n.map(|n| &self[n]))
+    }
+
+    pub fn compute(&self, node: NodeId, types: &mut Types<'t>) -> Ty<'t> {
+        match &self[node] {
+            Node::ConstantNode(ConstantNode { ty, .. }) => *ty,
+            Node::ReturnNode(_) => types.ty_bot,
+            Node::StartNode(_) => types.ty_bot,
+            Node::AddNode(AddNode { base }) => {
+                match self.get_many([base.inputs[1], base.inputs[2]]) {
+                    [Some(Node::ConstantNode(c1)), Some(Node::ConstantNode(c2))]
+                    if c1.is_constant() && c2.is_constant()
+                    => {
+                        types.get_int(c1.value().wrapping_add(c2.value()))
+                    }
+                    _ => types.ty_bot
+                }
+            }
+            Node::SubNode(SubNode { base }) => {
+                match self.get_many([base.inputs[1], base.inputs[2]]) {
+                    [Some(Node::ConstantNode(c1)), Some(Node::ConstantNode(c2))]
+                    if c1.is_constant() && c2.is_constant()
+                    => {
+                        types.get_int(c1.value().wrapping_sub(c2.value()))
+                    }
+                    _ => types.ty_bot
+                }
+            }
+            Node::MulNode(MulNode { base }) => {
+                match self.get_many([base.inputs[1], base.inputs[2]]) {
+                    [Some(Node::ConstantNode(c1)), Some(Node::ConstantNode(c2))]
+                    if c1.is_constant() && c2.is_constant()
+                    => {
+                        types.get_int(c1.value().wrapping_mul(c2.value()))
+                    }
+                    _ => types.ty_bot
+                }
+            }
+            Node::DivNode(DivNode { base }) => {
+                match self.get_many([base.inputs[1], base.inputs[2]]) {
+                    [Some(Node::ConstantNode(c1)), Some(Node::ConstantNode(c2))]
+                    if c1.is_constant() && c2.is_constant()
+                    => {
+                        // TODO handle (or ignore?) div by 0
+                        types.get_int(c1.value().wrapping_div(c2.value()))
+                    }
+                    _ => types.ty_bot
+                }
+            }
+            Node::MinusNode(MinusNode { base }) => {
+                match self.get_many([base.inputs[1]]) {
+                    [Some(Node::ConstantNode(c1))] if c1.is_constant() => {
+                        types.get_int(c1.value().wrapping_neg())
+                    }
+                    _ => types.ty_bot
+                }
+            }
+        }
     }
 }
 
@@ -310,6 +371,10 @@ impl<'t> ConstantNode<'t> {
 
     pub fn value(&self) -> i64 {
         self.ty.unwrap_int()
+    }
+
+    pub fn is_constant(&self) -> bool {
+        true
     }
 }
 
