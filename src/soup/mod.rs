@@ -2,3 +2,4 @@
 mod tests;
 pub mod soup;
 mod nodes;
+mod types;

@@ -6,6 +6,7 @@ use std::ops::{Index, IndexMut};
 
 use crate::bit_set;
 use crate::bit_set::BitSet;
+use crate::soup::types::Ty;
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub struct NodeId(NonZeroU32);
@@ -33,25 +34,24 @@ impl Debug for NodeId {
     }
 }
 
-pub struct Nodes {
-    nodes: Vec<Node>,
+pub struct Nodes<'t> {
+    nodes: Vec<Node<'t>>,
 }
 
-impl Nodes {
+impl<'t> Nodes<'t> {
     pub fn new() -> Self {
-        let dummy = Node::ConstantNode(ConstantNode {
+        let dummy = Node::StartNode(StartNode {
             base: NodeBase {
                 id: NodeId::DUMMY,
                 inputs: vec![],
                 outputs: vec![],
             },
-            value: 0,
         });
         Nodes {
             nodes: vec![dummy]
         }
     }
-    pub fn create<F: FnOnce(NodeId) -> Node>(&mut self, f: F) -> NodeId {
+    pub fn create<F: FnOnce(NodeId) -> Node<'t>>(&mut self, f: F) -> NodeId {
         let id = u32::try_from(self.nodes.len())
             .and_then(NonZeroU32::try_from)
             .map(NodeId).unwrap();
@@ -61,15 +61,15 @@ impl Nodes {
     }
 }
 
-impl Index<NodeId> for Nodes {
-    type Output = Node;
+impl<'t> Index<NodeId> for Nodes<'t> {
+    type Output = Node<'t>;
 
     fn index(&self, index: NodeId) -> &Self::Output {
         &self.nodes[index.index()]
     }
 }
 
-impl IndexMut<NodeId> for Nodes {
+impl<'t> IndexMut<NodeId> for Nodes<'t> {
     fn index_mut(&mut self, index: NodeId) -> &mut Self::Output {
         &mut self.nodes[index.index()]
     }
@@ -98,8 +98,8 @@ pub struct NodeBase {
     pub outputs: Vec<NodeId>,
 }
 
-pub enum Node {
-    ConstantNode(ConstantNode),
+pub enum Node<'t> {
+    ConstantNode(ConstantNode<'t>),
     ReturnNode(ReturnNode),
     StartNode(StartNode),
     AddNode(AddNode),
@@ -109,9 +109,9 @@ pub enum Node {
     MinusNode(MinusNode),
 }
 
-pub struct ConstantNode {
+pub struct ConstantNode<'t> {
     pub base: NodeBase,
-    value: i64,
+    ty: Ty<'t>,
 }
 
 pub struct ReturnNode {
@@ -122,7 +122,7 @@ pub struct StartNode {
     pub base: NodeBase,
 }
 
-impl Node {
+impl<'t> Node<'t> {
     pub fn id(&self) -> NodeId {
         self.base().id
     }
@@ -155,7 +155,7 @@ impl Node {
     /// Easy reading label for debugger
     pub fn label(&self) -> Cow<str> {
         match self {
-            Node::ConstantNode(c) => Cow::Owned(format!("#{}", c.value)),
+            Node::ConstantNode(c) => Cow::Owned(format!("#{}", c.value())),
             Node::ReturnNode(_) => Cow::Borrowed("Return"),
             Node::StartNode(_) => Cow::Borrowed("Start"),
             Node::AddNode(_) => Cow::Borrowed("Add"),
@@ -193,19 +193,19 @@ impl Node {
     }
 }
 
-pub struct PrintNodes<'a> {
+pub struct PrintNodes<'a, 't> {
     node: Option<NodeId>,
-    nodes: &'a Nodes,
+    nodes: &'a Nodes<'t>,
 }
 
-impl Display for PrintNodes<'_> {
+impl Display for PrintNodes<'_, '_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut visited = BitSet::zeros(self.nodes.nodes.len());
         self.nodes.fmt(self.node, f, &mut visited)
     }
 }
 
-impl Nodes {
+impl<'t> Nodes<'t> {
     pub(crate) fn print(&self, node: Option<NodeId>) -> PrintNodes {
         PrintNodes {
             node,
@@ -230,7 +230,7 @@ impl Nodes {
                 self.fmt(add.base.inputs[2], f, visited)?;
                 write!(f, ")")
             }
-            Node::ConstantNode(c) => write!(f, "{}", c.value),
+            Node::ConstantNode(c) => write!(f, "{}", c.value()),
             n @ Node::StartNode(_) => write!(f, "{}", n.label()),
             Node::SubNode(sub) => {
                 write!(f, "(")?;
@@ -296,11 +296,11 @@ impl ReturnNode {
     }
 }
 
-impl ConstantNode {
-    pub fn new(id: NodeId, start: NodeId, value: i64) -> Self {
+impl<'t> ConstantNode<'t> {
+    pub fn new(id: NodeId, start: NodeId, ty: Ty<'t>) -> Self {
         Self {
             base: NodeBase::new(id, vec![Some(start)]),
-            value,
+            ty,
         }
     }
 
@@ -309,7 +309,7 @@ impl ConstantNode {
     }
 
     pub fn value(&self) -> i64 {
-        self.value
+        self.ty.unwrap_int()
     }
 }
 

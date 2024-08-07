@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use crate::arena::Arena;
-use crate::hir::types::Types;
+use crate::soup::types::Types;
 use crate::soup::soup::Soup;
 use crate::syntax::ast::Item;
 use crate::syntax::parser::Parser;

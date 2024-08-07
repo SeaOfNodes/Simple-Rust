@@ -1,15 +1,15 @@
-use crate::hir::types::Types;
+use crate::soup::types::Types;
 use crate::soup::nodes::{AddNode, ConstantNode, DivNode, MinusNode, MulNode, Node, NodeId, Nodes, ReturnNode, StartNode, SubNode};
 use crate::syntax::ast::{BinaryOperator, Block, Expression, Function, PrefixOperator, Statement};
 
-pub struct Soup {
-    pub nodes: Nodes,
+pub struct Soup<'t> {
+    pub nodes: Nodes<'t>,
     start: NodeId,
     ctrl: NodeId,
     pub disable_peephole: bool,
 }
 
-impl Soup {
+impl<'t> Soup<'t> {
     pub fn new() -> Self {
         Self {
             nodes: Nodes::new(),
@@ -18,7 +18,7 @@ impl Soup {
             disable_peephole: false,
         }
     }
-    pub fn compile_function(&mut self, function: &Function, types: &mut Types) -> Result<(NodeId, NodeId), ()> {
+    pub fn compile_function(&mut self, function: &Function, types: &mut Types<'t>) -> Result<(NodeId, NodeId), ()> {
         let start = self.nodes.create(|id| Node::StartNode(StartNode::new(id)));
         self.start = start;
         self.ctrl = start;
@@ -30,7 +30,7 @@ impl Soup {
         Ok((start, stop))
     }
 
-    fn compile_block(&mut self, block: &Block, types: &mut Types) -> Result<NodeId, ()> {
+    fn compile_block(&mut self, block: &Block, types: &mut Types<'t>) -> Result<NodeId, ()> {
         for statement in &block.statements {
             match statement {
                 Statement::Expression(_) => todo!(),
@@ -45,10 +45,11 @@ impl Soup {
         Err(())
     }
 
-    fn compile_expression(&mut self, expression: &Expression, types: &mut Types) -> Result<NodeId, ()> {
+    fn compile_expression(&mut self, expression: &Expression, types: &mut Types<'t>) -> Result<NodeId, ()> {
         match expression {
             Expression::Immediate(immediate) => {
-                Ok(self.nodes.create(|id| Node::ConstantNode(ConstantNode::new(id, self.start, *immediate))))
+                let ty = types.get_int(*immediate);
+                Ok(self.nodes.create(|id| Node::ConstantNode(ConstantNode::new(id, self.start, ty))))
             }
             Expression::Binary { operator, location: _, left, right } => {
                 let left_node = self.compile_expression(left, types)?;
