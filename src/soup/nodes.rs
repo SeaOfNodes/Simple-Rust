@@ -6,7 +6,7 @@ use std::ops::{Index, IndexMut};
 
 use crate::bit_set;
 use crate::bit_set::BitSet;
-use crate::soup::types::{Ty, Types};
+use crate::soup::types::{Ty, Type};
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub struct NodeId(NonZeroU32);
@@ -36,6 +36,7 @@ impl Debug for NodeId {
 
 pub struct Nodes<'t> {
     nodes: Vec<Node<'t>>,
+    node_ty: Vec<Option<Ty<'t>>>,
 }
 
 impl<'t> Nodes<'t> {
@@ -48,7 +49,8 @@ impl<'t> Nodes<'t> {
             },
         });
         Nodes {
-            nodes: vec![dummy]
+            nodes: vec![dummy],
+            node_ty: vec![None],
         }
     }
     pub fn create<F: FnOnce(NodeId) -> Node<'t>>(&mut self, f: F) -> NodeId {
@@ -56,69 +58,58 @@ impl<'t> Nodes<'t> {
             .and_then(NonZeroU32::try_from)
             .map(NodeId).unwrap();
         self.nodes.push(f(id));
+        self.node_ty.push(None);
         debug_assert_eq!(self[id].id(), id);
+        debug_assert_eq!(self.nodes.len(), self.node_ty.len());
         id
     }
 
-    pub fn get_many<const N: usize>(&self, nodes: [Option<NodeId>; N]) -> [Option<&Node>; N] {
-        nodes.map(|n| n.map(|n| &self[n]))
+    pub fn get_many_ty<const N: usize>(&self, nodes: [Option<NodeId>; N]) -> [Option<&'t Type<'t>>; N] {
+        nodes.map(|n| n.map(|n| &self.node_ty[n.index()])
+            .map(|t| t.map(|t| t.inner()))
+            .unwrap_or(None))
     }
 
-    pub fn compute(&self, node: NodeId, types: &mut Types<'t>) -> Ty<'t> {
-        match &self[node] {
-            Node::ConstantNode(ConstantNode { ty, .. }) => *ty,
-            Node::ReturnNode(_) => types.ty_bot,
-            Node::StartNode(_) => types.ty_bot,
-            Node::AddNode(AddNode { base }) => {
-                match self.get_many([base.inputs[1], base.inputs[2]]) {
-                    [Some(Node::ConstantNode(c1)), Some(Node::ConstantNode(c2))]
-                    if c1.is_constant() && c2.is_constant()
-                    => {
-                        types.get_int(c1.value().wrapping_add(c2.value()))
-                    }
-                    _ => types.ty_bot
-                }
-            }
-            Node::SubNode(SubNode { base }) => {
-                match self.get_many([base.inputs[1], base.inputs[2]]) {
-                    [Some(Node::ConstantNode(c1)), Some(Node::ConstantNode(c2))]
-                    if c1.is_constant() && c2.is_constant()
-                    => {
-                        types.get_int(c1.value().wrapping_sub(c2.value()))
-                    }
-                    _ => types.ty_bot
-                }
-            }
-            Node::MulNode(MulNode { base }) => {
-                match self.get_many([base.inputs[1], base.inputs[2]]) {
-                    [Some(Node::ConstantNode(c1)), Some(Node::ConstantNode(c2))]
-                    if c1.is_constant() && c2.is_constant()
-                    => {
-                        types.get_int(c1.value().wrapping_mul(c2.value()))
-                    }
-                    _ => types.ty_bot
-                }
-            }
-            Node::DivNode(DivNode { base }) => {
-                match self.get_many([base.inputs[1], base.inputs[2]]) {
-                    [Some(Node::ConstantNode(c1)), Some(Node::ConstantNode(c2))]
-                    if c1.is_constant() && c2.is_constant()
-                    => {
-                        // TODO handle (or ignore?) div by 0
-                        types.get_int(c1.value().wrapping_div(c2.value()))
-                    }
-                    _ => types.ty_bot
-                }
-            }
-            Node::MinusNode(MinusNode { base }) => {
-                match self.get_many([base.inputs[1]]) {
-                    [Some(Node::ConstantNode(c1))] if c1.is_constant() => {
-                        types.get_int(c1.value().wrapping_neg())
-                    }
-                    _ => types.ty_bot
-                }
+    pub fn ty(&self, node: NodeId) -> Option<Ty<'t>> {
+        self.node_ty[node.index()]
+    }
+    pub fn get_ty_mut(&mut self, node: NodeId) -> &mut Option<Ty<'t>> {
+        &mut self.node_ty[node.index()]
+    }
+
+    pub fn is_dead(&self, node: NodeId) -> bool {
+        self[node].is_unused() && self[node].base().inputs.is_empty() && self.ty(node).is_none()
+    }
+
+    pub fn kill(&mut self, node: NodeId) {
+        debug_assert!(self[node].is_unused());
+        for i in 0..self[node].base().inputs.len() {
+            self.set_def(node, i, None);
+        }
+        self[node].base_mut().inputs = vec![];
+        *self.get_ty_mut(node) = None; // flag as dead
+        debug_assert!(self.is_dead(node));
+    }
+
+
+    pub fn set_def(&mut self, this: NodeId, index: usize, new_def: Option<NodeId>) {
+        let old_def = self[this].base().inputs[index];
+        if old_def == new_def {
+            return;
+        }
+
+        if let Some(new_def) = new_def {
+            self[new_def].base_mut().add_use(this);
+        }
+
+        if let Some(old_def) = old_def {
+            self[old_def].base_mut().del_use(this);
+            if self[old_def].base_mut().is_unused() {
+                self.kill(old_def);
             }
         }
+
+        self[this].base_mut().inputs[index] = new_def;
     }
 }
 
@@ -200,6 +191,19 @@ impl<'t> Node<'t> {
         }
     }
 
+    pub fn base_mut(&mut self) -> &mut NodeBase {
+        match self {
+            Node::ConstantNode(n) => &mut n.base,
+            Node::ReturnNode(n) => &mut n.base,
+            Node::StartNode(n) => &mut n.base,
+            Node::AddNode(n) => &mut n.base,
+            Node::SubNode(n) => &mut n.base,
+            Node::MulNode(n) => &mut n.base,
+            Node::DivNode(n) => &mut n.base,
+            Node::MinusNode(n) => &mut n.base,
+        }
+    }
+
     pub fn is_cfg(&self) -> bool {
         match self {
             Node::ConstantNode(_) => false,
@@ -249,8 +253,8 @@ impl<'t> Node<'t> {
         }
     }
 
-    fn is_dead(&self) -> bool {
-        false
+    pub fn is_unused(&self) -> bool {
+        self.base().is_unused()
     }
 }
 
@@ -278,7 +282,7 @@ impl<'t> Nodes<'t> {
         let Some(node) = node else { return write!(f, "<?>") };
         visited.add(node);
         match &self[node] {
-            node if node.is_dead() => write!(f, "{}:DEAD", node.unique_name()),
+            n if self.is_dead(node) => write!(f, "{}:DEAD", n.unique_name()),
             Node::ReturnNode(r) => {
                 write!(f, "return ")?;
                 self.fmt(r.expr(), f, visited)?;
@@ -331,6 +335,20 @@ impl NodeBase {
             outputs: vec![],
         }
     }
+
+    fn add_use(&mut self, node: NodeId) {
+        self.outputs.push(node)
+    }
+
+    fn del_use(&mut self, node: NodeId) {
+        if let Some(pos) = self.outputs.iter().position(|n| *n == node) {
+            self.outputs.swap_remove(pos);
+        }
+    }
+
+    fn is_unused(&self) -> bool {
+        self.outputs.is_empty()
+    }
 }
 
 impl StartNode {
@@ -371,6 +389,9 @@ impl<'t> ConstantNode<'t> {
 
     pub fn value(&self) -> i64 {
         self.ty.unwrap_int()
+    }
+    pub fn ty(&self) -> Ty<'t> {
+        self.ty
     }
 
     pub fn is_constant(&self) -> bool {

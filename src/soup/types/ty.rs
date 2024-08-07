@@ -15,6 +15,9 @@ impl<'t> Ty<'t> {
     pub fn new(t: &'t Type<'t>) -> Self {
         Self(t)
     }
+    pub fn inner(&self) -> &'t Type<'t> {
+        self.0
+    }
 }
 
 impl PartialEq<Self> for Ty<'_> {
