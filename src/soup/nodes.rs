@@ -1,13 +1,36 @@
+use std::borrow::Cow;
+use std::fmt;
+use std::fmt::{Debug, Display};
 use std::num::NonZeroU32;
 use std::ops::{Index, IndexMut};
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+use crate::bit_set;
+use crate::bit_set::BitSet;
+
+#[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub struct NodeId(NonZeroU32);
 
 impl NodeId {
     pub const DUMMY: NodeId = NodeId(NonZeroU32::MAX);
 
     fn index(self) -> usize { self.0.get() as usize }
+}
+
+impl bit_set::Index for NodeId {
+    fn index(&self) -> usize {
+        NodeId::index(*self)
+    }
+}
+
+impl Display for NodeId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(&self.0.get(), f)
+    }
+}
+impl Debug for NodeId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Debug::fmt(&self.0.get(), f)
+    }
 }
 
 pub struct Nodes {
@@ -79,6 +102,11 @@ pub enum Node {
     ConstantNode(ConstantNode),
     ReturnNode(ReturnNode),
     StartNode(StartNode),
+    AddNode(AddNode),
+    SubNode(SubNode),
+    MulNode(MulNode),
+    DivNode(DivNode),
+    MinusNode(MinusNode),
 }
 
 pub struct ConstantNode {
@@ -103,6 +131,11 @@ impl Node {
             Node::ConstantNode(n) => &n.base,
             Node::ReturnNode(n) => &n.base,
             Node::StartNode(n) => &n.base,
+            Node::AddNode(n) => &n.base,
+            Node::SubNode(n) => &n.base,
+            Node::MulNode(n) => &n.base,
+            Node::DivNode(n) => &n.base,
+            Node::MinusNode(n) => &n.base,
         }
     }
 
@@ -110,7 +143,121 @@ impl Node {
         match self {
             Node::ConstantNode(_) => false,
             Node::ReturnNode(_) => true,
-            Node::StartNode(_) => true
+            Node::StartNode(_) => true,
+            Node::AddNode(_) => false,
+            Node::SubNode(_) => false,
+            Node::MulNode(_) => false,
+            Node::DivNode(_) => false,
+            Node::MinusNode(_) => false,
+        }
+    }
+
+    /// Easy reading label for debugger
+    pub fn label(&self) -> Cow<str> {
+        match self {
+            Node::ConstantNode(c) => Cow::Owned(format!("#{}", c.value)),
+            Node::ReturnNode(_) => Cow::Borrowed("Return"),
+            Node::StartNode(_) => Cow::Borrowed("Start"),
+            Node::AddNode(_) => Cow::Borrowed("Add"),
+            Node::SubNode(_) => Cow::Borrowed("Sub"),
+            Node::MulNode(_) => Cow::Borrowed("Mul"),
+            Node::DivNode(_) => Cow::Borrowed("Div"),
+            Node::MinusNode(_) => Cow::Borrowed("Minus"),
+        }
+    }
+
+    // Unique label for graph visualization, e.g. "Add12" or "Region30" or "EQ99"
+    pub fn unique_name(&self) -> String {
+        match self {
+            Node::ConstantNode(c) => format!("Con_{}", self.base().id),
+            _ => format!("{}{}", self.label(), self.base().id)
+        }
+    }
+
+    // Graphical label, e.g. "+" or "Region" or "=="
+    pub fn glabel(&self) -> Cow<str> {
+        match self {
+            Node::ConstantNode(_) => self.label(),
+            Node::ReturnNode(_) => self.label(),
+            Node::StartNode(_) => self.label(),
+            Node::AddNode(_) => Cow::Borrowed("+"),
+            Node::SubNode(_) => Cow::Borrowed("-"),
+            Node::MulNode(_) => Cow::Borrowed("*"),
+            Node::DivNode(_) => Cow::Borrowed("//"),
+            Node::MinusNode(_) => Cow::Borrowed("-"),
+        }
+    }
+
+    fn is_dead(&self) -> bool {
+        false
+    }
+}
+
+pub struct PrintNodes<'a> {
+    node: Option<NodeId>,
+    nodes: &'a Nodes,
+}
+
+impl Display for PrintNodes<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut visited = BitSet::zeros(self.nodes.nodes.len());
+        self.nodes.fmt(self.node, f, &mut visited)
+    }
+}
+
+impl Nodes {
+    pub(crate) fn print(&self, node: Option<NodeId>) -> PrintNodes {
+        PrintNodes {
+            node,
+            nodes: self,
+        }
+    }
+
+    fn fmt(&self, node: Option<NodeId>, f: &mut fmt::Formatter, visited: &mut BitSet<NodeId>) -> fmt::Result {
+        let Some(node) = node else { return write!(f, "<?>") };
+        visited.add(node);
+        match &self[node] {
+            node if node.is_dead() => write!(f, "{}:DEAD", node.unique_name()),
+            Node::ReturnNode(r) => {
+                write!(f, "return ")?;
+                self.fmt(r.expr(), f, visited)?;
+                write!(f, ";")
+            }
+            Node::AddNode(add) => {
+                write!(f, "(")?;
+                self.fmt(add.base.inputs[1], f, visited)?;
+                write!(f, "+")?;
+                self.fmt(add.base.inputs[2], f, visited)?;
+                write!(f, ")")
+            }
+            Node::ConstantNode(c) => write!(f, "{}", c.value),
+            n @ Node::StartNode(_) => write!(f, "{}", n.label()),
+            Node::SubNode(sub) => {
+                write!(f, "(")?;
+                self.fmt(sub.base.inputs[1], f, visited)?;
+                write!(f, "-")?;
+                self.fmt(sub.base.inputs[2], f, visited)?;
+                write!(f, ")")
+            }
+            Node::MulNode(mul) => {
+                write!(f, "(")?;
+                self.fmt(mul.base.inputs[1], f, visited)?;
+                write!(f, "*")?;
+                self.fmt(mul.base.inputs[2], f, visited)?;
+                write!(f, ")")
+            }
+            Node::DivNode(div) => {
+                write!(f, "(")?;
+                self.fmt(div.base.inputs[1], f, visited)?;
+                write!(f, "*")?;
+                self.fmt(div.base.inputs[2], f, visited)?;
+                write!(f, ")")
+            }
+            Node::MinusNode(minus) => {
+                write!(f, "(-")?;
+                self.fmt(minus.base.inputs[1], f, visited)?;
+                write!(f, ")")
+            }
         }
     }
 }
@@ -163,5 +310,65 @@ impl ConstantNode {
 
     pub fn value(&self) -> i64 {
         self.value
+    }
+}
+
+pub struct AddNode {
+    pub base: NodeBase,
+}
+
+impl AddNode {
+    pub fn new(id: NodeId, [left, right]: [NodeId; 2]) -> Self {
+        Self {
+            base: NodeBase::new(id, vec![None, Some(left), Some(right)])
+        }
+    }
+}
+
+pub struct SubNode {
+    pub base: NodeBase,
+}
+
+impl SubNode {
+    pub fn new(id: NodeId, [left, right]: [NodeId; 2]) -> Self {
+        Self {
+            base: NodeBase::new(id, vec![None, Some(left), Some(right)])
+        }
+    }
+}
+
+pub struct MulNode {
+    pub base: NodeBase,
+}
+
+impl MulNode {
+    pub fn new(id: NodeId, [left, right]: [NodeId; 2]) -> Self {
+        Self {
+            base: NodeBase::new(id, vec![None, Some(left), Some(right)])
+        }
+    }
+}
+
+pub struct DivNode {
+    pub base: NodeBase,
+}
+
+impl DivNode {
+    pub fn new(id: NodeId, [left, right]: [NodeId; 2]) -> Self {
+        Self {
+            base: NodeBase::new(id, vec![None, Some(left), Some(right)])
+        }
+    }
+}
+
+pub struct MinusNode {
+    pub base: NodeBase,
+}
+
+impl MinusNode {
+    pub fn new(id: NodeId, expr: NodeId) -> Self {
+        Self {
+            base: NodeBase::new(id, vec![None, Some(expr)])
+        }
     }
 }

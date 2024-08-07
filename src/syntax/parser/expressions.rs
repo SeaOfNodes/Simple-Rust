@@ -276,6 +276,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 #[cfg(test)]
 mod tests {
+    use crate::syntax::ast::{BinaryOperator, Expression};
     use crate::syntax::parser::expressions::Precedence;
     use crate::syntax::parser::Parser;
 
@@ -420,5 +421,15 @@ mod tests {
     #[test]
     fn test_invalid() {
         Parser::test_fails("2-", |p| p.parse_expression(Precedence::None));
+    }
+
+    #[test]
+    fn associativity_add() {
+        Parser::test("1 + 2 + 3", |p| {
+            let e = p.parse_expression(Precedence::None);
+            let Ok(Expression::Binary { operator: BinaryOperator::Plus, location, left, right }) = &e else { unreachable!() };
+            assert!(matches!(**right, Expression::Immediate(3)));
+            e
+        });
     }
 }
