@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use crate::arena::Arena;
+use crate::soup::graph_visualizer;
 use crate::soup::soup::Soup;
 use crate::soup::types::Types;
 use crate::syntax::ast::Item;
@@ -25,6 +26,8 @@ fn test_simple_program() {
     let (_start, stop) = soup
         .compile_function(function, &mut types)
         .expect("should compile");
+
+    println!("{}", graph_visualizer::generate_dot_output(&soup).unwrap());
 
     // TODO does it matter that it isn't parsed like this?
     // assert_eq!("return (1+((2*3)+(-5)));", soup.nodes.print(Some(stop)).to_string());
@@ -141,6 +144,8 @@ fn test_example() {
     let (_start, stop) = soup
         .compile_function(function, &mut types)
         .expect("should compile");
+
+    println!("{}", graph_visualizer::generate_dot_output(&soup).unwrap());
 
     assert_eq!("return 2;", soup.nodes.print(Some(stop)).to_string());
 }

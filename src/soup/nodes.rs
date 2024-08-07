@@ -55,6 +55,9 @@ impl<'t> Nodes<'t> {
             node_ty: vec![None],
         }
     }
+    pub fn len(&self) -> usize {
+        self.nodes.len()
+    }
     pub fn create<F: FnOnce(NodeId) -> Node<'t>>(&mut self, f: F) -> NodeId {
         let id = u32::try_from(self.nodes.len())
             .and_then(NonZeroU32::try_from)

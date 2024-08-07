@@ -7,7 +7,7 @@ use crate::syntax::ast::{BinaryOperator, Block, Expression, Function, PrefixOper
 
 pub struct Soup<'t> {
     pub nodes: Nodes<'t>,
-    start: NodeId,
+    pub(crate) start: NodeId,
     ctrl: NodeId,
     pub disable_peephole: bool,
 }
