@@ -65,9 +65,10 @@ impl<'t> Nodes<'t> {
             .unwrap();
         self.nodes.push(f(id));
         self.node_ty.push(None);
-        let inputs = self[id].base().inputs.clone(); // TODO expensive clone!
-        for input in inputs.iter().flatten() {
-            self[*input].base_mut().add_use(id);
+        for i in 0..self[id].base().inputs.len() {
+            if let Some(input) = self[id].base().inputs[i] {
+                self[input].base_mut().add_use(id);
+            }
         }
 
         debug_assert_eq!(self[id].id(), id);
