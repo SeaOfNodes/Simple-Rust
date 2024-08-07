@@ -16,6 +16,7 @@ pub struct Parser<'a, 'b> {
     tokenizer: Peekable<Tokenizer<'a>>,
     source: &'a str,
     path: &'b Path,
+    errors: Vec<String>,
 }
 
 impl<'a, 'b> Parser<'a, 'b> {
@@ -24,6 +25,7 @@ impl<'a, 'b> Parser<'a, 'b> {
             tokenizer: Tokenizer::new(source).peekable(),
             source,
             path,
+            errors: vec![],
         }
     }
 
@@ -41,7 +43,7 @@ impl<'a, 'b> Parser<'a, 'b> {
             }
         }
     }
-    
+
     #[cfg(test)]
     fn test_fails<Ast: super::formatter::FormatCode + std::fmt::Debug, E: std::fmt::Debug>(source: &str, action: impl FnOnce(&mut Parser) -> Result<Ast, E>) {
         let mut parser = Parser::new(source, "dummy-path.ro".as_ref());
@@ -56,18 +58,19 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
+    fn error_at(&mut self, location: &Token, message: &str) {
+        let message = format!("{}:{}:{}: {message}", self.path.to_str().unwrap(), location.line, location.column);
+        self.errors.push(message);
+    }
+
     fn parse_internal(mut self) -> Result<ModuleAst, ()> {
         let name = "TODO".to_string();
         let mut module = ModuleAst { name, items: vec![] };
-        while let Some(next) = self.peek() {
+        while let Some(next) = self.peek().cloned() {
             match next.kind {
                 Kind::Fun => {
                     let Ok(function) = self.function() else {
-                        // TODO decide where to do error reporting
-                        if let Some(token) = self.peek().cloned() {
-                            println!("{}:{}:{}: Error parsing function", self.path.to_str().unwrap(), token.line, token.column)
-                        }
-                        println!("Error at token: {:?}", self.peek());
+                        self.error_at(&next, "Error parsing function");
                         return Err(());
                     };
                     module.items.push(Item::Function(function));

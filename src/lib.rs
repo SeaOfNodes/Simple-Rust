@@ -23,6 +23,7 @@ pub mod lir;
 pub mod hir;
 mod modules;
 pub mod syntax;
+pub mod soup;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum ExitCode {
