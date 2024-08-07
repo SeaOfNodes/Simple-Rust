@@ -294,7 +294,9 @@ impl<'a> Iterator for Tokenizer<'a> {
                     }
                     if terminated {
                         if invalid_escape {
-                            value = Some(Value::Error("string with invalid escape sequence".to_string()));
+                            value = Some(Value::Error(
+                                "string with invalid escape sequence".to_string(),
+                            ));
                             Error
                         } else {
                             value = Some(Value::Str(v));

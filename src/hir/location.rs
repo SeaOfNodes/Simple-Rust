@@ -15,10 +15,16 @@ pub struct Location<'t> {
 impl Display for Location<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let module = self.module.unwrap_module();
-        let file = module.parsed_module.as_ref()
+        let file = module
+            .parsed_module
+            .as_ref()
             .map(|it| it.file.to_string_lossy())
             .unwrap_or(Cow::from("<no file>"));
-        write!(f, "{} {:?}:{}:{}", module.name, file, self.line, self.column)
+        write!(
+            f,
+            "{} {:?}:{}:{}",
+            module.name, file, self.line, self.column
+        )
     }
 }
 

@@ -1,10 +1,10 @@
 use std::fmt::{Display, Formatter};
 
-use crate::hir::Hir;
 use crate::hir::id::Id;
 use crate::hir::location::Location;
 use crate::hir::operation::Operation;
 use crate::hir::types::Ty;
+use crate::hir::Hir;
 
 #[derive(Clone, Debug)]
 pub struct Node<'t> {
@@ -64,9 +64,7 @@ impl<'t> Node<'t> {
     pub fn starts_basic_block(&self) -> bool {
         match &self.operation {
             Operation::Root { .. } | Operation::Start { .. } | Operation::Region { .. } => true,
-            _ => false
+            _ => false,
         }
     }
 }
-
-

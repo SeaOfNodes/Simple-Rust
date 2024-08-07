@@ -1,15 +1,15 @@
 use std::iter::Peekable;
 use std::path::Path;
 
-pub use expressions::{Associativity, infix_precedence, Precedence};
+pub use expressions::{infix_precedence, Associativity, Precedence};
 
 use crate::syntax::ast::{Identifier, Item, Location, ModuleAst};
 use crate::syntax::tokenizer::{Kind, Token, Tokenizer};
 
-mod expressions;
-mod types;
 mod adts;
+mod expressions;
 mod functions;
+mod types;
 
 pub struct Parser<'a, 'b> {
     // TODO maybe collect to a vector instead of peekable
@@ -30,7 +30,10 @@ impl<'a, 'b> Parser<'a, 'b> {
     }
 
     #[cfg(test)]
-    fn test<Ast: super::formatter::FormatCode, E: std::fmt::Debug>(source: &str, action: impl FnOnce(&mut Parser) -> Result<Ast, E>) {
+    fn test<Ast: super::formatter::FormatCode, E: std::fmt::Debug>(
+        source: &str,
+        action: impl FnOnce(&mut Parser) -> Result<Ast, E>,
+    ) {
         let mut parser = Parser::new(source, "dummy-path.ro".as_ref());
         let ast = action(&mut parser);
         match ast {
@@ -39,18 +42,31 @@ impl<'a, 'b> Parser<'a, 'b> {
                 assert_eq!((source, parser.peek()), (formatted.as_str(), None));
             }
             Err(e) => {
-                assert!(false, "parse error: {:?}  next_token: {:?}", e, parser.peek());
+                assert!(
+                    false,
+                    "parse error: {:?}  next_token: {:?}",
+                    e,
+                    parser.peek()
+                );
             }
         }
     }
 
     #[cfg(test)]
-    fn test_fails<Ast: super::formatter::FormatCode + std::fmt::Debug, E: std::fmt::Debug>(source: &str, action: impl FnOnce(&mut Parser) -> Result<Ast, E>) {
+    fn test_fails<Ast: super::formatter::FormatCode + std::fmt::Debug, E: std::fmt::Debug>(
+        source: &str,
+        action: impl FnOnce(&mut Parser) -> Result<Ast, E>,
+    ) {
         let mut parser = Parser::new(source, "dummy-path.ro".as_ref());
         let ast = action(&mut parser);
         match ast {
             Ok(ast) => {
-                assert!(false, "expected parse error, but got {:?}, next_token: {:?}", ast, parser.peek());
+                assert!(
+                    false,
+                    "expected parse error, but got {:?}, next_token: {:?}",
+                    ast,
+                    parser.peek()
+                );
             }
             Err(e) => {
                 // task failed successfully
@@ -59,13 +75,21 @@ impl<'a, 'b> Parser<'a, 'b> {
     }
 
     fn error_at(&mut self, location: &Token, message: &str) {
-        let message = format!("{}:{}:{}: {message}", self.path.to_str().unwrap(), location.line, location.column);
+        let message = format!(
+            "{}:{}:{}: {message}",
+            self.path.to_str().unwrap(),
+            location.line,
+            location.column
+        );
         self.errors.push(message);
     }
 
     fn parse_internal(mut self) -> Result<ModuleAst, ()> {
         let name = "TODO".to_string();
-        let mut module = ModuleAst { name, items: vec![] };
+        let mut module = ModuleAst {
+            name,
+            items: vec![],
+        };
         while let Some(next) = self.peek().cloned() {
             match next.kind {
                 Kind::Fun => {
@@ -78,7 +102,12 @@ impl<'a, 'b> Parser<'a, 'b> {
                 Kind::Enum => {
                     let Ok(e) = self.parse_enum() else {
                         if let Some(token) = self.peek().cloned() {
-                            println!("{}:{}:{}: Error parsing enum", self.path.to_str().unwrap(), token.line, token.column)
+                            println!(
+                                "{}:{}:{}: Error parsing enum",
+                                self.path.to_str().unwrap(),
+                                token.line,
+                                token.column
+                            )
                         }
                         println!("Error at token: {:?}", self.peek());
                         return Err(());
@@ -88,7 +117,12 @@ impl<'a, 'b> Parser<'a, 'b> {
                 Kind::Struct => {
                     let Ok(e) = self.parse_struct() else {
                         if let Some(token) = self.peek().cloned() {
-                            println!("{}:{}:{}: Error parsing struct", self.path.to_str().unwrap(), token.line, token.column)
+                            println!(
+                                "{}:{}:{}: Error parsing struct",
+                                self.path.to_str().unwrap(),
+                                token.line,
+                                token.column
+                            )
                         }
                         println!("Error at token: {:?}", self.peek());
                         return Err(());
@@ -166,9 +200,14 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-
-    fn list<T, E: From<()>>(&mut self, open: Kind, parse: fn(&mut Parser<'a, 'b>) -> Result<T, E>, separator: Kind, close: Kind, allow_trailing_separator: bool) -> Result<Vec<T>, E>
-    {
+    fn list<T, E: From<()>>(
+        &mut self,
+        open: Kind,
+        parse: fn(&mut Parser<'a, 'b>) -> Result<T, E>,
+        separator: Kind,
+        close: Kind,
+        allow_trailing_separator: bool,
+    ) -> Result<Vec<T>, E> {
         self.eat(open)?;
 
         let mut result = vec![];

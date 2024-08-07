@@ -21,12 +21,22 @@ impl<'a, 'b> Parser<'a, 'b> {
         };
 
         let members = if self.peek_kind(Kind::OpenBrace) {
-            Some(self.list(Kind::OpenBrace, Self::parse_enum_member, Kind::Comma, Kind::CloseBrace, true)?)
+            Some(self.list(
+                Kind::OpenBrace,
+                Self::parse_enum_member,
+                Kind::Comma,
+                Kind::CloseBrace,
+                true,
+            )?)
         } else {
             None
         };
 
-        Ok(Enum { name, parent, members })
+        Ok(Enum {
+            name,
+            parent,
+            members,
+        })
     }
 
     fn parse_struct_member(&mut self) -> Result<StructMember, ()> {
@@ -43,7 +53,13 @@ impl<'a, 'b> Parser<'a, 'b> {
         let name = self.eat_identifier()?;
 
         let members = if self.peek_kind(Kind::OpenBrace) {
-            Some(self.list(Kind::OpenBrace, Self::parse_struct_member, Kind::Comma, Kind::CloseBrace, true)?)
+            Some(self.list(
+                Kind::OpenBrace,
+                Self::parse_struct_member,
+                Kind::Comma,
+                Kind::CloseBrace,
+                true,
+            )?)
         } else {
             None
         };
@@ -58,7 +74,9 @@ mod tests {
 
     #[test]
     fn test_parse_struct() {
-        Parser::test("struct Point {\n    x: int,\n    y: int,\n}", |p| p.parse_struct());
+        Parser::test("struct Point {\n    x: int,\n    y: int,\n}", |p| {
+            p.parse_struct()
+        });
     }
 
     #[test]

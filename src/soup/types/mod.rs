@@ -25,11 +25,16 @@ struct Interner<'a> {
 
 impl<'t> Interner<'t> {
     fn intern(&mut self, t: Type<'t>) -> Ty<'t> {
-        *self.type_to_ty.raw_entry_mut().from_key(&t).or_insert_with(|| {
-            let copy = &*self.arena.alloc(t);
-            let ty = Ty::new(copy);
-            (copy, ty)
-        }).1
+        *self
+            .type_to_ty
+            .raw_entry_mut()
+            .from_key(&t)
+            .or_insert_with(|| {
+                let copy = &*self.arena.alloc(t);
+                let ty = Ty::new(copy);
+                (copy, ty)
+            })
+            .1
     }
 }
 
@@ -42,7 +47,10 @@ impl<'a> Types<'a> {
 
         let ty_bot = interner.intern(Type::Bot);
         let ty_top = interner.intern(Type::Top);
-        let ty_zero = interner.intern(Type::Int { value: 0, constant: true });
+        let ty_zero = interner.intern(Type::Int {
+            value: 0,
+            constant: true,
+        });
 
         Self {
             interner,
@@ -55,7 +63,10 @@ impl<'a> Types<'a> {
     pub fn get_int(&mut self, value: i64) -> Ty<'a> {
         match value {
             0 => self.ty_zero,
-            _ => self.interner.intern(Type::Int { value, constant: true }),
+            _ => self.interner.intern(Type::Int {
+                value,
+                constant: true,
+            }),
         }
     }
 }

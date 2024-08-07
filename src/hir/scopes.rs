@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use crate::hir::Hir;
 use crate::hir::id::Id;
 use crate::hir::types::{Ty, Types};
+use crate::hir::Hir;
 use crate::syntax::ast::Type;
 
 pub struct ItemPath<'a, 'b> {
@@ -24,7 +24,12 @@ impl<'t> Scopes<'t> {
         }
     }
 
-    pub fn lookup(&mut self, hir: Option<&Hir<'t>>, types: &mut Types<'t>, path: &ItemPath) -> Option<Ty<'t>> {
+    pub fn lookup(
+        &mut self,
+        hir: Option<&Hir<'t>>,
+        types: &mut Types<'t>,
+        path: &ItemPath,
+    ) -> Option<Ty<'t>> {
         if let Some(hir) = hir {
             if let Some((first, rest)) = path.segments.split_first() {
                 if let Some(local) = self.lookup_local(first) {
@@ -34,21 +39,27 @@ impl<'t> Scopes<'t> {
             }
         }
 
-        return types.lookup(self.module, &path.segments)
+        return types
+            .lookup(self.module, &path.segments)
             .or_else(|| types.lookup(types.ty_root_module, &path.segments))
             .or_else(|| types.lookup(types.ty_std_module, &path.segments));
     }
 
-    pub fn lookup_type(&mut self, hir: Option<&Hir<'t>>, types: &mut Types<'t>, typ: &Type) -> Option<Ty<'t>> {
+    pub fn lookup_type(
+        &mut self,
+        hir: Option<&Hir<'t>>,
+        types: &mut Types<'t>,
+        typ: &Type,
+    ) -> Option<Ty<'t>> {
         match typ {
             Type::Identifier(i) => {
                 let segments = &[i.value.as_str()];
                 let path = ItemPath { segments };
                 self.lookup(hir, types, &path)
             }
-            Type::Pointer(t) => {
-                self.lookup_type(hir, types, t).map(|ty| types.get_pointer(ty))
-            }
+            Type::Pointer(t) => self
+                .lookup_type(hir, types, t)
+                .map(|ty| types.get_pointer(ty)),
         }
     }
 
@@ -85,4 +96,3 @@ pub struct Local {
     pub definition: Id,
     pub last_relevant_memory: Id,
 }
-

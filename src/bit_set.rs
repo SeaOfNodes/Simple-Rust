@@ -18,7 +18,14 @@ pub struct BitSet<E> {
 impl<E: Index> BitSet<E> {
     pub(crate) fn zeros(capacity: usize) -> Self {
         Self {
-            words: vec![0; if capacity == 0 { 0 } else { capacity / usize::BITS as usize + 1 }],
+            words: vec![
+                0;
+                if capacity == 0 {
+                    0
+                } else {
+                    capacity / usize::BITS as usize + 1
+                }
+            ],
             phantom_data: Default::default(),
         }
     }
@@ -58,7 +65,6 @@ impl<E: Index> BitSet<E> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::BitSet;
@@ -73,11 +79,11 @@ mod tests {
         assert!(!set.get(42));
         assert!(set.get(43));
         set.remove(43);
-        
+
         for i in 0..100 {
             assert!(!set.get(i));
         }
-        
+
         assert_eq!(set.words.iter().sum::<usize>(), 0);
     }
 }

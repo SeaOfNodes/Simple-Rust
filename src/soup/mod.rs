@@ -1,5 +1,5 @@
+mod nodes;
+pub mod soup;
 #[cfg(test)]
 mod tests;
-pub mod soup;
-mod nodes;
 mod types;

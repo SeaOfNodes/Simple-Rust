@@ -1,10 +1,10 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
-use crate::hir::Hir;
 use crate::hir::id::Id;
 use crate::hir::node::Node;
 use crate::hir::operation::{ConstantValue, Operation};
+use crate::hir::Hir;
 use crate::lir::{BlockId, Lir, Register};
 
 impl<'t> Hir<'t> {
@@ -17,12 +17,20 @@ impl<'t> Hir<'t> {
             instructions: Vec<Id>,
         }
 
-        let mut basic_blocks = self.nodes.iter()
+        let mut basic_blocks = self
+            .nodes
+            .iter()
             .filter(|it| Node::starts_basic_block(it) && it.id != self.root)
-            .map(|it| (it.id, BB {
-                label: lir.new_block_id(),
-                instructions: Vec::from([it.id]),
-            })).collect::<HashMap<_, _>>();
+            .map(|it| {
+                (
+                    it.id,
+                    BB {
+                        label: lir.new_block_id(),
+                        instructions: Vec::from([it.id]),
+                    },
+                )
+            })
+            .collect::<HashMap<_, _>>();
 
         if basic_blocks.len() != 1 {
             todo!();
@@ -30,7 +38,11 @@ impl<'t> Hir<'t> {
         let start = *basic_blocks.iter().next().unwrap().0;
         for x in self.nodes.iter() {
             if !x.starts_basic_block() {
-                basic_blocks.get_mut(&start).unwrap().instructions.push(x.id);
+                basic_blocks
+                    .get_mut(&start)
+                    .unwrap()
+                    .instructions
+                    .push(x.id);
             }
         }
 
@@ -43,7 +55,6 @@ impl<'t> Hir<'t> {
             let block = bb.label;
             let mut blocked = bb.instructions;
             let mut available = Vec::new();
-
 
             for _ in 0..blocked.len() {
                 // find available instructions
@@ -64,26 +75,31 @@ impl<'t> Hir<'t> {
                 }
 
                 // pick the best one
-                let best_index = available.iter().enumerate().max_by(|(_, a), (_, b)| {
-                    let na = &self.nodes[a.index()];
-                    let nb = &self.nodes[b.index()];
+                let best_index = available
+                    .iter()
+                    .enumerate()
+                    .max_by(|(_, a), (_, b)| {
+                        let na = &self.nodes[a.index()];
+                        let nb = &self.nodes[b.index()];
 
-                    match (&na.operation, &nb.operation) {
-                        // first:
-                        _ if na.starts_basic_block() => Ordering::Greater,
-                        _ if nb.starts_basic_block() => Ordering::Less,
-                        (Operation::Phi { .. }, _) => Ordering::Greater,
-                        (_, Operation::Phi { .. }) => Ordering::Less,
-                        (Operation::Call { .. }, _) => Ordering::Greater,
-                        (_, Operation::Call { .. }) => Ordering::Less,
-                        // last:
-                        (Operation::Return { .. }, _) => Ordering::Less,
-                        (_, Operation::Return { .. }) => Ordering::Greater,
-                        (Operation::If { .. }, _) => Ordering::Less,
-                        (_, Operation::If { .. }) => Ordering::Greater,
-                        _ => nb.id.index().cmp(&na.id.index()) // arbitrarily pick the smaller id
-                    }
-                }).unwrap().0;
+                        match (&na.operation, &nb.operation) {
+                            // first:
+                            _ if na.starts_basic_block() => Ordering::Greater,
+                            _ if nb.starts_basic_block() => Ordering::Less,
+                            (Operation::Phi { .. }, _) => Ordering::Greater,
+                            (_, Operation::Phi { .. }) => Ordering::Less,
+                            (Operation::Call { .. }, _) => Ordering::Greater,
+                            (_, Operation::Call { .. }) => Ordering::Less,
+                            // last:
+                            (Operation::Return { .. }, _) => Ordering::Less,
+                            (_, Operation::Return { .. }) => Ordering::Greater,
+                            (Operation::If { .. }, _) => Ordering::Less,
+                            (_, Operation::If { .. }) => Ordering::Greater,
+                            _ => nb.id.index().cmp(&na.id.index()), // arbitrarily pick the smaller id
+                        }
+                    })
+                    .unwrap()
+                    .0;
                 let best_id = available.swap_remove(best_index);
 
                 // lower it
@@ -92,14 +108,12 @@ impl<'t> Hir<'t> {
                 match best.operation {
                     Operation::Root { .. } => unreachable!(),
                     Operation::Start { .. } => {}
-                    Operation::Constant { value } => {
-                        match value {
-                            ConstantValue::Integer(i) => {
-                                let reg = lir.imm64(block, i, best.origin);
-                                result[best_id.index()] = Some(reg);
-                            }
+                    Operation::Constant { value } => match value {
+                        ConstantValue::Integer(i) => {
+                            let reg = lir.imm64(block, i, best.origin);
+                            result[best_id.index()] = Some(reg);
                         }
-                    }
+                    },
                     Operation::Return { value, .. } => {
                         if let Some(value) = value {
                             let src = result[value.index()].unwrap();

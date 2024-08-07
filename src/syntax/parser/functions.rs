@@ -14,7 +14,13 @@ impl<'a, 'b> Parser<'a, 'b> {
         self.eat(Kind::Fun)?;
         let name = self.eat_identifier()?;
 
-        let parameters = self.list(Kind::OpenParenthesis, Parser::parameter, Kind::Comma, Kind::CloseParenthesis, false)?;
+        let parameters = self.list(
+            Kind::OpenParenthesis,
+            Parser::parameter,
+            Kind::Comma,
+            Kind::CloseParenthesis,
+            false,
+        )?;
 
         let return_type = if self.peek_kind(Kind::SingleArrowRight) {
             self.eat(Kind::SingleArrowRight)?;
@@ -30,7 +36,12 @@ impl<'a, 'b> Parser<'a, 'b> {
             Some(self.block()?)
         };
 
-        Ok(Function { name, body, parameters, return_type })
+        Ok(Function {
+            name,
+            body,
+            parameters,
+            return_type,
+        })
     }
 }
 
@@ -50,6 +61,9 @@ mod tests {
 
     #[test]
     fn test_function() {
-        Parser::test("fun foo(a: Int, b: Int) -> Int {\n    return a + b;\n}", |parser| parser.function());
+        Parser::test(
+            "fun foo(a: Int, b: Int) -> Int {\n    return a + b;\n}",
+            |parser| parser.function(),
+        );
     }
 }

@@ -13,7 +13,9 @@ pub struct Id {
 impl From<usize> for Id {
     fn from(value: usize) -> Self {
         assert!(value < u32::MAX as usize);
-        return Id { index: NonZeroU32::new((value + 1) as u32).unwrap() };
+        return Id {
+            index: NonZeroU32::new((value + 1) as u32).unwrap(),
+        };
     }
 }
 

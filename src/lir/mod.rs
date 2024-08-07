@@ -1,8 +1,8 @@
 use std::fmt::{Debug, Display, Formatter};
 use std::mem;
 
-use crate::asm::MachineCode;
 use crate::asm::reg::Reg;
+use crate::asm::MachineCode;
 use crate::hir::location::Location;
 use crate::lir::stack_slots::StackSlots;
 
@@ -27,7 +27,9 @@ impl<'t> Lir<'t> {
     }
 
     fn new_reg(&mut self) -> Register {
-        let new = Register { id: self.next_reg.id.checked_add(1).unwrap() };
+        let new = Register {
+            id: self.next_reg.id.checked_add(1).unwrap(),
+        };
         mem::replace(&mut self.next_reg, new)
     }
 
@@ -78,7 +80,12 @@ impl<'t> Lir<'t> {
                             }
                         }
                     }
-                    Operation::Binary { kind, first, second, dst } => {
+                    Operation::Binary {
+                        kind,
+                        first,
+                        second,
+                        dst,
+                    } => {
                         let dst = allocation[dst.id as usize];
                         let first = allocation[first.id as usize];
                         let second = allocation[second.id as usize];
@@ -95,7 +102,9 @@ impl<'t> Lir<'t> {
     }
 
     pub fn new_block_id(&mut self) -> BlockId {
-        let id = BlockId { id: u32::try_from(self.blocks.len()).unwrap() };
+        let id = BlockId {
+            id: u32::try_from(self.blocks.len()).unwrap(),
+        };
         self.blocks.push(BasicBlock {
             id,
             instructions: vec![],
@@ -104,29 +113,58 @@ impl<'t> Lir<'t> {
     }
 
     fn add(&mut self, block: BlockId, operation: Operation, location: Option<Location<'t>>) {
-        self.blocks[block.id as usize].instructions.push(Instruction {
-            operation,
-            location,
-        })
+        self.blocks[block.id as usize]
+            .instructions
+            .push(Instruction {
+                operation,
+                location,
+            })
     }
 
     pub fn ret(&mut self, block: BlockId, location: Option<Location<'t>>) {
         self.add(block, Operation::Ret, location)
     }
 
-    pub fn imm64(&mut self, block: BlockId, value: i64, location: Option<Location<'t>>) -> Register {
+    pub fn imm64(
+        &mut self,
+        block: BlockId,
+        value: i64,
+        location: Option<Location<'t>>,
+    ) -> Register {
         let dst = self.new_reg();
         self.add(block, Operation::Imm64 { value, dst }, location);
         dst
     }
 
-    pub fn mov(&mut self, block: BlockId, dst: Register, src: Register, location: Option<Location<'t>>) {
+    pub fn mov(
+        &mut self,
+        block: BlockId,
+        dst: Register,
+        src: Register,
+        location: Option<Location<'t>>,
+    ) {
         self.add(block, Operation::Mov { dst, src }, location)
     }
 
-    pub fn binary(&mut self, block: BlockId, kind: Binary, first: Register, second: Register, location: Option<Location<'t>>) -> Register {
+    pub fn binary(
+        &mut self,
+        block: BlockId,
+        kind: Binary,
+        first: Register,
+        second: Register,
+        location: Option<Location<'t>>,
+    ) -> Register {
         let dst = self.new_reg();
-        self.add(block, Operation::Binary { kind, first, second, dst }, location);
+        self.add(
+            block,
+            Operation::Binary {
+                kind,
+                first,
+                second,
+                dst,
+            },
+            location,
+        );
         dst
     }
 }
@@ -162,8 +200,14 @@ impl Debug for Register {
 #[derive(Debug)]
 enum Operation {
     Ret,
-    Imm64 { dst: Register, value: i64 },
-    Mov { dst: Register, src: Register },
+    Imm64 {
+        dst: Register,
+        value: i64,
+    },
+    Mov {
+        dst: Register,
+        src: Register,
+    },
     Unary {
         kind: Unary,
         src: Register,

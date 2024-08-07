@@ -13,14 +13,14 @@ use crate::hir::scopes::{Local, Scopes};
 use crate::hir::types::{Ty, Types};
 use crate::syntax::ast::{Block, Expression, Function, Statement};
 
+mod dominators;
 pub mod id;
 pub mod location;
-pub mod types;
-pub mod operation;
-pub mod node;
-pub mod scopes;
 pub mod lower;
-mod dominators;
+pub mod node;
+pub mod operation;
+pub mod scopes;
+pub mod types;
 
 pub struct Hir<'t> {
     nodes: Vec<Node<'t>>,
@@ -42,7 +42,11 @@ impl<'t> Hir<'t> {
             is_extern: false,
         }
     }
-    pub fn from_source(function: &Function, types: &mut Types<'t>, scopes: &mut Scopes<'t>) -> Result<Hir<'t>, ()> {
+    pub fn from_source(
+        function: &Function,
+        types: &mut Types<'t>,
+        scopes: &mut Scopes<'t>,
+    ) -> Result<Hir<'t>, ()> {
         let mut hir = Hir {
             nodes: vec![],
             worklist_queue: Default::default(),
@@ -57,15 +61,23 @@ impl<'t> Hir<'t> {
         let start = hir.add_node(Some(root), Operation::Start {}, types.ty_unit, vec![]);
 
         for parameter in function.parameters.iter() {
-            let ty = scopes.lookup_type(Some(&hir), types, &parameter.typ).ok_or(())?;
+            let ty = scopes
+                .lookup_type(Some(&hir), types, &parameter.typ)
+                .ok_or(())?;
             let name = parameter.name.value.clone();
-            let parameter = hir.add_node(Some(start), Operation::Parameter {
-                name: name.clone(),
-            }, ty, vec![]);
-            scopes.add_local(name, Local {
-                definition: parameter,
-                last_relevant_memory: start,
-            });
+            let parameter = hir.add_node(
+                Some(start),
+                Operation::Parameter { name: name.clone() },
+                ty,
+                vec![],
+            );
+            scopes.add_local(
+                name,
+                Local {
+                    definition: parameter,
+                    last_relevant_memory: start,
+                },
+            );
         }
 
         if let Some(block) = &function.body {
@@ -75,33 +87,53 @@ impl<'t> Hir<'t> {
         Ok(hir)
     }
 
-    fn add_block(&mut self, types: &mut Types<'t>, scopes: &mut Scopes, block: &Block) -> Result<(), ()> {
+    fn add_block(
+        &mut self,
+        types: &mut Types<'t>,
+        scopes: &mut Scopes,
+        block: &Block,
+    ) -> Result<(), ()> {
         scopes.begin_scope();
         let result = self.add_statements(types, scopes, &block.statements);
         scopes.end_scope();
         result
     }
 
-    fn add_statements(&mut self, types: &mut Types<'t>, scopes: &mut Scopes, statements: &[Statement]) -> Result<(), ()> {
+    fn add_statements(
+        &mut self,
+        types: &mut Types<'t>,
+        scopes: &mut Scopes,
+        statements: &[Statement],
+    ) -> Result<(), ()> {
         for statement in statements {
             self.add_statement(types, scopes, statement)?;
         }
         Ok(())
     }
 
-    fn add_statement(&mut self, types: &mut Types<'t>, scopes: &mut Scopes, statement: &Statement) -> Result<(), ()> {
+    fn add_statement(
+        &mut self,
+        types: &mut Types<'t>,
+        scopes: &mut Scopes,
+        statement: &Statement,
+    ) -> Result<(), ()> {
         match statement {
             Statement::Expression(_) => {}
             Statement::Return(ret) => {
                 let value = self.add_expression(types, scopes, &ret.value)?;
                 let dummy = value;
-                self.add_node(scopes.control, Operation::Return {
-                    value: Some(value),
-                    io: dummy,
-                    memory: dummy,
-                    frame_pointer: dummy,
-                    return_address: dummy,
-                }, types.ty_void, vec![]);
+                self.add_node(
+                    scopes.control,
+                    Operation::Return {
+                        value: Some(value),
+                        io: dummy,
+                        memory: dummy,
+                        frame_pointer: dummy,
+                        return_address: dummy,
+                    },
+                    types.ty_void,
+                    vec![],
+                );
             }
             Statement::If(_) => {}
             Statement::Var(_) => {}
@@ -109,19 +141,33 @@ impl<'t> Hir<'t> {
         Ok(())
     }
 
-    fn add_expression(&mut self, types: &mut Types<'t>, scopes: &mut Scopes, expression: &Expression) -> Result<Id, ()> {
+    fn add_expression(
+        &mut self,
+        types: &mut Types<'t>,
+        scopes: &mut Scopes,
+        expression: &Expression,
+    ) -> Result<Id, ()> {
         let id = match expression {
-            Expression::Immediate(immediate) => {
-                self.add_node(None, Operation::Constant {
+            Expression::Immediate(immediate) => self.add_node(
+                None,
+                Operation::Constant {
                     value: ConstantValue::Integer(*immediate),
-                }, types.ty_i64, vec![])
-            }
+                },
+                types.ty_i64,
+                vec![],
+            ),
             _ => todo!("Implement {:?}", expression),
         };
         Ok(id)
     }
 
-    fn add_node(&mut self, control: Option<Id>, operation: Operation, ty: Ty<'t>, outputs: Vec<Id>) -> Id {
+    fn add_node(
+        &mut self,
+        control: Option<Id>,
+        operation: Operation,
+        ty: Ty<'t>,
+        outputs: Vec<Id>,
+    ) -> Id {
         let id = Id::from(self.nodes.len());
         self.nodes.push(Node {
             id,
@@ -141,11 +187,14 @@ fn update_node(id: Id, hir: &mut Hir) {
     // if all operands constant: replace with constant
     match &node.operation {
         Operation::Constant { .. } => {}
-        Operation::Call { function, arguments } => {
+        Operation::Call {
+            function,
+            arguments,
+        } => {
             // lookup function and check if it can be constant folded
             if true {
                 let all_constant = arguments.iter().all(|it| {
-                    matches!(hir.nodes[it.index()].operation, Operation::Constant{..})
+                    matches!(hir.nodes[it.index()].operation, Operation::Constant { .. })
                 });
                 return;
             }

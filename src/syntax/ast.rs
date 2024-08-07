@@ -165,7 +165,7 @@ pub struct Return {
 
 #[derive(Debug)]
 pub struct If {
-    // Unlike {condition, then_expr, optional_else_expr} this 
+    // Unlike {condition, then_expr, optional_else_expr} this
     // representation enforces that both branches are blocks.
     pub cases: Vec<(Expression, Block)>,
     pub else_block: Option<Block>,

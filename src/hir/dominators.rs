@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
-use crate::hir::Hir;
 use crate::hir::id::Id;
+use crate::hir::Hir;
 
 impl<'t> Hir<'t> {
     /// TODO: use more efficient algorithm for dominators or at least a more efficient representation like enum DominatorSet { All, Some(HashSet<Id>), One(Id) }
@@ -61,10 +61,10 @@ mod tests {
     use std::collections::HashSet;
 
     use crate::arena::Arena;
-    use crate::hir::Hir;
     use crate::hir::id::Id;
     use crate::hir::operation::Operation;
     use crate::hir::types::Types;
+    use crate::hir::Hir;
 
     /// https://en.wikipedia.org/wiki/Dominator_(graph_theory)
     #[test]

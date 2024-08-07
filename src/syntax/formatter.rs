@@ -4,12 +4,12 @@ use std::fmt::{Display, Write};
 use crate::syntax::ast;
 use crate::syntax::tokenizer::Kind;
 
-mod tokens;
-mod types;
 mod adts;
 mod expressions;
 mod functions;
 mod module;
+mod tokens;
+mod types;
 
 #[derive(Copy, Clone)]
 pub struct CodeStyle {
@@ -89,7 +89,6 @@ impl Formatter<'_, '_> {
     }
 }
 
-
 pub trait FormatCode {
     fn format<'s>(&self, style: &'s CodeStyle) -> Displayable<'_, 's, Self> {
         Displayable { ast: self, style }
@@ -112,4 +111,3 @@ impl<'a, 's, Ast: FormatCode + ?Sized> Display for Displayable<'a, 's, Ast> {
         <Ast as FormatCode>::fmt(self.ast, &mut formatter)
     }
 }
-

@@ -14,7 +14,9 @@ pub struct NodeId(NonZeroU32);
 impl NodeId {
     pub const DUMMY: NodeId = NodeId(NonZeroU32::MAX);
 
-    fn index(self) -> usize { self.0.get() as usize }
+    fn index(self) -> usize {
+        self.0.get() as usize
+    }
 }
 
 impl bit_set::Index for NodeId {
@@ -56,7 +58,8 @@ impl<'t> Nodes<'t> {
     pub fn create<F: FnOnce(NodeId) -> Node<'t>>(&mut self, f: F) -> NodeId {
         let id = u32::try_from(self.nodes.len())
             .and_then(NonZeroU32::try_from)
-            .map(NodeId).unwrap();
+            .map(NodeId)
+            .unwrap();
         self.nodes.push(f(id));
         self.node_ty.push(None);
         debug_assert_eq!(self[id].id(), id);
@@ -64,10 +67,15 @@ impl<'t> Nodes<'t> {
         id
     }
 
-    pub fn get_many_ty<const N: usize>(&self, nodes: [Option<NodeId>; N]) -> [Option<&'t Type<'t>>; N] {
-        nodes.map(|n| n.map(|n| &self.node_ty[n.index()])
-            .map(|t| t.map(|t| t.inner()))
-            .unwrap_or(None))
+    pub fn get_many_ty<const N: usize>(
+        &self,
+        nodes: [Option<NodeId>; N],
+    ) -> [Option<&'t Type<'t>>; N] {
+        nodes.map(|n| {
+            n.map(|n| &self.node_ty[n.index()])
+                .map(|t| t.map(|t| t.inner()))
+                .unwrap_or(None)
+        })
     }
 
     pub fn ty(&self, node: NodeId) -> Option<Ty<'t>> {
@@ -90,7 +98,6 @@ impl<'t> Nodes<'t> {
         *self.get_ty_mut(node) = None; // flag as dead
         debug_assert!(self.is_dead(node));
     }
-
 
     pub fn set_def(&mut self, this: NodeId, index: usize, new_def: Option<NodeId>) {
         let old_def = self[this].base().inputs[index];
@@ -126,7 +133,6 @@ impl<'t> IndexMut<NodeId> for Nodes<'t> {
         &mut self.nodes[index.index()]
     }
 }
-
 
 pub struct NodeBase {
     id: NodeId,
@@ -235,7 +241,7 @@ impl<'t> Node<'t> {
     pub fn unique_name(&self) -> String {
         match self {
             Node::ConstantNode(c) => format!("Con_{}", self.base().id),
-            _ => format!("{}{}", self.label(), self.base().id)
+            _ => format!("{}{}", self.label(), self.base().id),
         }
     }
 
@@ -272,14 +278,18 @@ impl Display for PrintNodes<'_, '_> {
 
 impl<'t> Nodes<'t> {
     pub(crate) fn print(&self, node: Option<NodeId>) -> PrintNodes {
-        PrintNodes {
-            node,
-            nodes: self,
-        }
+        PrintNodes { node, nodes: self }
     }
 
-    fn fmt(&self, node: Option<NodeId>, f: &mut fmt::Formatter, visited: &mut BitSet<NodeId>) -> fmt::Result {
-        let Some(node) = node else { return write!(f, "<?>") };
+    fn fmt(
+        &self,
+        node: Option<NodeId>,
+        f: &mut fmt::Formatter,
+        visited: &mut BitSet<NodeId>,
+    ) -> fmt::Result {
+        let Some(node) = node else {
+            return write!(f, "<?>");
+        };
         visited.add(node);
         match &self[node] {
             n if self.is_dead(node) => write!(f, "{}:DEAD", n.unique_name()),
@@ -354,7 +364,7 @@ impl NodeBase {
 impl StartNode {
     pub fn new(id: NodeId) -> Self {
         Self {
-            base: NodeBase::new(id, vec![])
+            base: NodeBase::new(id, vec![]),
         }
     }
 }
@@ -362,7 +372,7 @@ impl StartNode {
 impl ReturnNode {
     pub fn new(id: NodeId, ctrl: NodeId, data: NodeId) -> Self {
         Self {
-            base: NodeBase::new(id, vec![Some(ctrl), Some(data)])
+            base: NodeBase::new(id, vec![Some(ctrl), Some(data)]),
         }
     }
 
@@ -406,7 +416,7 @@ pub struct AddNode {
 impl AddNode {
     pub fn new(id: NodeId, [left, right]: [NodeId; 2]) -> Self {
         Self {
-            base: NodeBase::new(id, vec![None, Some(left), Some(right)])
+            base: NodeBase::new(id, vec![None, Some(left), Some(right)]),
         }
     }
 }
@@ -418,7 +428,7 @@ pub struct SubNode {
 impl SubNode {
     pub fn new(id: NodeId, [left, right]: [NodeId; 2]) -> Self {
         Self {
-            base: NodeBase::new(id, vec![None, Some(left), Some(right)])
+            base: NodeBase::new(id, vec![None, Some(left), Some(right)]),
         }
     }
 }
@@ -430,7 +440,7 @@ pub struct MulNode {
 impl MulNode {
     pub fn new(id: NodeId, [left, right]: [NodeId; 2]) -> Self {
         Self {
-            base: NodeBase::new(id, vec![None, Some(left), Some(right)])
+            base: NodeBase::new(id, vec![None, Some(left), Some(right)]),
         }
     }
 }
@@ -442,7 +452,7 @@ pub struct DivNode {
 impl DivNode {
     pub fn new(id: NodeId, [left, right]: [NodeId; 2]) -> Self {
         Self {
-            base: NodeBase::new(id, vec![None, Some(left), Some(right)])
+            base: NodeBase::new(id, vec![None, Some(left), Some(right)]),
         }
     }
 }
@@ -454,7 +464,7 @@ pub struct MinusNode {
 impl MinusNode {
     pub fn new(id: NodeId, expr: NodeId) -> Self {
         Self {
-            base: NodeBase::new(id, vec![None, Some(expr)])
+            base: NodeBase::new(id, vec![None, Some(expr)]),
         }
     }
 }

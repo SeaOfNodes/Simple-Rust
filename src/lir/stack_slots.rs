@@ -42,4 +42,3 @@ impl<'a> Index<StackSlotIndex> for StackSlots<'a> {
         &self.entries[index.0.get() as usize - 1]
     }
 }
-

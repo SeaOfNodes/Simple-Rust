@@ -17,14 +17,15 @@ impl<T> Arena<T> {
             inner: RefCell::new(Inner {
                 current: Vec::with_capacity(ALLOCATION_CAPACITY),
                 allocations: vec![],
-            })
+            }),
         }
     }
 
     pub fn alloc(&self, t: T) -> &mut T {
         let mut inner = self.inner.borrow_mut();
         if inner.current.len() == inner.current.capacity() {
-            let previous = std::mem::replace(&mut inner.current, Vec::with_capacity(ALLOCATION_CAPACITY));
+            let previous =
+                std::mem::replace(&mut inner.current, Vec::with_capacity(ALLOCATION_CAPACITY));
             inner.allocations.push(previous);
         }
         let nth = inner.current.len();
@@ -54,8 +55,14 @@ mod tests {
         assert_eq!(b.x, 1);
         assert_eq!(c.x, 2);
 
-        assert_eq!(b as *const Test as usize, a as *const Test as usize + std::mem::size_of::<Test>());
-        assert_eq!(c as *const Test as usize, b as *const Test as usize + std::mem::size_of::<Test>());
+        assert_eq!(
+            b as *const Test as usize,
+            a as *const Test as usize + std::mem::size_of::<Test>()
+        );
+        assert_eq!(
+            c as *const Test as usize,
+            b as *const Test as usize + std::mem::size_of::<Test>()
+        );
     }
 
     #[test]

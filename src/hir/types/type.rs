@@ -105,4 +105,3 @@ impl Hash for TyModule<'_> {
         self.name.hash(state);
     }
 }
-

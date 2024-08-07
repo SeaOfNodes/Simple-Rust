@@ -10,21 +10,21 @@ use std::sync::Arc;
 
 use crate::arena::Arena;
 use crate::asm::{FunctionSymbol, MachineCode};
-use crate::hir::Hir;
 use crate::hir::scopes::Scopes;
 use crate::hir::types::{Ty, Types};
+use crate::hir::Hir;
 use crate::modules::{Modules, ParsedModule};
 use crate::syntax::ast::Item;
 
-pub mod asm;
-pub mod elf;
 pub mod arena;
-pub mod lir;
-pub mod hir;
-mod modules;
-pub mod syntax;
-pub mod soup;
+pub mod asm;
 pub mod bit_set;
+pub mod elf;
+pub mod hir;
+pub mod lir;
+mod modules;
+pub mod soup;
+pub mod syntax;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum ExitCode {
@@ -40,7 +40,6 @@ struct ModuleName(String);
 #[derive(Eq, PartialEq, Hash, Clone, Debug)]
 struct FunctionId(usize);
 
-
 pub fn run(main: PathBuf, _build_args: Vec<String>) -> ExitCode {
     if !main.is_file() || main.extension().map(|it| it != "ro").unwrap_or(true) {
         eprintln!("Not a .ro file: '{}'", main.to_string_lossy());
@@ -48,12 +47,8 @@ pub fn run(main: PathBuf, _build_args: Vec<String>) -> ExitCode {
     }
 
     match compile(main, _build_args) {
-        Ok(ok) => {
-            ExitCode::Success
-        }
-        Err(err) => {
-            ExitCode::Failure
-        }
+        Ok(ok) => ExitCode::Success,
+        Err(err) => ExitCode::Failure,
     }
 }
 
@@ -72,12 +67,16 @@ pub fn compile(build_file: PathBuf, _build_args: Vec<String>) -> Result<PathBuf,
     let mut types = Types::new(&type_arena);
 
     {
-        let module = modules.read_and_parse(Arc::new(build_file.clone())).map_err(|e| {
-            eprintln!("Could not read file {build_file:?}: {e}");
-        })?;
-        let ty = types.get_module(module.clone(), types.ty_root_module).map_err(|e| {
-            eprintln!("Duplicate module");
-        })?;
+        let module = modules
+            .read_and_parse(Arc::new(build_file.clone()))
+            .map_err(|e| {
+                eprintln!("Could not read file {build_file:?}: {e}");
+            })?;
+        let ty = types
+            .get_module(module.clone(), types.ty_root_module)
+            .map_err(|e| {
+                eprintln!("Duplicate module");
+            })?;
         for i in 0..module.ast.items.len() {
             if unique_worklist_tasks < max_unique_worklist_tasks {
                 unique_worklist_tasks += 1;
@@ -113,9 +112,11 @@ pub fn compile(build_file: PathBuf, _build_args: Vec<String>) -> Result<PathBuf,
                 let module = modules.read_and_parse(path.clone()).map_err(|e| {
                     eprintln!("Could not read file {path:?}: {e}");
                 })?;
-                let ty = types.get_module(module.clone(), types.ty_root_module).map_err(|e| {
-                    eprintln!("Duplicate module");
-                })?;
+                let ty = types
+                    .get_module(module.clone(), types.ty_root_module)
+                    .map_err(|e| {
+                        eprintln!("Duplicate module");
+                    })?;
 
                 for i in 0..module.ast.items.len() {
                     if unique_worklist_tasks < max_unique_worklist_tasks {
@@ -197,7 +198,6 @@ pub fn compile(build_file: PathBuf, _build_args: Vec<String>) -> Result<PathBuf,
     Ok(executable_path)
 }
 
-
 enum Outcome<'c> {
     Done,
     Hir(Hir<'c>),
@@ -205,7 +205,12 @@ enum Outcome<'c> {
     ParseImport(PathBuf),
 }
 
-fn compile_item<'c>(types: &mut Types<'c>, module: &Arc<ParsedModule>, module_ty: Ty<'c>, item: usize) -> Outcome<'c> {
+fn compile_item<'c>(
+    types: &mut Types<'c>,
+    module: &Arc<ParsedModule>,
+    module_ty: Ty<'c>,
+    item: usize,
+) -> Outcome<'c> {
     let item = &module.ast.as_ref().items[item];
 
     let mut scopes = Scopes::new(module_ty);
@@ -227,10 +232,12 @@ fn compile_item<'c>(types: &mut Types<'c>, module: &Arc<ParsedModule>, module_ty
             };
 
             let location = e.name.location.to_hir(module_ty);
-            let members = e.members.as_ref().map(|o| o.iter().enumerate()
-                .map(|(i, m)| (m.name.value.clone(), i as i64))
-                .collect()
-            );
+            let members = e.members.as_ref().map(|o| {
+                o.iter()
+                    .enumerate()
+                    .map(|(i, m)| (m.name.value.clone(), i as i64))
+                    .collect()
+            });
             types.get_enum(location, parent, members);
 
             Outcome::Done

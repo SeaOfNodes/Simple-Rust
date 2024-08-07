@@ -27,7 +27,7 @@ pub enum Operation {
         inputs: Vec<Id>,
     },
     Phi {
-        inputs: Vec<Id>
+        inputs: Vec<Id>,
     },
     If {
         predicate: Id,
@@ -54,7 +54,6 @@ pub enum ConstantValue {
     Integer(i64),
 }
 
-
 #[derive(Clone, Debug)]
 pub enum Projection {
     Index(u64),
@@ -66,14 +65,19 @@ pub enum Projection {
     IO,
 }
 
-
 impl Operation {
     pub fn for_each_dependency<F: FnMut(Id)>(&self, mut f: F) {
         let mut f = |x: &Id| f(*x);
         match self {
             Operation::Root {} => {}
             Operation::Start {} => {}
-            Operation::Return { value, io, memory, frame_pointer, return_address } => {
+            Operation::Return {
+                value,
+                io,
+                memory,
+                frame_pointer,
+                return_address,
+            } => {
                 value.iter().for_each(&mut f);
                 f(io);
                 f(memory);
@@ -82,7 +86,10 @@ impl Operation {
             }
             Operation::Parameter { name } => {}
             Operation::Constant { value } => {}
-            Operation::Call { function, arguments } => {
+            Operation::Call {
+                function,
+                arguments,
+            } => {
                 f(function);
                 arguments.iter().for_each(f);
             }

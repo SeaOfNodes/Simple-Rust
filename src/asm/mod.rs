@@ -1,10 +1,10 @@
 use std::convert::TryFrom;
 
-use crate::asm::mem::{Mem, RM, Scale};
+use crate::asm::mem::{Mem, Scale, RM};
 use crate::asm::reg::{Reg, RegSet};
 
-pub mod reg;
 pub mod mem;
+pub mod reg;
 
 pub struct MachineCode {
     pub bytes: Vec<u8>,
@@ -61,10 +61,18 @@ impl MachineCode {
     /// B = Extension of the ModR/M r/m field, SIB base field, or Opcode reg field
     pub fn rex(&mut self, w: bool, r: bool, x: bool, b: bool) {
         let mut byte = 0b0100_0000;
-        if w { byte |= 0b1000; }
-        if r { byte |= 0b100; }
-        if x { byte |= 0b10; }
-        if b { byte |= 0b1; }
+        if w {
+            byte |= 0b1000;
+        }
+        if r {
+            byte |= 0b100;
+        }
+        if x {
+            byte |= 0b10;
+        }
+        if b {
+            byte |= 0b1;
+        }
         self.push(byte)
     }
 
@@ -99,7 +107,6 @@ impl MachineCode {
     pub fn mov_r64_rm64<T: Into<RM>>(&mut self, target: Reg, source: T) {
         self.op_rm64_r64(false, 0x8B, source, target);
     }
-
 
     pub fn add_rm64_r64<T: Into<RM>>(&mut self, target: T, r: Reg) {
         self.op_rm64_r64(false, 0x01, target, r);
@@ -149,7 +156,12 @@ impl MachineCode {
                 self.mod_reg_rm(0b11, reg.reg_field(), rm.reg_field());
             }
             RM::M(mem) => {
-                self.rex(true, reg.needs_rex_bit(), mem.index.needs_rex_bit(), mem.base.needs_rex_bit());
+                self.rex(
+                    true,
+                    reg.needs_rex_bit(),
+                    mem.index.needs_rex_bit(),
+                    mem.base.needs_rex_bit(),
+                );
                 if op_prefix {
                     self.push(0x0f);
                 }
@@ -220,7 +232,8 @@ impl MachineCode {
         // TODO calls need to be aligned to 16 bit!
         self.push(0xe8);
         let offset = self.bytes.len();
-        self.relocations.push(RelocationKind::Fn32(offset, name.to_string()));
+        self.relocations
+            .push(RelocationKind::Fn32(offset, name.to_string()));
         self.push(0);
         self.push(0);
         self.push(0);
@@ -255,9 +268,11 @@ impl MachineCode {
     }
 
     pub fn test_r64_and_r64(&mut self, reg: Reg, reg2: Reg) {
-        self.push(0b0100_1000
-            | if reg2.needs_rex_bit() { 0b100 } else { 0 }
-            | if reg.needs_rex_bit() { 0b1 } else { 0 });
+        self.push(
+            0b0100_1000
+                | if reg2.needs_rex_bit() { 0b100 } else { 0 }
+                | if reg.needs_rex_bit() { 0b1 } else { 0 },
+        );
         self.push(0x85);
         self.push(0b1100_0000 | (reg2.reg_field() << 3) | reg.reg_field());
     }
@@ -266,7 +281,8 @@ impl MachineCode {
         self.lea_rip_offset32(into, 0);
         let offset = self.bytes.len() - 4;
         let addend = self.ro_data.len() as i64;
-        self.relocations.push(RelocationKind::Rodata32(offset, addend));
+        self.relocations
+            .push(RelocationKind::Rodata32(offset, addend));
         self.ro_data.extend_from_slice(value.as_bytes());
         self.ro_data.push(0); // zero terminator
     }
@@ -363,9 +379,7 @@ impl MachineCode {
         F: FnMut(&mut Self, &mut RegSet, Reg) -> T,
     {
         match rm {
-            RM::R(r) => {
-                f(self, free, r)
-            }
+            RM::R(r) => f(self, free, r),
             RM::M(m) => {
                 let r = free.reserve_any();
                 let t = f(self, free, r);
@@ -379,8 +393,8 @@ impl MachineCode {
 
 #[cfg(test)]
 mod tests {
-    use iced_x86::{Decoder, DecoderOptions, Formatter, Instruction, NasmFormatter};
     use iced_x86::code_asm::*;
+    use iced_x86::{Decoder, DecoderOptions, Formatter, Instruction, NasmFormatter};
 
     use crate::asm::mem::{Mem, Scale};
 
@@ -390,22 +404,28 @@ mod tests {
     fn assembler() {
         compare_with_iced(|code, i| {
             i.mov(rcx, rbx + rax * 1 + 0x4299).unwrap();
-            code.mov_r64_rm64(Reg::RCX, RM::M(Mem {
-                base: Reg::RBX,
-                index: Reg::RAX,
-                scale: Scale::S1,
-                disp: 0x4299,
-            }));
+            code.mov_r64_rm64(
+                Reg::RCX,
+                RM::M(Mem {
+                    base: Reg::RBX,
+                    index: Reg::RAX,
+                    scale: Scale::S1,
+                    disp: 0x4299,
+                }),
+            );
         });
 
         compare_with_iced(|code, i| {
             i.mov(rcx + r11 * 4 + 0x42, r11).unwrap();
-            code.mov_rm64_r64(RM::M(Mem {
-                base: Reg::RCX,
-                index: Reg::R11,
-                scale: Scale::S4,
-                disp: 0x42,
-            }), Reg::R11);
+            code.mov_rm64_r64(
+                RM::M(Mem {
+                    base: Reg::RCX,
+                    index: Reg::R11,
+                    scale: Scale::S4,
+                    disp: 0x42,
+                }),
+                Reg::R11,
+            );
         });
 
         compare_with_iced(|code, i| {

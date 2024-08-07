@@ -108,7 +108,7 @@ pub struct RegSet {
 impl RegSet {
     pub fn all(free: bool) -> RegSet {
         RegSet {
-            is_free: [free; 16]
+            is_free: [free; 16],
         }
     }
 

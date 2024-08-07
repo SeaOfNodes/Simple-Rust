@@ -1,6 +1,8 @@
-use crate::syntax::ast::{Assignment, BinaryOperator, Block, Call, Expression, If, PrefixOperator, Return, Statement, Var};
+use crate::syntax::ast::{
+    Assignment, BinaryOperator, Block, Call, Expression, If, PrefixOperator, Return, Statement, Var,
+};
 use crate::syntax::formatter::{FormatCode, Formatter};
-use crate::syntax::parser::{Associativity, infix_precedence};
+use crate::syntax::parser::{infix_precedence, Associativity};
 use crate::syntax::tokenizer::{Kind, Operator};
 
 fn binary_operator_token(op: BinaryOperator) -> Kind {
@@ -27,9 +29,7 @@ impl FormatCode for Expression {
             Expression::Immediate(value) => {
                 write!(f.f, "{value}")
             }
-            Expression::Boolean(v) => {
-                f.write_token(if *v { Kind::True } else { Kind::False })
-            }
+            Expression::Boolean(v) => f.write_token(if *v { Kind::True } else { Kind::False }),
             Expression::Prefix { operator, operand } => {
                 let token_kind = match operator {
                     PrefixOperator::Plus => Kind::Op(Operator::Plus),
@@ -48,17 +48,31 @@ impl FormatCode for Expression {
                 }
                 Ok(())
             }
-            Expression::Binary { operator, location: _, left, right} => {
+            Expression::Binary {
+                operator,
+                location: _,
+                left,
+                right,
+            } => {
                 // NOTE: add parentheses to avoid invalid syntax trees during fuzzing
                 let token_kind = binary_operator_token(*operator);
                 let (p_outer, a_outer) = infix_precedence(token_kind).unwrap();
 
                 let should_parenthesize = |e: &Expression, is_left: bool| {
-                    if let Expression::Binary { operator: inner_operator, .. } = e {
-                        let (p_inner, a_inner) = infix_precedence(binary_operator_token(*inner_operator)).unwrap();
+                    if let Expression::Binary {
+                        operator: inner_operator,
+                        ..
+                    } = e
+                    {
+                        let (p_inner, a_inner) =
+                            infix_precedence(binary_operator_token(*inner_operator)).unwrap();
                         p_inner < p_outer
-                            || (p_inner == p_outer && is_left && matches!(a_outer, Associativity::Right))
-                            || (p_inner == p_outer && !is_left && matches!(a_outer, Associativity::Left))
+                            || (p_inner == p_outer
+                                && is_left
+                                && matches!(a_outer, Associativity::Right))
+                            || (p_inner == p_outer
+                                && !is_left
+                                && matches!(a_outer, Associativity::Left))
                     } else {
                         false
                     }
@@ -85,18 +99,18 @@ impl FormatCode for Expression {
                 }
                 Ok(())
             }
-            Expression::Dot { left, right, enum_value_hack } => {
+            Expression::Dot {
+                left,
+                right,
+                enum_value_hack,
+            } => {
                 left.fmt(f)?;
                 f.write_token(Kind::Dot)?;
                 f.write_identifier(right)
             }
-            Expression::Call(call) => {
-                call.fmt(f)
-            }
+            Expression::Call(call) => call.fmt(f),
             Expression::Identifier(i) => f.write_identifier(i),
-            Expression::String(s) => {
-                f.write_string_literal(s)
-            }
+            Expression::String(s) => f.write_string_literal(s),
             Expression::Parenthesized(expr) => {
                 f.write_token(Kind::OpenParenthesis)?;
                 expr.fmt(f)?;

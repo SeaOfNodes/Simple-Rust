@@ -1,7 +1,7 @@
-use std::{fs, io};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::{fs, io};
 
 use crate::syntax::ast::ModuleAst;
 use crate::syntax::parser::Parser;
@@ -28,22 +28,27 @@ pub struct ParsedModule {
 
 #[derive(Clone)]
 pub struct Modules {
-    modules: HashMap::<Arc<PathBuf>, Module>,
+    modules: HashMap<Arc<PathBuf>, Module>,
 }
 
 impl Modules {
     pub fn new() -> Self {
-        Self { modules: HashMap::new() }
+        Self {
+            modules: HashMap::new(),
+        }
     }
 
     pub fn read_and_parse(&mut self, file: Arc<PathBuf>) -> io::Result<Arc<ParsedModule>> {
         let contents = match fs::read_to_string(file.as_path()) {
             Ok(contents) => contents,
             Err(e) => {
-                self.modules.insert(file.clone(), Module::Unread {
-                    file,
-                    failed_to_read: true,
-                });
+                self.modules.insert(
+                    file.clone(),
+                    Module::Unread {
+                        file,
+                        failed_to_read: true,
+                    },
+                );
                 return Err(e);
             }
         };

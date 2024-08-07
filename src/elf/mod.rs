@@ -205,7 +205,11 @@ pub fn write_to_file(
             // TODO local functions need to be added before global functions
             st_info: (STB_GLOBAL << 4) | STT_FUNC,
             st_other: STV_DEFAULT,
-            st_shndx: if symbol.is_extern { 0 } else { text_section_index } as u16, // TODO points to a SHT_SYMTAB_SHNDX section if too large
+            st_shndx: if symbol.is_extern {
+                0
+            } else {
+                text_section_index
+            } as u16, // TODO points to a SHT_SYMTAB_SHNDX section if too large
             st_value: symbol.code_offset,
             st_size: symbol.code_size,
         };

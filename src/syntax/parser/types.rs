@@ -14,7 +14,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                 let t = self.parse_type()?;
                 Ok(Type::Pointer(Box::from(t)))
             }
-            _ => todo!("handle error")
+            _ => todo!("handle error"),
         };
         result
     }

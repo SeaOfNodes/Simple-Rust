@@ -1,6 +1,8 @@
 use std::cell::Cell;
 
-use crate::syntax::ast::{BinaryOperator, Block, Call, Expression, If, PrefixOperator, Return, Statement, Var};
+use crate::syntax::ast::{
+    BinaryOperator, Block, Call, Expression, If, PrefixOperator, Return, Statement, Var,
+};
 use crate::syntax::parser::Parser;
 use crate::syntax::tokenizer::{Kind, Operator, Value};
 
@@ -46,7 +48,7 @@ fn prefix_precedence(token: Kind) -> Option<Precedence> {
     match token {
         Kind::Op(Operator::Plus) | Kind::Op(Operator::Minus) => Some(Precedence::Unary),
         Kind::Op(Operator::Multiply) | Kind::Ampersand => Some(Precedence::Unary),
-        _ => None
+        _ => None,
     }
 }
 
@@ -63,10 +65,19 @@ pub fn infix_precedence(token: Kind) -> Option<(Precedence, Associativity)> {
         Kind::Op(Operator::Equal) => (Precedence::Assignment, Associativity::Right),
         Kind::Or => (Precedence::Or, Associativity::Left),
         Kind::And => (Precedence::And, Associativity::Left),
-        Kind::OpEq(Operator::Equal) | Kind::OpEq(Operator::Not) => (Precedence::Equality, Associativity::Left),
-        Kind::Op(Operator::Less) | Kind::Op(Operator::Greater) | Kind::OpEq(Operator::Less) | Kind::OpEq(Operator::Greater) => (Precedence::Comparison, Associativity::Left),
-        Kind::Op(Operator::Plus) | Kind::Op(Operator::Minus) => (Precedence::Term, Associativity::Left),
-        Kind::Op(Operator::Multiply) | Kind::Op(Operator::Divide) => (Precedence::Factor, Associativity::Left),
+        Kind::OpEq(Operator::Equal) | Kind::OpEq(Operator::Not) => {
+            (Precedence::Equality, Associativity::Left)
+        }
+        Kind::Op(Operator::Less)
+        | Kind::Op(Operator::Greater)
+        | Kind::OpEq(Operator::Less)
+        | Kind::OpEq(Operator::Greater) => (Precedence::Comparison, Associativity::Left),
+        Kind::Op(Operator::Plus) | Kind::Op(Operator::Minus) => {
+            (Precedence::Term, Associativity::Left)
+        }
+        Kind::Op(Operator::Multiply) | Kind::Op(Operator::Divide) => {
+            (Precedence::Factor, Associativity::Left)
+        }
         _ => return None,
     };
     Some(res)
@@ -75,7 +86,6 @@ pub fn infix_precedence(token: Kind) -> Option<(Precedence, Associativity)> {
 impl<'a, 'b> Parser<'a, 'b> {
     /// https://matklad.github.io/2020/04/13/simple-but-powerful-pratt-parsing.html
     pub fn parse_expression(&mut self, min_precedence: Precedence) -> Result<Expression, ()> {
-
         // primary
         let mut result = match self.peek().ok_or(())?.kind {
             Kind::Identifier => {
@@ -93,7 +103,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                 let string = self.eat(Kind::Str).unwrap();
                 let value = match string.value {
                     Some(Value::Str(s)) => s,
-                    _ => unreachable!()
+                    _ => unreachable!(),
                 };
                 Expression::String(value)
             }
@@ -118,7 +128,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                     Kind::Op(Operator::Multiply) => PrefixOperator::Dereference,
                     Kind::Op(Operator::Plus) => PrefixOperator::Plus,
                     Kind::Op(Operator::Minus) => PrefixOperator::Minus,
-                    _ => unreachable!("prefix_precedence returned Some")
+                    _ => unreachable!("prefix_precedence returned Some"),
                 };
                 self.eat(token_kind).unwrap();
                 let expression = self.parse_expression(p)?;
@@ -146,10 +156,19 @@ impl<'a, 'b> Parser<'a, 'b> {
                         }
                     }
                     Kind::OpenParenthesis => {
-                        let arguments = self.list(Kind::OpenParenthesis, |p| p.parse_expression(Precedence::None), Kind::Comma, Kind::CloseParenthesis, true)?;
-                        Expression::Call(Box::from(Call { callee: result, arguments }))
+                        let arguments = self.list(
+                            Kind::OpenParenthesis,
+                            |p| p.parse_expression(Precedence::None),
+                            Kind::Comma,
+                            Kind::CloseParenthesis,
+                            true,
+                        )?;
+                        Expression::Call(Box::from(Call {
+                            callee: result,
+                            arguments,
+                        }))
                     }
-                    _ => unreachable!("postfix_precedence returned Some")
+                    _ => unreachable!("postfix_precedence returned Some"),
                 };
                 continue;
             }
@@ -160,7 +179,9 @@ impl<'a, 'b> Parser<'a, 'b> {
                     break;
                 }
                 let right_precedence = match a {
-                    Associativity::Left => p.next().expect("not maximum because p < min_precedence"),
+                    Associativity::Left => {
+                        p.next().expect("not maximum because p < min_precedence")
+                    }
                     Associativity::Right => p,
                 };
 
@@ -215,7 +236,6 @@ impl<'a, 'b> Parser<'a, 'b> {
         Ok(Block { statements })
     }
 
-
     fn statement(&mut self) -> Result<Statement, ()> {
         let result = match self.peek().ok_or(())?.kind {
             Kind::Return => {
@@ -238,10 +258,17 @@ impl<'a, 'b> Parser<'a, 'b> {
                 let expression = self.parse_expression(Precedence::None)?;
                 self.eat(Kind::Semicolon)?;
 
-                Statement::Var(Var { name, ty, expression })
+                Statement::Var(Var {
+                    name,
+                    ty,
+                    expression,
+                })
             }
             Kind::If => {
-                let mut i = If { cases: vec![], else_block: None };
+                let mut i = If {
+                    cases: vec![],
+                    else_block: None,
+                };
 
                 loop {
                     if self.peek_kind(Kind::If) {
@@ -302,8 +329,12 @@ mod tests {
     fn test_expression_terms_and_factors() {
         Parser::test("1 + 2 * 3", |p| p.parse_expression(Precedence::None));
         Parser::test("1 * 2 + 3", |p| p.parse_expression(Precedence::None));
-        Parser::test("1 + 2 + 3 * 4 * 5 + 6", |p| p.parse_expression(Precedence::None));
-        Parser::test("1 * 2 * 3 + 4 + 5 * 6", |p| p.parse_expression(Precedence::None));
+        Parser::test("1 + 2 + 3 * 4 * 5 + 6", |p| {
+            p.parse_expression(Precedence::None)
+        });
+        Parser::test("1 * 2 * 3 + 4 + 5 * 6", |p| {
+            p.parse_expression(Precedence::None)
+        });
     }
 
     #[test]
@@ -334,7 +365,9 @@ mod tests {
     #[test]
     fn test_expression_string() {
         Parser::test("\"string\"", |p| p.parse_expression(Precedence::None));
-        Parser::test("\"\\\"\\\\\\n\\r\\t\"", |p| p.parse_expression(Precedence::None));
+        Parser::test("\"\\\"\\\\\\n\\r\\t\"", |p| {
+            p.parse_expression(Precedence::None)
+        });
 
         let test_char = |c: char| {
             let s = format!("\"\\{c}\""); // "\{c}"
@@ -427,7 +460,15 @@ mod tests {
     fn associativity_add() {
         Parser::test("1 + 2 + 3", |p| {
             let e = p.parse_expression(Precedence::None);
-            let Ok(Expression::Binary { operator: BinaryOperator::Plus, location, left, right }) = &e else { unreachable!() };
+            let Ok(Expression::Binary {
+                operator: BinaryOperator::Plus,
+                location,
+                left,
+                right,
+            }) = &e
+            else {
+                unreachable!()
+            };
             assert!(matches!(**right, Expression::Immediate(3)));
             e
         });
