@@ -1,5 +1,3 @@
-use std::cell::Cell;
-
 use crate::syntax::ast::{
     BinaryOperator, Block, Call, Expression, If, PrefixOperator, Return, Statement, Var,
 };
@@ -156,7 +154,6 @@ impl<'a, 'b> Parser<'a, 'b> {
                         Expression::Dot {
                             left: Box::from(result),
                             right,
-                            enum_value_hack: Cell::new(0),
                         }
                     }
                     Kind::OpenParenthesis => {

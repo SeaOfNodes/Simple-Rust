@@ -1,5 +1,3 @@
-use std::cell::Cell;
-
 #[derive(Debug)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct ModuleAst {
@@ -113,7 +111,6 @@ pub enum Expression {
     Dot {
         left: Box<Expression>,
         right: Identifier,
-        enum_value_hack: Cell<i64>, // TODO removeme
     },
     Call(Box<Call>),
     Identifier(Identifier),
@@ -201,7 +198,7 @@ impl<'a> arbitrary::Arbitrary<'a> for Identifier {
 
 #[cfg(feature = "arbitrary")]
 impl<'a> arbitrary::Arbitrary<'a> for Location {
-    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+    fn arbitrary(_: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
         Ok(Location { line: 0, column: 0 }) // we don't care about locations
     }
 }

@@ -64,7 +64,7 @@ impl FormatCode for Expression {
                         ..
                     } = e
                     {
-                        let (p_inner, a_inner) =
+                        let (p_inner, _a_inner) =
                             infix_precedence(binary_operator_token(*inner_operator)).unwrap();
                         p_inner < p_outer
                             || (p_inner == p_outer
@@ -99,11 +99,7 @@ impl FormatCode for Expression {
                 }
                 Ok(())
             }
-            Expression::Dot {
-                left,
-                right,
-                enum_value_hack,
-            } => {
+            Expression::Dot { left, right } => {
                 left.fmt(f)?;
                 f.write_token(Kind::Dot)?;
                 f.write_identifier(right)

@@ -32,12 +32,6 @@ pub enum ExitCode {
     InvalidFile,
 }
 
-#[derive(Eq, PartialEq, Hash, Clone, Debug)]
-struct ModuleName(String);
-
-#[derive(Eq, PartialEq, Hash, Clone, Debug)]
-struct FunctionId(usize);
-
 pub fn run(main: PathBuf, _build_args: Vec<String>) -> ExitCode {
     if !main.is_file() || main.extension().map(|it| it != "ro").unwrap_or(true) {
         eprintln!("Not a .ro file: '{}'", main.to_string_lossy());
@@ -45,8 +39,8 @@ pub fn run(main: PathBuf, _build_args: Vec<String>) -> ExitCode {
     }
 
     match compile(main, _build_args) {
-        Ok(ok) => ExitCode::Success,
-        Err(err) => ExitCode::Failure,
+        Ok(_) => ExitCode::Success,
+        Err(_) => ExitCode::Failure,
     }
 }
 
@@ -226,7 +220,7 @@ fn compile_item<'c>(
                 }
             }
         },
-        Item::Enum(e) => {
+        Item::Enum(_) => {
             // let parent = if let Some(parent) = &e.parent {
             //     todo!()
             //     // let ty = scopes.lookup_type(None, types, parent);
@@ -249,7 +243,7 @@ fn compile_item<'c>(
             //
             Outcome::Done
         }
-        Item::Struct(s) => {
+        Item::Struct(_) => {
             // let location = s.name.location.with_module(module_ty);
             //
             // // let struct_ty = types.get_struct(location);

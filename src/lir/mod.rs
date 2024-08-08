@@ -222,12 +222,12 @@ enum Operation {
 }
 
 #[derive(Debug)]
-enum Unary {
+pub enum Unary {
     Negate,
 }
 
 #[derive(Debug)]
-enum Binary {
+pub enum Binary {
     Add,
     Sub,
     Mul,
