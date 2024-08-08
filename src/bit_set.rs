@@ -10,7 +10,7 @@ impl Index for usize {
     }
 }
 
-pub struct BitSet<E> {
+pub(crate) struct BitSet<E> {
     words: Vec<usize>,
     phantom_data: PhantomData<E>,
 }
@@ -44,14 +44,14 @@ impl<E: Index> BitSet<E> {
         (word, bit)
     }
 
-    pub fn add(&mut self, element: E) {
+    pub(crate) fn add(&mut self, element: E) {
         let (word, bit) = BitSet::index(&element);
         self.ensure_size(word);
         self.words[word] |= 1 << bit;
         debug_assert!(self.get(element));
     }
 
-    pub fn remove(&mut self, element: E) {
+    pub(crate) fn remove(&mut self, element: E) {
         let (word, bit) = BitSet::index(&element);
         if let Some(word) = self.words.get_mut(word) {
             *word &= !(1 << bit);
@@ -59,7 +59,7 @@ impl<E: Index> BitSet<E> {
         debug_assert!(!self.get(element));
     }
 
-    pub fn get(&self, element: E) -> bool {
+    pub(crate) fn get(&self, element: E) -> bool {
         let (word, bit) = BitSet::index(&element);
         self.words.get(word).is_some_and(|w| (w & (1 << bit)) != 0)
     }

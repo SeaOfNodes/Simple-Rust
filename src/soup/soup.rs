@@ -251,7 +251,7 @@ impl<'t> Soup<'t> {
         node // no progress
     }
 
-    fn idealize(&mut self, node: NodeId, types: &mut Types<'t>) -> Option<NodeId> {
+    fn idealize(&mut self, _node: NodeId, _types: &mut Types<'t>) -> Option<NodeId> {
         None
     }
 }

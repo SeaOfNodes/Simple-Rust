@@ -420,9 +420,11 @@ mod tests {
     fn test_block() {
         Parser::test("{}", |p| p.block());
         Parser::test("{\n    foo();\n}", |p| p.block());
-        Parser::test("a + {\n    foo();\n}", |p| p.parse_expression(Precedence::None));
+        Parser::test("a + {\n    foo();\n}", |p| {
+            p.parse_expression(Precedence::None)
+        });
     }
-    
+
     #[test]
     fn test_statement_block() {
         Parser::test("{}", |p| p.statement());
@@ -491,8 +493,8 @@ mod tests {
             let e = p.parse_expression(Precedence::None);
             let Ok(Expression::Binary {
                 operator: BinaryOperator::Plus,
-                location,
-                left,
+                location: _,
+                left: _,
                 right,
             }) = &e
             else {

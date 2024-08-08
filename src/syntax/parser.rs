@@ -68,7 +68,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                     parser.peek()
                 );
             }
-            Err(e) => {
+            Err(_) => {
                 // task failed successfully
             }
         }

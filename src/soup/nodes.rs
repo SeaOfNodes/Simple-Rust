@@ -271,7 +271,7 @@ impl<'t> Node<'t> {
     // Unique label for graph visualization, e.g. "Add12" or "Region30" or "EQ99"
     pub fn unique_name(&self) -> String {
         match self {
-            Node::ConstantNode(c) => format!("Con_{}", self.base().id),
+            Node::ConstantNode(_) => format!("Con_{}", self.base().id),
             _ => format!("{}{}", self.label(), self.base().id),
         }
     }

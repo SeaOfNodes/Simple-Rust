@@ -339,7 +339,6 @@ fn tokenize() {
         89439834 31.4159
         var if true
     "#;
-    let file = 12;
     let mut tokenizer = Tokenizer::new(source);
 
     let t = tokenizer.next().unwrap();
