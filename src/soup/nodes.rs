@@ -419,9 +419,9 @@ impl<'t> Nodes<'t> {
             .ok_or(())
     }
 
-    pub fn scope_update(&mut self, scope_node: NodeId, name: &str, value: NodeId) {
+    pub fn scope_update(&mut self, scope_node: NodeId, name: &str, value: NodeId) -> Result<NodeId, ()> {
         let nesting_level = self.scope_mut(scope_node).scopes.len() - 1;
-        self.scope_lookup_update(scope_node, name, Some(value), nesting_level);
+        self.scope_lookup_update(scope_node, name, Some(value), nesting_level).ok_or(())
     }
 
     fn scope_lookup_update(
@@ -437,8 +437,10 @@ impl<'t> Nodes<'t> {
             let old = scope.base.inputs[index];
             if value.is_some() {
                 self.set_def(scope_node, index, value);
+                value
+            } else {
+                old
             }
-            old
         } else if nesting_level > 0 {
             self.scope_lookup_update(scope_node, name, value, nesting_level - 1)
         } else {

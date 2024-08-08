@@ -133,9 +133,12 @@ fn test_self_assign() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let () = soup
+    let errors = soup
         .compile_function(function, &mut types)
         .expect_err("should fail");
+    
+    assert_eq!(errors.len(), 1);
+    assert!(errors[0].contains("not in scope"));
 }
 
 #[test]

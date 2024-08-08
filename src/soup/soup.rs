@@ -1,3 +1,5 @@
+use std::mem;
+
 use crate::soup::graph_visualizer;
 use crate::soup::nodes::{
     AddNode, ConstantNode, DivNode, MinusNode, MulNode, Node, NodeId, Nodes, ReturnNode, ScopeNode,
@@ -5,6 +7,7 @@ use crate::soup::nodes::{
 };
 use crate::soup::types::{Ty, Type, Types};
 use crate::syntax::ast::{BinaryOperator, Block, Expression, Function, PrefixOperator, Statement};
+use crate::syntax::formatter::{CodeStyle, FormatCode};
 
 pub struct Soup<'t> {
     pub nodes: Nodes<'t>,
@@ -12,6 +15,7 @@ pub struct Soup<'t> {
     ctrl: NodeId,
     pub(crate) scope: NodeId,
     pub disable_peephole: bool,
+    errors: Vec<String>,
 }
 
 impl<'t> Soup<'t> {
@@ -22,13 +26,14 @@ impl<'t> Soup<'t> {
             ctrl: NodeId::DUMMY,
             scope: NodeId::DUMMY,
             disable_peephole: false,
+            errors: vec![],
         }
     }
     pub fn compile_function(
         &mut self,
         function: &Function,
         types: &mut Types<'t>,
-    ) -> Result<(NodeId, NodeId), ()> {
+    ) -> Result<(NodeId, NodeId), Vec<String>> {
         let start = self.create_peepholed(types, |id| Node::StartNode(StartNode::new(id)));
         self.start = start;
         self.ctrl = start;
@@ -37,24 +42,33 @@ impl<'t> Soup<'t> {
 
         let stop = match &function.body {
             None => todo!(),
-            Some(body) => self.compile_block(&body, types)?,
+            Some(body) => self.compile_block(&body, types),
         };
-        Ok((start, stop))
+
+        if self.errors.is_empty() {
+            Ok((start, stop))
+        } else {
+            Err(mem::take(&mut self.errors))
+        }
     }
 
-    fn compile_block(&mut self, block: &Block, types: &mut Types<'t>) -> Result<NodeId, ()> {
+    fn compile_block(&mut self, block: &Block, types: &mut Types<'t>) -> NodeId {
         let mut result = None;
         let mut saw_return = false;
+        let mut reported_unreachable = false;
 
         self.nodes.scope_push(self.scope);
         for statement in &block.statements {
-            if saw_return && !matches!(statement, Statement::Meta(_)) {
-                return Err(());
+            if saw_return && !matches!(statement, Statement::Meta(_)) && !reported_unreachable {
+                let s = statement.format(&CodeStyle::DEFAULT);
+                self.errors
+                    .push(format!("Unreachable statement after return: {s}"));
+                reported_unreachable = true;
             }
             match statement {
-                Statement::Expression(e) => result = Some(self.compile_expression(e, types)?),
+                Statement::Expression(e) => result = Some(self.compile_expression(e, types)),
                 Statement::Return(ret) => {
-                    let data = self.compile_expression(&ret.value, types)?;
+                    let data = self.compile_expression(&ret.value, types);
                     let ctrl = self.ctrl;
                     saw_return = true;
                     result = Some(self.create_peepholed(types, |id| {
@@ -63,9 +77,16 @@ impl<'t> Soup<'t> {
                 }
                 Statement::If(_) => todo!(),
                 Statement::Var(var) => {
-                    let value = self.compile_expression(&var.expression, types)?;
-                    self.nodes
-                        .scope_define(self.scope, var.name.value.clone(), value)?;
+                    let value = self.compile_expression(&var.expression, types);
+                    if let Err(()) =
+                        self.nodes
+                            .scope_define(self.scope, var.name.value.clone(), value)
+                    {
+                        self.errors.push(format!(
+                            "{:?}: Variable {} is already defined in scope",
+                            var.name.location, &var.name.value
+                        ));
+                    }
                     result = Some(value);
                 }
                 Statement::Meta(ident) => {
@@ -76,25 +97,38 @@ impl<'t> Soup<'t> {
             }
         }
         self.nodes.scope_pop(self.scope);
-        result.ok_or(())
+
+        result.unwrap_or_else(|| self.create_unit(types))
     }
 
-    fn compile_expression(
-        &mut self,
-        expression: &Expression,
-        types: &mut Types<'t>,
-    ) -> Result<NodeId, ()> {
+    fn create_unit(&mut self, types: &mut Types<'t>) -> NodeId {
+        let ty = types.ty_zero; // TODO return Unit or something like that
+        let start = self.start;
+        self.create_peepholed(types, |id| {
+            Node::ConstantNode(ConstantNode::new(id, start, ty))
+        })
+    }
+
+    fn compile_expression(&mut self, expression: &Expression, types: &mut Types<'t>) -> NodeId {
         match expression {
             Expression::Immediate(immediate) => {
                 let ty = types.get_int(*immediate);
                 let start = self.start;
-                Ok(self.create_peepholed(types, |id| {
+                self.create_peepholed(types, |id| {
                     Node::ConstantNode(ConstantNode::new(id, start, ty))
-                }))
+                })
             }
             Expression::Identifier(identifier) => {
-                let value = self.nodes.scope_lookup(self.scope, &identifier.value)?;
-                Ok(value)
+                match self.nodes.scope_lookup(self.scope, &identifier.value) {
+                    Ok(value) => value,
+                    Err(()) => {
+                        self.errors.push(format!(
+                            "{:?}: Variable {} not in scope",
+                            identifier.location, &identifier.value
+                        ));
+                        self.create_unit(types)
+                    }
+                }
             }
             Expression::Binary {
                 operator: BinaryOperator::Assign,
@@ -105,11 +139,17 @@ impl<'t> Soup<'t> {
                 let Expression::Identifier(left) = left.as_ref() else {
                     todo!()
                 };
-                let right = self.compile_expression(right, types)?;
+                let right = self.compile_expression(right, types);
 
-                self.nodes.scope_update(self.scope, &left.value, right);
-
-                Ok(right)
+                self.nodes
+                    .scope_update(self.scope, &left.value, right)
+                    .unwrap_or_else(|()| {
+                        self.errors.push(format!(
+                            "{:?}: Variable {} not in scope",
+                            left.location, &left.value
+                        ));
+                        self.create_unit(types)
+                    })
             }
             Expression::Binary {
                 operator,
@@ -117,9 +157,9 @@ impl<'t> Soup<'t> {
                 left,
                 right,
             } => {
-                let left_node = self.compile_expression(left, types)?;
-                let right_node = self.compile_expression(right, types)?;
-                Ok(self.create_peepholed(types, |id| match operator {
+                let left_node = self.compile_expression(left, types);
+                let right_node = self.compile_expression(right, types);
+                self.create_peepholed(types, |id| match operator {
                     BinaryOperator::Plus => {
                         Node::AddNode(AddNode::new(id, [left_node, right_node]))
                     }
@@ -133,14 +173,14 @@ impl<'t> Soup<'t> {
                         Node::DivNode(DivNode::new(id, [left_node, right_node]))
                     }
                     _ => todo!(),
-                }))
+                })
             }
             Expression::Prefix { operator, operand } => {
-                let operand = self.compile_expression(operand, types)?;
-                Ok(self.create_peepholed(types, |id| match operator {
+                let operand = self.compile_expression(operand, types);
+                self.create_peepholed(types, |id| match operator {
                     PrefixOperator::Minus => Node::MinusNode(MinusNode::new(id, operand)),
                     _ => todo! {},
-                }))
+                })
             }
             Expression::Parenthesized(inner) => self.compile_expression(inner, types),
             Expression::Block(block) => self.compile_block(block, types),
