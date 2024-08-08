@@ -1,3 +1,4 @@
+use crate::soup::graph_visualizer;
 use crate::soup::nodes::{
     AddNode, ConstantNode, DivNode, MinusNode, MulNode, Node, NodeId, Nodes, ReturnNode, ScopeNode,
     StartNode, SubNode,
@@ -42,14 +43,21 @@ impl<'t> Soup<'t> {
     }
 
     fn compile_block(&mut self, block: &Block, types: &mut Types<'t>) -> Result<NodeId, ()> {
+        let mut result = None;
+        let mut saw_return = false;
+
         self.nodes.scope_push(self.scope);
         for statement in &block.statements {
+            if saw_return && !matches!(statement, Statement::Meta(_)) {
+                return Err(());
+            }
             match statement {
-                Statement::Expression(_) => todo!(),
+                Statement::Expression(e) => result = Some(self.compile_expression(e, types)?),
                 Statement::Return(ret) => {
                     let data = self.compile_expression(&ret.value, types)?;
                     let ctrl = self.ctrl;
-                    return Ok(self.create_peepholed(types, |id| {
+                    saw_return = true;
+                    result = Some(self.create_peepholed(types, |id| {
                         Node::ReturnNode(ReturnNode::new(id, ctrl, data))
                     }));
                 }
@@ -58,11 +66,17 @@ impl<'t> Soup<'t> {
                     let value = self.compile_expression(&var.expression, types)?;
                     self.nodes
                         .scope_define(self.scope, var.name.value.clone(), value)?;
+                    result = Some(value);
+                }
+                Statement::Meta(ident) => {
+                    if ident.value == "show_graph" {
+                        println!("{}", graph_visualizer::generate_dot_output(self).unwrap());
+                    }
                 }
             }
         }
         self.nodes.scope_pop(self.scope);
-        Err(())
+        result.ok_or(())
     }
 
     fn compile_expression(
@@ -128,7 +142,9 @@ impl<'t> Soup<'t> {
                     _ => todo! {},
                 }))
             }
-            _ => todo!(),
+            Expression::Parenthesized(inner) => self.compile_expression(inner, types),
+            Expression::Block(block) => self.compile_block(block, types),
+            _ => todo!("{expression:?}"),
         }
     }
 

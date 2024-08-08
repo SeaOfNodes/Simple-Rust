@@ -2,7 +2,7 @@ use crate::syntax::ast::{
     Assignment, BinaryOperator, Block, Call, Expression, If, PrefixOperator, Return, Statement, Var,
 };
 use crate::syntax::formatter::{FormatCode, Formatter};
-use crate::syntax::parser::{infix_precedence, Associativity};
+use crate::syntax::parser::{Associativity, infix_precedence};
 use crate::syntax::tokenizer::{Kind, Operator};
 
 fn binary_operator_token(op: BinaryOperator) -> Kind {
@@ -116,6 +116,7 @@ impl FormatCode for Expression {
                 expr.fmt(f)?;
                 f.write_token(Kind::CloseParenthesis)
             }
+            Expression::Block(block) => block.fmt(f),
         }
     }
 }
@@ -154,6 +155,7 @@ impl FormatCode for Block {
 impl FormatCode for Statement {
     fn fmt(&self, f: &mut Formatter<'_, '_>) -> std::fmt::Result {
         match self {
+            Statement::Expression(Expression::Block(block)) => block.fmt(f),
             Statement::Expression(e) => {
                 e.fmt(f)?;
                 f.write_token(Kind::Semicolon)
@@ -161,6 +163,11 @@ impl FormatCode for Statement {
             Statement::Return(r) => r.fmt(f),
             Statement::If(i) => i.fmt(f),
             Statement::Var(v) => v.fmt(f),
+            Statement::Meta(i) => {
+                f.write_token(Kind::Hash)?;
+                f.write_identifier(i)?;
+                f.write_token(Kind::Semicolon)
+            }
         }
     }
 }

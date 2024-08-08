@@ -137,6 +137,7 @@ impl<'t> Hir<'t> {
             }
             Statement::If(_) => {}
             Statement::Var(_) => {}
+            Statement::Meta(_) => {}
         }
         Ok(())
     }

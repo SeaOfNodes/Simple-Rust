@@ -119,6 +119,7 @@ pub enum Expression {
     Identifier(Identifier),
     String(String),
     Parenthesized(Box<Expression>),
+    Block(Block),
 }
 
 #[derive(Debug)]
@@ -155,6 +156,7 @@ pub enum Statement {
     Return(Return),
     If(If),
     Var(Var),
+    Meta(Identifier),
 }
 
 #[derive(Debug)]

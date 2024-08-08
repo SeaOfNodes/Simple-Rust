@@ -9,7 +9,7 @@ use crate::syntax::parser::Parser;
 #[test]
 fn test_var_decl() {
     let parser = Parser::new(
-        "fun main() -> Int { var a: int = 1; return a; }",
+        "fun main() -> Int { var a: Int = 1; return a; }",
         Path::new("dummy.ro"),
     );
     let ast = parser.parse().expect("should parse");
@@ -30,7 +30,7 @@ fn test_var_decl() {
 #[test]
 fn test_var_add() {
     let parser = Parser::new(
-        "fun main() -> Int { var a: int = 1; var b: int = 2; return a + b; }",
+        "fun main() -> Int { var a: Int = 1; var b = 2; return a + b; }",
         Path::new("dummy.ro"),
     );
     let ast = parser.parse().expect("should parse");
@@ -51,7 +51,7 @@ fn test_var_add() {
 #[test]
 fn test_var_scope() {
     let parser = Parser::new(
-        "fun main() -> Int { var a: int = 1; var b: int = 2; var c: int = 0; { var b: int = 3; c = a + b; } return c; }",
+        "fun main() -> Int { var a: Int = 1; var b = 2; var c: Int = 0; { var b: Int = 3; c = a + b; } return c; }",
         Path::new("dummy.ro"),
     );
     let ast = parser.parse().expect("should parse");
@@ -72,7 +72,7 @@ fn test_var_scope() {
 #[test]
 fn test_var_scope_no_peephole() {
     let parser = Parser::new(
-        "fun main() -> Int { var a: int = 1; var b: int = 2; var c: int = 0; { var b: int = 3; c = a + b; #show_graph; } return c; #show_graph; }",
+        "fun main() -> Int { var a: Int = 1; var b: Int = 2; var c: Int = 0; { var b: Int = 3; c = a + b; #show_graph; } return c; #show_graph; }",
         Path::new("dummy.ro"),
     );
     let ast = parser.parse().expect("should parse");
@@ -95,12 +95,12 @@ fn test_var_scope_no_peephole() {
 fn test_var_dist() {
     let parser = Parser::new(
         "fun main() -> Int {
-            var x0: int = 1;
-            var y0: int = 2;
-            var x1: int = 3;
-            var y1: int = 4;
+            var x0: Int = 1;
+            var y0      = 2;
+            var x1: Int = 3;
+            var y1: Int = 4;
             return (x0-x1)*(x0-x1) + (y0-y1)*(y0-y1);
-            #showGraph;
+            #show_graph;
         }",
         Path::new("dummy.ro"),
     );
@@ -122,7 +122,7 @@ fn test_var_dist() {
 #[test]
 fn test_self_assign() {
     let parser = Parser::new(
-        "fun main() -> Int { var a: int = a; return a; }",
+        "fun main() -> Int { var a: Int = a; return a; }",
         Path::new("dummy.ro"),
     );
     let ast = parser.parse().expect("should parse");
@@ -133,7 +133,7 @@ fn test_self_assign() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (()) = soup
+    let () = soup
         .compile_function(function, &mut types)
         .expect_err("should fail");
 }
@@ -141,7 +141,7 @@ fn test_self_assign() {
 #[test]
 fn test_bad_1() {
     let parser = Parser::new(
-        "fun main() -> Int { var a: int = 1; var b: int = 2; var c: int = 0; { var b: int = 3; c = a + b; }",
+        "fun main() -> Int { var a: Int = 1; var b: Int = 2; var c: Int = 0; { var b: Int = 3; c = a + b; }",
         Path::new("dummy.ro"),
     );
     let () = parser.parse().expect_err("should not parse");

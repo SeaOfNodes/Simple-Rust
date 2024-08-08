@@ -121,6 +121,10 @@ impl<'a, 'b> Parser<'a, 'b> {
                 self.eat(Kind::CloseParenthesis)?;
                 Expression::Parenthesized(Box::from(expression))
             }
+            Kind::OpenBrace => {
+                let block = self.block()?;
+                Expression::Block(block)
+            }
             token_kind => {
                 let p = prefix_precedence(token_kind).ok_or(())?;
                 let op = match token_kind {
@@ -227,8 +231,12 @@ impl<'a, 'b> Parser<'a, 'b> {
         self.eat(Kind::OpenBrace)?;
 
         while self.peek_not_kind(Kind::CloseBrace) {
-            let statement = self.statement()?;
-            statements.push(statement);
+            if self.peek_kind(Kind::Semicolon) {
+                self.eat(Kind::Semicolon).unwrap();
+            } else {
+                let statement = self.statement()?;
+                statements.push(statement);
+            }
         }
 
         self.eat(Kind::CloseBrace)?;
@@ -290,9 +298,17 @@ impl<'a, 'b> Parser<'a, 'b> {
 
                 Statement::If(i)
             }
-            _ => {
-                let expression = self.parse_expression(Precedence::None)?;
+            Kind::Hash => {
+                self.eat(Kind::Hash).unwrap();
+                let ident = self.eat_identifier()?;
                 self.eat(Kind::Semicolon)?;
+                Statement::Meta(ident)
+            }
+            k => {
+                let expression = self.parse_expression(Precedence::None)?;
+                if k != Kind::OpenBrace {
+                    self.eat(Kind::Semicolon)?;
+                }
                 Statement::Expression(expression)
             }
         };
@@ -404,6 +420,14 @@ mod tests {
     fn test_block() {
         Parser::test("{}", |p| p.block());
         Parser::test("{\n    foo();\n}", |p| p.block());
+        Parser::test("a + {\n    foo();\n}", |p| p.parse_expression(Precedence::None));
+    }
+    
+    #[test]
+    fn test_statement_block() {
+        Parser::test("{}", |p| p.statement());
+        Parser::test("{\n    {}\n}", |p| p.statement());
+        Parser::test("{\n    {}\n    {}\n}", |p| p.statement());
     }
 
     #[test]
@@ -420,6 +444,11 @@ mod tests {
     fn test_statement_var() {
         Parser::test("var foo = 42;", |p| p.statement());
         Parser::test("var foo: Int = 42;", |p| p.statement());
+    }
+
+    #[test]
+    fn test_statement_meta() {
+        Parser::test("#show_graph;", |p| p.statement());
     }
 
     #[test]

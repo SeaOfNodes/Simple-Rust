@@ -8,6 +8,7 @@ impl Kind {
             Kind::Ampersand => "&",
             Kind::Circumflex => "^",
             Kind::At => "@",
+            Kind::Hash => "#",
             Kind::Colon => ":",
             Kind::Comma => ",",
             Kind::Dot => ".",

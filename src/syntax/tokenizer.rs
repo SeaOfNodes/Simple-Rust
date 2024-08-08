@@ -21,6 +21,7 @@ pub enum Kind {
     Ampersand,
     Circumflex,
     At,
+    Hash,
     Colon,
     Comma,
     Dot,
@@ -185,6 +186,7 @@ impl<'a> Iterator for Tokenizer<'a> {
                 '^' => Circumflex,
                 '&' => Ampersand,
                 '@' => At,
+                '#' => Hash,
                 c if c.is_ascii_digit() => {
                     let mut k = Integer;
                     let mut clone = self.iter.clone();
