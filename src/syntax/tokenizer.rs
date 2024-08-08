@@ -106,7 +106,7 @@ impl<'a> Tokenizer<'a> {
             iter: source.chars(),
             source,
             line: 1,
-            column: 1,
+            column: 0,
         }
     }
 

@@ -1,4 +1,5 @@
 use std::iter::Peekable;
+use std::mem;
 use std::path::Path;
 
 pub use expressions::{Associativity, infix_precedence, Precedence};
@@ -84,7 +85,21 @@ impl<'a, 'b> Parser<'a, 'b> {
         self.errors.push(message);
     }
 
-    fn parse_internal(mut self) -> Result<ModuleAst, ()> {
+    fn eat_unexpected_token(&mut self) {
+        let message = match self.next() {
+            Ok(token) => format!(
+                "{}:{}:{}: Unexpected token '{}'",
+                self.path.to_str().unwrap(),
+                token.line,
+                token.column,
+                &self.source[token.start..token.end],
+            ),
+            Err(()) => format!("{}: Unexpected end of file", self.path.to_str().unwrap(),),
+        };
+        self.errors.push(message);
+    }
+
+    fn parse_internal(&mut self) -> Result<ModuleAst, ()> {
         let name = "TODO".to_string();
         let mut module = ModuleAst {
             name,
@@ -94,43 +109,27 @@ impl<'a, 'b> Parser<'a, 'b> {
             match next.kind {
                 Kind::Fun => {
                     let Ok(function) = self.function() else {
-                        self.error_at(&next, "Error parsing function");
+                        self.eat_unexpected_token();
                         return Err(());
                     };
                     module.items.push(Item::Function(function));
                 }
                 Kind::Enum => {
                     let Ok(e) = self.parse_enum() else {
-                        if let Some(token) = self.peek().cloned() {
-                            println!(
-                                "{}:{}:{}: Error parsing enum",
-                                self.path.to_str().unwrap(),
-                                token.line,
-                                token.column
-                            )
-                        }
-                        println!("Error at token: {:?}", self.peek());
+                        self.eat_unexpected_token();
                         return Err(());
                     };
                     module.items.push(Item::Enum(e));
                 }
                 Kind::Struct => {
                     let Ok(e) = self.parse_struct() else {
-                        if let Some(token) = self.peek().cloned() {
-                            println!(
-                                "{}:{}:{}: Error parsing struct",
-                                self.path.to_str().unwrap(),
-                                token.line,
-                                token.column
-                            )
-                        }
-                        println!("Error at token: {:?}", self.peek());
+                        self.eat_unexpected_token();
                         return Err(());
                     };
                     module.items.push(Item::Struct(e));
                 }
                 _ => {
-                    println!("unexpeced token: {:?}", self.peek());
+                    self.eat_unexpected_token();
                     return Err(());
                 }
             }
@@ -138,7 +137,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         Ok(module)
     }
 
-    pub fn parse(self) -> Result<ModuleAst, ()> {
+    pub fn parse(mut self) -> Result<ModuleAst, Vec<String>> {
         let path = self.path;
         let module = self.parse_internal();
 
@@ -152,7 +151,8 @@ impl<'a, 'b> Parser<'a, 'b> {
             // TODO: also check that they result in equal intermediate representations
         }
 
-        module
+        assert_eq!(self.errors.is_empty(), module.is_ok());
+        module.map_err(|()| mem::take(&mut self.errors))
     }
 
     fn eat(&mut self, kind: Kind) -> Result<Token, ()> {

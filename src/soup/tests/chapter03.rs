@@ -136,7 +136,7 @@ fn test_self_assign() {
     let errors = soup
         .compile_function(function, &mut types)
         .expect_err("should fail");
-    
+
     assert_eq!(errors.len(), 1);
     assert!(errors[0].contains("not in scope"));
 }
@@ -147,5 +147,7 @@ fn test_bad_1() {
         "fun main() -> Int { var a: Int = 1; var b: Int = 2; var c: Int = 0; { var b: Int = 3; c = a + b; }",
         Path::new("dummy.ro"),
     );
-    let () = parser.parse().expect_err("should not parse");
+    let errors = parser.parse().expect_err("should not parse");
+    assert_eq!(errors.len(), 1);
+    assert!(errors[0].contains("end of file"));
 }
