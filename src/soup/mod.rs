@@ -1,6 +1,7 @@
 mod graph_visualizer;
+pub mod location;
 mod nodes;
 pub mod soup;
 #[cfg(test)]
 mod tests;
-mod types;
+pub mod types;
