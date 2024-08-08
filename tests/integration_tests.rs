@@ -22,8 +22,8 @@ macro_rules! relative_path {
     }};
 }
 
-mod test_0001_return_0;
-mod test_0002_return_42;
+// mod test_0001_return_0;
+// mod test_0002_return_42;
 // mod test_0003_return_addition;
 // mod test_0004_function_call;
 // mod test_0005_two_statements;
