@@ -46,7 +46,7 @@ fn test_zero() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (start, stop) = soup
+    let (start, _stop) = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 

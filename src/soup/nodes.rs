@@ -99,12 +99,22 @@ impl<'t> Nodes<'t> {
         self[node].is_unused() && self[node].base().inputs.is_empty() && self.ty(node).is_none()
     }
 
+    pub fn pop_n(&mut self, node: NodeId, n: usize) {
+        for _ in 0..n {
+            let old_def = self[node].base_mut().inputs.pop().unwrap();
+            if let Some(old_def) = old_def {
+                self[old_def].base_mut().del_use(node);
+                if self[old_def].base_mut().is_unused() {
+                    self.kill(old_def);
+                }
+            }
+        }
+    }
+
     pub fn kill(&mut self, node: NodeId) {
         debug_assert!(self[node].is_unused());
-        for i in 0..self[node].base().inputs.len() {
-            self.set_def(node, i, None);
-        }
-        self[node].base_mut().inputs = vec![];
+        self.pop_n(node, self[node].base().inputs.len());
+        self[node].base_mut().inputs = vec![]; // deallocate
         *self.get_ty_mut(node) = None; // flag as dead
         debug_assert!(self.is_dead(node));
     }
@@ -127,6 +137,13 @@ impl<'t> Nodes<'t> {
         }
 
         self[this].base_mut().inputs[index] = new_def;
+    }
+
+    fn add_def(&mut self, node: NodeId, new_def: Option<NodeId>) {
+        self[node].base_mut().inputs.push(new_def);
+        if let Some(new_def) = new_def {
+            self[new_def].base_mut().add_use(node);
+        }
     }
 }
 
@@ -365,6 +382,36 @@ impl<'t> Nodes<'t> {
             }
         }
     }
+
+    fn scope_mut(&mut self, scope_node: NodeId) -> &mut ScopeNode {
+        let Node::ScopeNode(scope) = &mut self[scope_node] else {
+            panic!("Must be called with a scope node id")
+        };
+        scope
+    }
+    pub fn scope_push(&mut self, scope_node: NodeId) {
+        self.scope_mut(scope_node).scopes.push(HashMap::new());
+    }
+
+    pub fn scope_pop(&mut self, scope_node: NodeId) {
+        let last = self.scope_mut(scope_node).scopes.pop().unwrap();
+        self.pop_n(scope_node, last.len());
+    }
+
+    pub fn scope_define(
+        &mut self,
+        scope_node: NodeId,
+        name: String,
+        value: NodeId,
+    ) -> Result<(), ()> {
+        let scope = self.scope_mut(scope_node);
+        let syms = scope.scopes.last_mut().unwrap();
+        if let Some(_old) = syms.insert(name, scope.base.inputs.len()) {
+            return Err(());
+        }
+        self.add_def(scope_node, Some(value));
+        Ok(())
+    }
 }
 
 impl NodeBase {
@@ -381,7 +428,7 @@ impl NodeBase {
     }
 
     fn del_use(&mut self, node: NodeId) {
-        if let Some(pos) = self.outputs.iter().position(|n| *n == node) {
+        if let Some(pos) = self.outputs.iter().rposition(|n| *n == node) {
             self.outputs.swap_remove(pos);
         }
     }

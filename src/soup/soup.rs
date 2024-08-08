@@ -1,5 +1,5 @@
 use crate::soup::nodes::{
-    AddNode, ConstantNode, DivNode, MinusNode, MulNode, Node, NodeId, Nodes, ReturnNode, ScopeNode,
+    AddNode, ConstantNode, DivNode, MinusNode, MulNode, Node, NodeId, Nodes, ReturnNode,
     StartNode, SubNode,
 };
 use crate::soup::types::{Ty, Type, Types};
