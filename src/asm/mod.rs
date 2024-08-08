@@ -1,6 +1,6 @@
 use std::convert::TryFrom;
 
-use crate::asm::mem::{Mem, Scale, RM};
+use crate::asm::mem::{Mem, RM, Scale};
 use crate::asm::reg::{Reg, RegSet};
 
 pub mod mem;
@@ -393,8 +393,8 @@ impl MachineCode {
 
 #[cfg(test)]
 mod tests {
-    use iced_x86::code_asm::*;
     use iced_x86::{Decoder, DecoderOptions, Formatter, Instruction, NasmFormatter};
+    use iced_x86::code_asm::*;
 
     use crate::asm::mem::{Mem, Scale};
 

@@ -237,7 +237,7 @@ fn compile_item<'c>(
             // } else {
             //     None
             // };
-            // 
+            //
             // let location = e.name.location.with_module(module_ty);
             // let members = e.members.as_ref().map(|o| {
             //     o.iter()
@@ -246,14 +246,14 @@ fn compile_item<'c>(
             //         .collect()
             // });
             // // types.get_enum(location, parent, members);
-            // 
+            //
             Outcome::Done
         }
         Item::Struct(s) => {
             // let location = s.name.location.with_module(module_ty);
-            // 
+            //
             // // let struct_ty = types.get_struct(location);
-            // 
+            //
             // if let Some(members) = &s.members {
             //     for member in members {
             //         // let ty = scopes.lookup_type(None, types, &member.ty);
@@ -263,7 +263,7 @@ fn compile_item<'c>(
             //         todo!()
             //     }
             // }
-            // 
+            //
             Outcome::Done
         }
     }

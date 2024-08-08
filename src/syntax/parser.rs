@@ -1,7 +1,7 @@
 use std::iter::Peekable;
 use std::path::Path;
 
-pub use expressions::{infix_precedence, Associativity, Precedence};
+pub use expressions::{Associativity, infix_precedence, Precedence};
 
 use crate::syntax::ast::{Identifier, Item, Location, ModuleAst};
 use crate::syntax::tokenizer::{Kind, Token, Tokenizer};
