@@ -10,7 +10,7 @@ pub struct Soup<'t> {
     pub nodes: Nodes<'t>,
     pub(crate) start: NodeId,
     ctrl: NodeId,
-    scope: NodeId,
+    pub(crate) scope: NodeId,
     pub disable_peephole: bool,
 }
 

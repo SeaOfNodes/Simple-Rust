@@ -580,8 +580,8 @@ impl MinusNode {
 }
 
 pub struct ScopeNode {
-    base: NodeBase,
-    scopes: Vec<HashMap<String, usize>>,
+    pub base: NodeBase,
+    pub scopes: Vec<HashMap<String, usize>>,
 }
 
 impl ScopeNode {
