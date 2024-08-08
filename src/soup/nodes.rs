@@ -412,6 +412,39 @@ impl<'t> Nodes<'t> {
         self.add_def(scope_node, Some(value));
         Ok(())
     }
+
+    pub fn scope_lookup(&mut self, scope_node: NodeId, name: &str) -> Result<NodeId, ()> {
+        let nesting_level = self.scope_mut(scope_node).scopes.len() - 1;
+        self.scope_lookup_update(scope_node, name, None, nesting_level)
+            .ok_or(())
+    }
+
+    pub fn scope_update(&mut self, scope_node: NodeId, name: &str, value: NodeId) {
+        let nesting_level = self.scope_mut(scope_node).scopes.len() - 1;
+        self.scope_lookup_update(scope_node, name, Some(value), nesting_level);
+    }
+
+    fn scope_lookup_update(
+        &mut self,
+        scope_node: NodeId,
+        name: &str,
+        value: Option<NodeId>,
+        nesting_level: usize,
+    ) -> Option<NodeId> {
+        let scope = self.scope_mut(scope_node);
+        let syms = &mut scope.scopes[nesting_level];
+        if let Some(index) = syms.get(name).copied() {
+            let old = scope.base.inputs[index];
+            if value.is_some() {
+                self.set_def(scope_node, index, value);
+            }
+            old
+        } else if nesting_level > 0 {
+            self.scope_lookup_update(scope_node, name, value, nesting_level - 1)
+        } else {
+            None
+        }
+    }
 }
 
 impl NodeBase {

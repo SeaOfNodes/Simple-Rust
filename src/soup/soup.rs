@@ -1,5 +1,5 @@
 use crate::soup::nodes::{
-    AddNode, ConstantNode, DivNode, MinusNode, MulNode, Node, NodeId, Nodes, ReturnNode,
+    AddNode, ConstantNode, DivNode, MinusNode, MulNode, Node, NodeId, Nodes, ReturnNode, ScopeNode,
     StartNode, SubNode,
 };
 use crate::soup::types::{Ty, Type, Types};
@@ -9,6 +9,7 @@ pub struct Soup<'t> {
     pub nodes: Nodes<'t>,
     pub(crate) start: NodeId,
     ctrl: NodeId,
+    scope: NodeId,
     pub disable_peephole: bool,
 }
 
@@ -18,6 +19,7 @@ impl<'t> Soup<'t> {
             nodes: Nodes::new(),
             start: NodeId::DUMMY,
             ctrl: NodeId::DUMMY,
+            scope: NodeId::DUMMY,
             disable_peephole: false,
         }
     }
@@ -29,6 +31,8 @@ impl<'t> Soup<'t> {
         let start = self.create_peepholed(types, |id| Node::StartNode(StartNode::new(id)));
         self.start = start;
         self.ctrl = start;
+        // if we didn't call peephole we might have to manually set the computed type like in the java constructor
+        self.scope = self.create_peepholed(types, |id| Node::ScopeNode(ScopeNode::new(id)));
 
         let stop = match &function.body {
             None => todo!(),
@@ -38,6 +42,7 @@ impl<'t> Soup<'t> {
     }
 
     fn compile_block(&mut self, block: &Block, types: &mut Types<'t>) -> Result<NodeId, ()> {
+        self.nodes.scope_push(self.scope);
         for statement in &block.statements {
             match statement {
                 Statement::Expression(_) => todo!(),
@@ -49,9 +54,14 @@ impl<'t> Soup<'t> {
                     }));
                 }
                 Statement::If(_) => todo!(),
-                Statement::Var(_) => todo!(),
+                Statement::Var(var) => {
+                    let value = self.compile_expression(&var.expression, types)?;
+                    self.nodes
+                        .scope_define(self.scope, var.name.value.clone(), value)?;
+                }
             }
         }
+        self.nodes.scope_pop(self.scope);
         Err(())
     }
 
@@ -67,6 +77,25 @@ impl<'t> Soup<'t> {
                 Ok(self.create_peepholed(types, |id| {
                     Node::ConstantNode(ConstantNode::new(id, start, ty))
                 }))
+            }
+            Expression::Identifier(identifier) => {
+                let value = self.nodes.scope_lookup(self.scope, &identifier.value)?;
+                Ok(value)
+            }
+            Expression::Binary {
+                operator: BinaryOperator::Assign,
+                location: _,
+                left,
+                right,
+            } => {
+                let Expression::Identifier(left) = left.as_ref() else {
+                    todo!()
+                };
+                let right = self.compile_expression(right, types)?;
+
+                self.nodes.scope_update(self.scope, &left.value, right);
+
+                Ok(right)
             }
             Expression::Binary {
                 operator,
