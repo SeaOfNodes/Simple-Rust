@@ -1,6 +1,7 @@
 use std::hash::Hash;
-use std::path::PathBuf;
+use std::sync::Arc;
 
+use crate::modules::ParsedModule;
 use crate::soup::types::Ty;
 
 #[derive(Eq, PartialEq, Clone, Hash, Debug)]
@@ -8,14 +9,8 @@ pub enum Type<'a> {
     Bot,
     Top,
     Int { value: i64, constant: bool },
-    Module(TyModule),
+    Module(Arc<ParsedModule>),
     Todo(Ty<'a>),
-}
-
-#[derive(Eq, PartialEq, Clone, Hash, Debug)]
-pub struct TyModule {
-    pub name: String,
-    pub path: PathBuf,
 }
 
 impl<'t> Type<'t> {
@@ -35,7 +30,7 @@ impl<'t> Type<'t> {
         }
     }
 
-    pub fn unwrap_module(&'t self) -> &'t TyModule {
+    pub fn unwrap_module(&'t self) -> &'t ParsedModule {
         match self {
             Type::Module(m) => m,
             _ => unreachable!(),

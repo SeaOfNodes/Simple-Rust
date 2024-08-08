@@ -3,7 +3,7 @@ use std::mem;
 
 use crate::asm::reg::Reg;
 use crate::asm::MachineCode;
-use crate::hir::location::Location;
+use crate::soup::location::Location;
 use crate::lir::stack_slots::StackSlots;
 
 mod stack_slots;

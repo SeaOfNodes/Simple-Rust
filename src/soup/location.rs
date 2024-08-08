@@ -13,11 +13,11 @@ pub struct Location<'t> {
 impl Display for Location<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let module = self.module.unwrap_module();
-        let file = module.path.to_string_lossy();
+        let file = module.file.to_string_lossy();
         write!(
             f,
             "{} {:?}:{}:{}",
-            module.name, file, self.line, self.column
+            module.ast.name, file, self.line, self.column
         )
     }
 }

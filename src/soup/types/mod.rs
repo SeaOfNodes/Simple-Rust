@@ -1,6 +1,8 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::arena::Arena;
+use crate::modules::ParsedModule;
 pub use crate::soup::types::r#type::*;
 pub use crate::soup::types::ty::Ty;
 
@@ -68,5 +70,9 @@ impl<'a> Types<'a> {
                 constant: true,
             }),
         }
+    }
+
+    pub fn get_module(&mut self, module: Arc<ParsedModule>) -> Ty<'a> {
+        self.interner.intern(Type::Module(module))
     }
 }

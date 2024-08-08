@@ -1,7 +1,8 @@
+use std::{fs, io};
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::{fs, io};
 
 use crate::syntax::ast::ModuleAst;
 use crate::syntax::parser::Parser;
@@ -19,11 +20,26 @@ enum Module {
     Parsed(Arc<ParsedModule>),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ParsedModule {
     pub file: Arc<PathBuf>,
     pub contents: Arc<String>,
     pub ast: Arc<ModuleAst>,
+}
+
+impl PartialEq for ParsedModule {
+    fn eq(&self, other: &Self) -> bool {
+        self.file.eq(&other.file) && self.contents.eq(&other.contents)
+    }
+}
+
+impl Eq for ParsedModule {}
+
+impl Hash for ParsedModule {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.file.hash(state);
+        self.contents.hash(state);
+    }
 }
 
 #[derive(Clone)]

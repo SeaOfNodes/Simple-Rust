@@ -10,17 +10,15 @@ use std::sync::Arc;
 
 use crate::arena::Arena;
 use crate::asm::{FunctionSymbol, MachineCode};
-use crate::hir::scopes::Scopes;
-use crate::hir::types::{Ty, Types};
-use crate::hir::Hir;
 use crate::modules::{Modules, ParsedModule};
+use crate::soup::soup::Soup;
+use crate::soup::types::{Ty, Types};
 use crate::syntax::ast::Item;
 
 pub mod arena;
 pub mod asm;
 pub mod bit_set;
 pub mod elf;
-pub mod hir;
 pub mod lir;
 mod modules;
 pub mod soup;
@@ -72,11 +70,10 @@ pub fn compile(build_file: PathBuf, _build_args: Vec<String>) -> Result<PathBuf,
             .map_err(|e| {
                 eprintln!("Could not read file {build_file:?}: {e}");
             })?;
-        let ty = types
-            .get_module(module.clone(), types.ty_root_module)
-            .map_err(|e| {
-                eprintln!("Duplicate module");
-            })?;
+
+        // if path and source are identical the old ast will be used
+        let ty = types.get_module(module.clone());
+
         for i in 0..module.ast.items.len() {
             if unique_worklist_tasks < max_unique_worklist_tasks {
                 unique_worklist_tasks += 1;
@@ -112,11 +109,7 @@ pub fn compile(build_file: PathBuf, _build_args: Vec<String>) -> Result<PathBuf,
                 let module = modules.read_and_parse(path.clone()).map_err(|e| {
                     eprintln!("Could not read file {path:?}: {e}");
                 })?;
-                let ty = types
-                    .get_module(module.clone(), types.ty_root_module)
-                    .map_err(|e| {
-                        eprintln!("Duplicate module");
-                    })?;
+                let ty = types.get_module(module.clone());
 
                 for i in 0..module.ast.items.len() {
                     if unique_worklist_tasks < max_unique_worklist_tasks {
@@ -148,24 +141,26 @@ pub fn compile(build_file: PathBuf, _build_args: Vec<String>) -> Result<PathBuf,
 
     let mut code = MachineCode::new();
     for hir in hirs.iter() {
-        let symbol = if !hir.is_extern {
-            let lir = hir.lower();
-
-            let code_offset = code.bytes.len() as u64;
-            lir.assemble(&mut code);
-            FunctionSymbol {
-                name: hir.symbol.clone(),
-                code_offset,
-                code_size: code.bytes.len() as u64 - code_offset,
-                is_extern: false,
+        let symbol = match hir {
+            Hir::Soup(_soup) => {
+                todo!()
+                // let lir = hir.lower();
+                //
+                // let code_offset = code.bytes.len() as u64;
+                // lir.assemble(&mut code);
+                // FunctionSymbol {
+                //     name: hir.symbol.clone(),
+                //     code_offset,
+                //     code_size: code.bytes.len() as u64 - code_offset,
+                //     is_extern: false,
+                // }
             }
-        } else {
-            FunctionSymbol {
-                name: hir.symbol.clone(),
+            Hir::ExternFunction { symbol } => FunctionSymbol {
+                name: symbol.clone(),
                 code_offset: 0,
                 code_size: 0,
                 is_extern: true,
-            }
+            },
         };
         code.function_symbols.push(symbol);
     }
@@ -198,6 +193,11 @@ pub fn compile(build_file: PathBuf, _build_args: Vec<String>) -> Result<PathBuf,
     Ok(executable_path)
 }
 
+enum Hir<'t> {
+    Soup(Soup<'t>),
+    ExternFunction { symbol: String },
+}
+
 enum Outcome<'c> {
     Done,
     Hir(Hir<'c>),
@@ -208,54 +208,62 @@ enum Outcome<'c> {
 fn compile_item<'c>(
     types: &mut Types<'c>,
     module: &Arc<ParsedModule>,
-    module_ty: Ty<'c>,
+    _module_ty: Ty<'c>,
     item: usize,
 ) -> Outcome<'c> {
     let item = &module.ast.as_ref().items[item];
 
-    let mut scopes = Scopes::new(module_ty);
-
     match item {
-        Item::Function(f) => {
-            let hir = Hir::from_source(f, types, &mut scopes).unwrap();
-            Outcome::Hir(hir)
-        }
-        Item::Enum(e) => {
-            let parent = if let Some(parent) = &e.parent {
-                let ty = scopes.lookup_type(None, types, parent);
-                if ty.is_none() {
-                    return Outcome::Retry;
+        Item::Function(f) => match f.body {
+            None => Outcome::Hir(Hir::ExternFunction {
+                symbol: f.name.value.clone(),
+            }),
+            Some(_) => {
+                let mut soup = Soup::new();
+                match soup.compile_function(f, types) {
+                    Ok(_) => Outcome::Hir(Hir::Soup(soup)),
+                    Err(_) => todo!(),
                 }
-                ty
-            } else {
-                None
-            };
-
-            let location = e.name.location.to_hir(module_ty);
-            let members = e.members.as_ref().map(|o| {
-                o.iter()
-                    .enumerate()
-                    .map(|(i, m)| (m.name.value.clone(), i as i64))
-                    .collect()
-            });
-            types.get_enum(location, parent, members);
-
+            }
+        },
+        Item::Enum(e) => {
+            // let parent = if let Some(parent) = &e.parent {
+            //     todo!()
+            //     // let ty = scopes.lookup_type(None, types, parent);
+            //     // if ty.is_none() {
+            //     //     return Outcome::Retry;
+            //     // }
+            //     // ty
+            // } else {
+            //     None
+            // };
+            // 
+            // let location = e.name.location.with_module(module_ty);
+            // let members = e.members.as_ref().map(|o| {
+            //     o.iter()
+            //         .enumerate()
+            //         .map(|(i, m)| (m.name.value.clone(), i as i64))
+            //         .collect()
+            // });
+            // // types.get_enum(location, parent, members);
+            // 
             Outcome::Done
         }
         Item::Struct(s) => {
-            let location = s.name.location.to_hir(module_ty);
-
-            let struct_ty = types.get_struct(location);
-
-            if let Some(members) = &s.members {
-                for member in members {
-                    let ty = scopes.lookup_type(None, types, &member.ty);
-                    if ty.is_none() {
-                        return Outcome::Retry;
-                    }
-                }
-            }
-
+            // let location = s.name.location.with_module(module_ty);
+            // 
+            // // let struct_ty = types.get_struct(location);
+            // 
+            // if let Some(members) = &s.members {
+            //     for member in members {
+            //         // let ty = scopes.lookup_type(None, types, &member.ty);
+            //         // if ty.is_none() {
+            //         //     return Outcome::Retry;
+            //         // }
+            //         todo!()
+            //     }
+            // }
+            // 
             Outcome::Done
         }
     }
