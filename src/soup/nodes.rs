@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Debug, Display};
 use std::num::NonZeroU32;
@@ -174,6 +175,7 @@ pub enum Node<'t> {
     MulNode(MulNode),
     DivNode(DivNode),
     MinusNode(MinusNode),
+    ScopeNode(ScopeNode),
 }
 
 pub struct ConstantNode<'t> {
@@ -203,6 +205,7 @@ impl<'t> Node<'t> {
             Node::MulNode(n) => &n.base,
             Node::DivNode(n) => &n.base,
             Node::MinusNode(n) => &n.base,
+            Node::ScopeNode(n) => &n.base,
         }
     }
 
@@ -216,19 +219,20 @@ impl<'t> Node<'t> {
             Node::MulNode(n) => &mut n.base,
             Node::DivNode(n) => &mut n.base,
             Node::MinusNode(n) => &mut n.base,
+            Node::ScopeNode(n) => &mut n.base,
         }
     }
 
     pub fn is_cfg(&self) -> bool {
         match self {
-            Node::ConstantNode(_) => false,
-            Node::ReturnNode(_) => true,
-            Node::StartNode(_) => true,
-            Node::AddNode(_) => false,
-            Node::SubNode(_) => false,
-            Node::MulNode(_) => false,
-            Node::DivNode(_) => false,
-            Node::MinusNode(_) => false,
+            Node::StartNode(_) | Node::ReturnNode(_) => true,
+            Node::ConstantNode(_)
+            | Node::AddNode(_)
+            | Node::SubNode(_)
+            | Node::MulNode(_)
+            | Node::DivNode(_)
+            | Node::MinusNode(_)
+            | Node::ScopeNode(_) => false,
         }
     }
 
@@ -243,6 +247,7 @@ impl<'t> Node<'t> {
             Node::MulNode(_) => Cow::Borrowed("Mul"),
             Node::DivNode(_) => Cow::Borrowed("Div"),
             Node::MinusNode(_) => Cow::Borrowed("Minus"),
+            Node::ScopeNode(_) => Cow::Borrowed("Scope"),
         }
     }
 
@@ -265,6 +270,7 @@ impl<'t> Node<'t> {
             Node::MulNode(_) => Cow::Borrowed("*"),
             Node::DivNode(_) => Cow::Borrowed("//"),
             Node::MinusNode(_) => Cow::Borrowed("-"),
+            Node::ScopeNode(_) => self.label(),
         }
     }
 
@@ -341,6 +347,21 @@ impl<'t> Nodes<'t> {
                 write!(f, "(-")?;
                 self.fmt(minus.base.inputs[1], f, visited)?;
                 write!(f, ")")
+            }
+            n @ Node::ScopeNode(scope) => {
+                write!(f, "{}", n.label())?;
+                for s in &scope.scopes {
+                    write!(f, "[")?;
+                    for (i, (name, input)) in s.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{name}:")?;
+                        self.fmt(scope.base.inputs[*input], f, visited)?;
+                    }
+                    write!(f, "]")?;
+                }
+                Ok(())
             }
         }
     }
@@ -474,6 +495,20 @@ impl MinusNode {
     pub fn new(id: NodeId, expr: NodeId) -> Self {
         Self {
             base: NodeBase::new(id, vec![None, Some(expr)]),
+        }
+    }
+}
+
+pub struct ScopeNode {
+    base: NodeBase,
+    scopes: Vec<HashMap<String, usize>>,
+}
+
+impl ScopeNode {
+    pub fn new(id: NodeId) -> Self {
+        Self {
+            base: NodeBase::new(id, vec![]),
+            scopes: vec![],
         }
     }
 }

@@ -1,6 +1,6 @@
 use crate::soup::nodes::{
-    AddNode, ConstantNode, DivNode, MinusNode, MulNode, Node, NodeId, Nodes, ReturnNode, StartNode,
-    SubNode,
+    AddNode, ConstantNode, DivNode, MinusNode, MulNode, Node, NodeId, Nodes, ReturnNode, ScopeNode,
+    StartNode, SubNode,
 };
 use crate::soup::types::{Ty, Type, Types};
 use crate::syntax::ast::{BinaryOperator, Block, Expression, Function, PrefixOperator, Statement};
@@ -180,6 +180,7 @@ impl<'t> Soup<'t> {
                 })] => types.get_int(value.wrapping_neg()),
                 _ => types.ty_bot,
             },
+            Node::ScopeNode(_) => types.ty_bot,
         }
     }
     fn peephole(&mut self, node: NodeId, types: &mut Types<'t>) -> NodeId {
