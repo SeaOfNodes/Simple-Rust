@@ -317,6 +317,23 @@ impl<'t> Node<'t> {
     pub fn is_unused(&self) -> bool {
         self.base().is_unused()
     }
+
+    pub fn is_multi_node(&self) -> bool {
+        match self {
+            Node::Start(_) => true,
+            Node::Constant(_)
+            | Node::Return(_)
+            | Node::Add(_)
+            | Node::Sub(_)
+            | Node::Mul(_)
+            | Node::Div(_)
+            | Node::Minus(_)
+            | Node::Scope(_)
+            | Node::Bool(_)
+            | Node::Not(_)
+            | Node::Proj(_) => false,
+        }
+    }
 }
 
 pub struct PrintNodes<'a, 't> {

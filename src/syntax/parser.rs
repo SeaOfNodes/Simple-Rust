@@ -75,16 +75,6 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn error_at(&mut self, location: &Token, message: &str) {
-        let message = format!(
-            "{}:{}:{}: {message}",
-            self.path.to_str().unwrap(),
-            location.line,
-            location.column
-        );
-        self.errors.push(message);
-    }
-
     fn eat_unexpected_token(&mut self) {
         let message = match self.next() {
             Ok(token) => format!(

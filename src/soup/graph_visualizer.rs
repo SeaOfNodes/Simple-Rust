@@ -9,7 +9,7 @@ pub fn generate_dot_output(soup: &Soup) -> Result<String, fmt::Error> {
     let all = find_all(soup);
 
     let mut sb = String::new();
-    writeln!(sb, "digraph chapter03 {{")?;
+    writeln!(sb, "digraph chapter04 {{")?;
     // TODO write /* file.ro */
     writeln!(sb, "\trankdir=BT;")?;
     writeln!(sb, "\tordering=\"in\";")?;
@@ -25,14 +25,52 @@ pub fn generate_dot_output(soup: &Soup) -> Result<String, fmt::Error> {
 fn nodes(sb: &mut String, nodes: &Nodes, all: &HashSet<NodeId>) -> fmt::Result {
     writeln!(sb, "\tsubgraph cluster_Nodes {{")?; // Magic "cluster_" in the subgraph name
     for n in all.iter().map(|n| &nodes[*n]) {
-        if matches!(n, Node::Scope(_)) {
+        if matches!(n, Node::Proj(_) | Node::Scope(_)) {
             continue;
         }
         write!(sb, "\t\t{} [ ", n.unique_name())?;
-        if n.is_cfg() {
-            write!(sb, "shape=box style=filled fillcolor=yellow ")?;
+        let lab = n.glabel();
+        if n.is_multi_node() {
+            writeln!(sb, "shape=plaintext label=<")?;
+            writeln!(
+                sb,
+                "\t\t\t<TABLE BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\" CELLPADDING=\"4\">"
+            )?;
+            writeln!(sb, "\t\t\t<TR><TD BGCOLOR=\"yellow\">{lab}</TD></TR>")?;
+            write!(sb, "\t\t\t<TR>")?;
+
+            let mut do_proj_table = false;
+            for use_ in &n.base().outputs {
+                if let proj @ Node::Proj(p) = &nodes[*use_] {
+                    if !do_proj_table {
+                        do_proj_table = true;
+                        writeln!(sb, "<TD>")?;
+                        writeln!(
+                            sb,
+                            "\t\t\t\t<TABLE BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\">"
+                        )?;
+                        write!(sb, "\t\t\t\t<TR>")?;
+                    }
+                    write!(sb, "<TD PORT=\"p{}\"", p.index)?;
+                    if proj.is_cfg() {
+                        write!(sb, " BGCOLOR=\"yellow\"")?;
+                    };
+                    write!(sb, ">{}</TD>", proj.glabel())?;
+                }
+            }
+            if do_proj_table {
+                writeln!(sb, "</TR>")?;
+                writeln!(sb, "\t\t\t\t</TABLE>")?;
+                write!(sb, "\t\t\t</TD>")?;
+            }
+            writeln!(sb, "</TR>")?;
+            write!(sb, "\t\t\t</TABLE>>\n\t\t")?;
+        } else {
+            if n.is_cfg() {
+                write!(sb, "shape=box style=filled fillcolor=yellow ")?;
+            }
+            write!(sb, "label=\"{lab}\" ")?;
         }
-        write!(sb, "label=\"{}\" ", n.glabel())?;
         writeln!(sb, "];")?;
     }
     writeln!(sb, "\t}}")
@@ -54,10 +92,10 @@ fn scopes(sb: &mut String, nodes: &Nodes, scope_node: NodeId) -> fmt::Result {
             sb,
             "\t\t\t<TABLE BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\">"
         )?;
-        writeln!(sb, "\t\t\t<TR><TD BGCOLOR=\"cyan\">{level}</TD>")?;
+        write!(sb, "\t\t\t<TR><TD BGCOLOR=\"cyan\">{level}</TD>")?;
         for name in s.keys() {
             let port_name = make_port_name(&scope_name, name);
-            writeln!(sb, "<TD PORT=\"{port_name}\">{name}</TD>")?;
+            write!(sb, "<TD PORT=\"{port_name}\">{name}</TD>")?;
         }
         writeln!(sb, "</TR>")?;
         writeln!(sb, "\t\t\t</TABLE>>];")?;
@@ -81,7 +119,7 @@ fn make_port_name(scope_name: &str, var_name: &str) -> String {
 fn node_edges(sb: &mut String, nodes: &Nodes, all: &HashSet<NodeId>) -> fmt::Result {
     writeln!(sb, "\tedge [ fontname=Helvetica, fontsize=8 ];")?;
     for n in all.iter().map(|n| &nodes[*n]) {
-        if matches!(n, Node::Scope(_)) {
+        if matches!(n, Node::Constant(_) | Node::Proj(_) | Node::Scope(_)) {
             continue;
         }
         for (i, def) in n.base().inputs.iter().enumerate() {
@@ -90,7 +128,7 @@ fn node_edges(sb: &mut String, nodes: &Nodes, all: &HashSet<NodeId>) -> fmt::Res
             } else {
                 continue;
             };
-            write!(sb, "\t{} -> {}", n.unique_name(), def.unique_name())?;
+            write!(sb, "\t{} -> {}", n.unique_name(), def_name(nodes, def.id()))?;
 
             write!(sb, "[taillabel={i}")?;
 
@@ -117,12 +155,22 @@ fn scope_edges(sb: &mut String, nodes: &Nodes, scope_node: NodeId) -> fmt::Resul
         for (name, index) in s {
             if let Some(def) = scope.base.inputs[*index] {
                 let port_name = make_port_name(&scope_name, name);
-                let def_name = nodes[def].unique_name();
+                let def_name = def_name(&nodes, def);
                 writeln!(sb, "\t{scope_name}:\"{port_name}\" -> {def_name};")?;
             }
         }
     }
     Ok(())
+}
+
+fn def_name(nodes: &Nodes, def: NodeId) -> String {
+    match &nodes[def] {
+        Node::Proj(p) => {
+            let mname = nodes[p.base.inputs[0].unwrap()].unique_name();
+            format!("{mname}:p{}", p.index)
+        }
+        n => n.unique_name(),
+    }
 }
 
 fn find_all(soup: &Soup) -> HashSet<NodeId> {
