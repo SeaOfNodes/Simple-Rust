@@ -21,8 +21,10 @@ fn test_simple_program() {
         .compile_function(function, &mut types)
         .expect("should compile");
 
-    let Node::Return(ret) = &soup.nodes[stop] else {
-        unreachable!("expect return");
+    let ret = if let Node::Stop(s) = &soup.nodes[stop] {
+        s.ret().unwrap()
+    } else {
+        unreachable!()
     };
     assert!(matches!(soup.nodes[ret.ctrl().unwrap()], Node::Proj(_)));
 

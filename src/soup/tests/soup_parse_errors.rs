@@ -25,7 +25,7 @@ fn test_one_unreachable_message() {
         .expect_err("should fail");
 
     assert_eq!(errors.len(), 1);
-    assert!(errors[0].to_lowercase().contains("unreachable"));
+    assert!(errors[0].contains("unreachable"));
 }
 
 #[test]
@@ -47,8 +47,8 @@ fn test_one_unreachable_message_per_block() {
         .expect_err("should fail");
 
     assert_eq!(errors.len(), 2);
-    assert!(errors[0].to_lowercase().contains("unreachable"));
-    assert!(errors[1].to_lowercase().contains("unreachable"));
+    assert!(errors[0].contains("Unreachable"));
+    assert!(errors[1].contains("Unreachable"));
 }
 
 #[test]
@@ -70,7 +70,7 @@ fn test_not_in_scope_read() {
         .expect_err("should fail");
 
     assert_eq!(errors.len(), 1);
-    assert!(errors[0].to_lowercase().contains("not in scope"));
+    assert!(errors[0].contains("not in scope"));
 }
 
 #[test]
@@ -92,7 +92,7 @@ fn test_not_in_scope_assign() {
         .expect_err("should fail");
 
     assert_eq!(errors.len(), 1);
-    assert!(errors[0].to_lowercase().contains("not in scope"));
+    assert!(errors[0].contains("not in scope"));
 }
 
 #[test]
@@ -114,5 +114,5 @@ fn test_already_defined() {
         .expect_err("should fail");
 
     assert_eq!(errors.len(), 1);
-    assert!(errors[0].to_lowercase().contains("already defined"));
+    assert!(errors[0].contains("already defined"));
 }
