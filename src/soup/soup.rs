@@ -16,6 +16,7 @@ pub struct Soup<'t> {
     pub(crate) scope: NodeId,
     pub disable_peephole: bool,
     errors: Vec<String>,
+    arg: Option<Ty<'t>>,
 }
 
 impl<'t> Soup<'t> {
@@ -27,8 +28,14 @@ impl<'t> Soup<'t> {
             scope: NodeId::DUMMY,
             disable_peephole: false,
             errors: vec![],
+            arg: None,
         }
     }
+    
+    pub fn set_arg(&mut self, ty: Ty<'t>) {
+        self.arg = Some(ty)
+    }
+    
     pub fn compile_function(
         &mut self,
         function: &Function,
