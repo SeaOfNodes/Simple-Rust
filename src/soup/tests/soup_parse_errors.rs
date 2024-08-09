@@ -25,7 +25,7 @@ fn test_one_unreachable_message() {
         .expect_err("should fail");
 
     assert_eq!(errors.len(), 1);
-    assert!(errors[0].contains("unreachable"));
+    assert!(errors[0].contains("Unreachable"));
 }
 
 #[test]

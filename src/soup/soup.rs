@@ -285,6 +285,10 @@ impl<'t> Soup<'t> {
                     _ => unreachable!("proj node ctrl must always be tuple, if present"),
                 }
             }
+            Node::If(_) => types.ty_if,
+            Node::Phi(_) => types.ty_bot,
+            Node::Region(_) => types.ty_ctrl,
+            Node::Stop(_) => types.ty_bot,
         }
     }
 
@@ -490,6 +494,7 @@ impl<'t> Soup<'t> {
                     None
                 }
             }
+            Node::Phi(_) => todo!(),
             Node::Constant(_)
             | Node::Return(_)
             | Node::Start(_)
@@ -497,7 +502,10 @@ impl<'t> Soup<'t> {
             | Node::Minus(_)
             | Node::Scope(_)
             | Node::Not(_)
-            | Node::Proj(_) => None,
+            | Node::Proj(_)
+            | Node::If(_)
+            | Node::Region(_)
+            | Node::Stop(_) => None,
         }
     }
 

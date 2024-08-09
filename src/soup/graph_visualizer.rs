@@ -52,7 +52,7 @@ fn nodes(sb: &mut String, nodes: &Nodes, all: &HashSet<NodeId>) -> fmt::Result {
                         write!(sb, "\t\t\t\t<TR>")?;
                     }
                     write!(sb, "<TD PORT=\"p{}\"", p.index)?;
-                    if proj.is_cfg() {
+                    if nodes.is_cfg(*use_) {
                         write!(sb, " BGCOLOR=\"yellow\"")?;
                     };
                     write!(sb, ">{}</TD>", proj.glabel())?;
@@ -66,7 +66,7 @@ fn nodes(sb: &mut String, nodes: &Nodes, all: &HashSet<NodeId>) -> fmt::Result {
             writeln!(sb, "</TR>")?;
             write!(sb, "\t\t\t</TABLE>>\n\t\t")?;
         } else {
-            if n.is_cfg() {
+            if nodes.is_cfg(n.id()) {
                 write!(sb, "shape=box style=filled fillcolor=yellow ")?;
             }
             write!(sb, "label=\"{lab}\" ")?;
@@ -134,7 +134,7 @@ fn node_edges(sb: &mut String, nodes: &Nodes, all: &HashSet<NodeId>) -> fmt::Res
 
             if matches!(n, Node::Constant(_)) && matches!(def, Node::Start(_)) {
                 write!(sb, " style=dotted")?;
-            } else if def.is_cfg() {
+            } else if nodes.is_cfg(def.id()) {
                 write!(sb, " color=red")?;
             }
 

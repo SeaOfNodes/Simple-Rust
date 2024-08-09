@@ -26,6 +26,9 @@ fn test_simple_program() {
     } else {
         unreachable!()
     };
+    let Node::Return(ret) = &soup.nodes[ret] else {
+        unreachable!()
+    };
     assert!(matches!(soup.nodes[ret.ctrl().unwrap()], Node::Proj(_)));
 
     let expr = ret.expr().expect("has expr");

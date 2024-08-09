@@ -196,6 +196,10 @@ pub enum Node<'t> {
     Bool(BoolNode),
     Not(NotNode),
     Proj(ProjNode),
+    If(IfNode),
+    Phi(PhiNode),
+    Region(RegionNode),
+    Stop(StopNode),
 }
 
 pub struct ConstantNode<'t> {
@@ -230,6 +234,10 @@ impl<'t> Node<'t> {
             Node::Bool(n) => &n.base,
             Node::Not(n) => &n.base,
             Node::Proj(n) => &n.base,
+            Node::If(n) => &n.base,
+            Node::Phi(n) => &n.base,
+            Node::Region(n) => &n.base,
+            Node::Stop(n) => &n.base,
         }
     }
 
@@ -247,22 +255,10 @@ impl<'t> Node<'t> {
             Node::Bool(n) => &mut n.base,
             Node::Not(n) => &mut n.base,
             Node::Proj(n) => &mut n.base,
-        }
-    }
-
-    pub fn is_cfg(&self) -> bool {
-        match self {
-            Node::Start(_) | Node::Return(_) => true,
-            Node::Proj(p) => p.index == 0,
-            Node::Constant(_)
-            | Node::Add(_)
-            | Node::Sub(_)
-            | Node::Mul(_)
-            | Node::Div(_)
-            | Node::Minus(_)
-            | Node::Scope(_)
-            | Node::Bool(_)
-            | Node::Not(_) => false,
+            Node::If(n) => &mut n.base,
+            Node::Phi(n) => &mut n.base,
+            Node::Region(n) => &mut n.base,
+            Node::Stop(n) => &mut n.base,
         }
     }
 
@@ -285,6 +281,10 @@ impl<'t> Node<'t> {
             },
             Node::Not(_) => "Not",
             Node::Proj(p) => return Cow::Owned(p.label.clone()), // clone to keep static lifetime for others
+            Node::If(_) => "If",
+            Node::Phi(p) => return Cow::Owned(format!("Phi_{}", p.label)),
+            Node::Region(_) => "Region",
+            Node::Stop(_) => "Stop",
         })
     }
 
@@ -311,6 +311,10 @@ impl<'t> Node<'t> {
             Node::Bool(b) => Cow::Borrowed(b.op.str()),
             Node::Not(_) => Cow::Borrowed("!"),
             Node::Proj(_) => self.label(),
+            Node::If(_) => self.label(),
+            Node::Phi(p) => Cow::Owned(format!("&phi;_{}", p.label)),
+            Node::Region(_) => self.label(),
+            Node::Stop(_) => self.label(),
         }
     }
 
@@ -320,7 +324,7 @@ impl<'t> Node<'t> {
 
     pub fn is_multi_node(&self) -> bool {
         match self {
-            Node::Start(_) => true,
+            Node::Start(_) | Node::If(_) => true,
             Node::Constant(_)
             | Node::Return(_)
             | Node::Add(_)
@@ -331,7 +335,10 @@ impl<'t> Node<'t> {
             | Node::Scope(_)
             | Node::Bool(_)
             | Node::Not(_)
-            | Node::Proj(_) => false,
+            | Node::Proj(_)
+            | Node::Phi(_)
+            | Node::Region(_)
+            | Node::Stop(_) => false,
         }
     }
 }
@@ -435,6 +442,56 @@ impl<'t> Nodes<'t> {
             Node::Proj(proj) => {
                 write!(f, "{}", proj.label)
             }
+            Node::If(i) => {
+                write!(f, "if( ")?;
+                self.fmt(i.base.inputs[1], f, visited)?;
+                write!(f, " )")
+            }
+            Node::Phi(phi) => {
+                write!(f, "Phi(")?;
+                for (i, input) in phi.base.inputs.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ",")?;
+                    }
+                    self.fmt(*input, f, visited)?;
+                }
+                write!(f, ")")
+            }
+            n @ Node::Region(region) => {
+                write!(f, "{}{}", n.label(), node.index())
+            }
+            Node::Stop(stop) => {
+                if let Some(ret) = stop.ret() {
+                    self.fmt(Some(ret), f, visited)
+                } else {
+                    write!(f, "Stop[ ")?;
+                    for ret in &stop.base.inputs {
+                        self.fmt(*ret, f, visited)?;
+                        write!(f, " ")?;
+                    }
+                    write!(f, "]")
+                }
+            }
+        }
+    }
+
+    pub fn is_cfg(&self, node: NodeId) -> bool {
+        match &self[node] {
+            Node::Start(_) | Node::Return(_) | Node::Stop(_) => true,
+            Node::If(_) | Node::Region(_) => true,
+            Node::Proj(p) => {
+                p.index == 0 || p.base.inputs[0].is_some_and(|n| matches!(&self[n], Node::If(_)))
+            }
+            Node::Constant(_)
+            | Node::Add(_)
+            | Node::Sub(_)
+            | Node::Mul(_)
+            | Node::Div(_)
+            | Node::Minus(_)
+            | Node::Scope(_)
+            | Node::Bool(_)
+            | Node::Phi(_)
+            | Node::Not(_) => false,
         }
     }
 
@@ -517,11 +574,15 @@ impl<'t> Nodes<'t> {
             | Node::Minus(_)
             | Node::Scope(_)
             | Node::Not(_)
+            | Node::If(_)
+            | Node::Phi(_)
+            | Node::Region(_)
+            | Node::Stop(_)
             | Node::Proj(_) => unreachable!(),
-            Node::Add(n) => self.create(|id| Node::Add(AddNode::new(id, ops))),
-            Node::Sub(n) => self.create(|id| Node::Sub(SubNode::new(id, ops))),
-            Node::Mul(n) => self.create(|id| Node::Mul(MulNode::new(id, ops))),
-            Node::Div(n) => self.create(|id| Node::Div(DivNode::new(id, ops))),
+            Node::Add(_) => self.create(|id| Node::Add(AddNode::new(id, ops))),
+            Node::Sub(_) => self.create(|id| Node::Sub(SubNode::new(id, ops))),
+            Node::Mul(_) => self.create(|id| Node::Mul(MulNode::new(id, ops))),
+            Node::Div(_) => self.create(|id| Node::Div(DivNode::new(id, ops))),
             Node::Bool(n) => {
                 let op = n.op;
                 self.create(|id| Node::Bool(BoolNode::new(id, ops, op)))
@@ -740,6 +801,64 @@ impl ProjNode {
             base: NodeBase::new(id, vec![Some(ctrl)]),
             index,
             label,
+        }
+    }
+}
+
+pub struct IfNode {
+    pub base: NodeBase,
+}
+
+impl IfNode {
+    pub fn new(id: NodeId, ctrl: NodeId, pred: NodeId) -> Self {
+        Self {
+            base: NodeBase::new(id, vec![Some(ctrl), Some(pred)]),
+        }
+    }
+}
+
+pub struct PhiNode {
+    pub base: NodeBase,
+    pub label: String,
+}
+
+impl PhiNode {
+    pub fn new(id: NodeId, label: String, inputs: Vec<Option<NodeId>>) -> Self {
+        Self {
+            base: NodeBase::new(id, inputs),
+            label,
+        }
+    }
+}
+
+pub struct RegionNode {
+    pub base: NodeBase,
+}
+
+impl RegionNode {
+    pub fn new(id: NodeId, inputs: Vec<Option<NodeId>>) -> Self {
+        Self {
+            base: NodeBase::new(id, inputs),
+        }
+    }
+}
+
+pub struct StopNode {
+    pub base: NodeBase,
+}
+
+impl StopNode {
+    pub fn new(id: NodeId, inputs: Vec<Option<NodeId>>) -> Self {
+        Self {
+            base: NodeBase::new(id, inputs),
+        }
+    }
+
+    pub fn ret(&self) -> Option<NodeId> {
+        if self.base.inputs.len() == 1 {
+            self.base.inputs[0]
+        } else {
+            None // ambiguous
         }
     }
 }
