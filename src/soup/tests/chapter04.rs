@@ -332,7 +332,8 @@ fn test_bug_3() {
         .compile_function(function, &mut types)
         .expect_err("should not compile");
 
-    assert_eq!(errors.len(), 1);
+    assert_eq!(errors.len(), 2);
+    assert!(errors[0].contains("not in scope"));
     assert!(errors[0].contains("not in scope"));
 }
 

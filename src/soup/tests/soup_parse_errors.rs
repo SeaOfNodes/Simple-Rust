@@ -31,7 +31,7 @@ fn test_one_unreachable_message() {
 #[test]
 fn test_one_unreachable_message_per_block() {
     let parser = Parser::new(
-        "fun main() -> Int { return 1; return 2; { return 3; return 4; } }",
+        "fun main() -> Int { { return 1; return 2; } return 3; return 4; }",
         Path::new("dummy.ro"),
     );
     let ast = parser.parse().expect("should parse");
