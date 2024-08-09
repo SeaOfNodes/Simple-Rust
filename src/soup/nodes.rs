@@ -128,7 +128,7 @@ impl<'t> Nodes<'t> {
         self[this].base_mut().inputs[index] = new_def;
     }
 
-    fn add_def(&mut self, node: NodeId, new_def: Option<NodeId>) {
+    pub fn add_def(&mut self, node: NodeId, new_def: Option<NodeId>) {
         self[node].base_mut().inputs.push(new_def);
         if let Some(new_def) = new_def {
             self[new_def].base_mut().add_use(node);
@@ -848,9 +848,9 @@ pub struct StopNode {
 }
 
 impl StopNode {
-    pub fn new(id: NodeId, inputs: Vec<Option<NodeId>>) -> Self {
+    pub fn new(id: NodeId) -> Self {
         Self {
-            base: NodeBase::new(id, inputs),
+            base: NodeBase::new(id, vec![]),
         }
     }
 

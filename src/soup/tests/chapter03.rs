@@ -20,7 +20,7 @@ fn test_var_decl() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
@@ -41,7 +41,7 @@ fn test_var_add() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
@@ -62,7 +62,7 @@ fn test_var_scope() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
@@ -84,7 +84,7 @@ fn test_var_scope_no_peephole() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
@@ -112,7 +112,7 @@ fn test_var_dist() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 

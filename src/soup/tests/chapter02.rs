@@ -23,7 +23,7 @@ fn test_simple_program() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
@@ -48,7 +48,7 @@ fn test_add_peephole() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
@@ -66,7 +66,7 @@ fn test_sub_peephole() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
@@ -84,7 +84,7 @@ fn test_mul_peephole() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
@@ -102,7 +102,7 @@ fn test_div_peephole() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
@@ -120,7 +120,7 @@ fn test_minus_peephole() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
@@ -141,7 +141,7 @@ fn test_example() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 

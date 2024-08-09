@@ -31,7 +31,7 @@ fn test_if_stmt() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
@@ -63,7 +63,7 @@ fn test_test() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
@@ -93,7 +93,7 @@ fn test_return2() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
@@ -125,7 +125,7 @@ fn test_if_merge_b() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
@@ -157,7 +157,7 @@ fn test_if_merge2() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
@@ -195,7 +195,7 @@ fn test_merge3() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
@@ -229,7 +229,7 @@ fn test_merge4() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
@@ -271,7 +271,7 @@ fn test_merge5() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
@@ -296,7 +296,7 @@ fn test_true() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 

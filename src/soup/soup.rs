@@ -3,7 +3,7 @@ use std::mem;
 use crate::soup::graph_visualizer;
 use crate::soup::nodes::{
     AddNode, BoolNode, BoolOp, ConstantNode, DivNode, MinusNode, MulNode, Node, NodeBase, NodeId,
-    Nodes, NotNode, ProjNode, ReturnNode, ScopeNode, StartNode, SubNode,
+    Nodes, NotNode, ProjNode, ReturnNode, ScopeNode, StartNode, StopNode, SubNode,
 };
 use crate::soup::types::{Int, Ty, Type, Types};
 use crate::syntax::ast::{BinaryOperator, Block, Expression, Function, PrefixOperator, Statement};
@@ -12,6 +12,7 @@ use crate::syntax::formatter::{CodeStyle, FormatCode};
 pub struct Soup<'t> {
     pub nodes: Nodes<'t>,
     pub(crate) start: NodeId,
+    pub(crate) stop: NodeId,
     pub(crate) scope: NodeId,
     pub disable_peephole: bool,
     errors: Vec<String>,
@@ -23,6 +24,7 @@ impl<'t> Soup<'t> {
         Self {
             nodes: Nodes::new(),
             start: NodeId::DUMMY,
+            stop: NodeId::DUMMY,
             scope: NodeId::DUMMY,
             disable_peephole: false,
             errors: vec![],
@@ -38,10 +40,13 @@ impl<'t> Soup<'t> {
         &mut self,
         function: &Function,
         types: &mut Types<'t>,
-    ) -> Result<(NodeId, NodeId), Vec<String>> {
+    ) -> Result<NodeId, Vec<String>> {
         let args = types.get_tuple(vec![types.ty_ctrl, self.arg.unwrap_or(types.ty_bot)]);
         let start = self.create_peepholed(types, |id| Node::Start(StartNode::new(id, args)));
         self.start = start;
+
+        self.stop = self.nodes.create(|id| Node::Stop(StopNode::new(id)));
+
         // if we didn't call peephole we might have to manually set the computed type like in the java constructor
         self.scope = self.create_peepholed(types, |id| Node::Scope(ScopeNode::new(id)));
 
@@ -61,12 +66,18 @@ impl<'t> Soup<'t> {
             .scope_define(self.scope, ScopeNode::ARG0.to_string(), arg0)
             .expect("not in scope");
 
-        let stop = self.compile_block(&body, types);
+        let ret = self.compile_block(&body, types);
 
         self.nodes.scope_pop(self.scope);
 
+        if !matches!(self.nodes[ret], Node::Return(_)) {
+            todo!("create return for value block");
+        }
+
+        self.peephole(self.stop, types);
+
         if self.errors.is_empty() {
-            Ok((start, stop))
+            Ok(self.stop)
         } else {
             Err(mem::take(&mut self.errors))
         }
@@ -91,6 +102,7 @@ impl<'t> Soup<'t> {
                     result = Some(self.create_peepholed(types, |id| {
                         Node::Return(ReturnNode::new(id, ctrl, data))
                     }));
+                    self.nodes.add_def(self.stop, result);
                     self.set_ctrl(None);
                 }
                 Statement::If(_) => todo!(),

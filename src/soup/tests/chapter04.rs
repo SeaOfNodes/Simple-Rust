@@ -21,7 +21,7 @@ fn test_peephole() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
@@ -42,7 +42,7 @@ fn test_peephole_2() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
@@ -63,7 +63,7 @@ fn test_add_0() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
@@ -84,7 +84,7 @@ fn test_add_add_mul() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
@@ -105,7 +105,7 @@ fn test_peephole_3() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
@@ -129,7 +129,7 @@ fn test_mul_1() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
@@ -152,7 +152,7 @@ fn test_var_arg() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
@@ -188,7 +188,7 @@ fn test_constant_arg() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
@@ -209,7 +209,7 @@ fn test_comp_eq() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
@@ -230,7 +230,7 @@ fn test_comp_eq_2() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
@@ -250,7 +250,7 @@ fn test_comp_neq() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
@@ -271,7 +271,7 @@ fn test_comp_neq_2() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
@@ -292,7 +292,7 @@ fn test_bug_1() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
@@ -313,7 +313,7 @@ fn test_bug_2() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
@@ -357,7 +357,7 @@ fn test_bug_4() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (_start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 

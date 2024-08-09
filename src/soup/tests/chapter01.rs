@@ -17,7 +17,7 @@ fn test_simple_program() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (start, stop) = soup
+    let stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
@@ -36,7 +36,7 @@ fn test_simple_program() {
         unreachable!("expect constant");
     };
 
-    assert_eq!(Some(start), constant.start());
+    assert_eq!(Some(soup.start), constant.start());
     assert_eq!(1, constant.ty().unwrap_int());
 }
 
@@ -51,11 +51,11 @@ fn test_zero() {
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")
     };
-    let (start, _stop) = soup
+    let _stop = soup
         .compile_function(function, &mut types)
         .expect("should compile");
 
-    let Node::Start(start) = &soup.nodes[start] else {
+    let Node::Start(start) = &soup.nodes[soup.start] else {
         unreachable!("expect type start");
     };
     for output in &start.base.outputs {
