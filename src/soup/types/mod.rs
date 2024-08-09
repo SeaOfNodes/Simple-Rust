@@ -17,6 +17,7 @@ pub struct Types<'a> {
 
     pub ty_bot: Ty<'a>,
     pub ty_top: Ty<'a>,
+    pub ty_ctrl: Ty<'a>,
     pub ty_zero: Ty<'a>,
     pub ty_one: Ty<'a>,
     pub ty_int_bot: Ty<'a>,
@@ -51,6 +52,7 @@ impl<'a> Types<'a> {
 
         let ty_bot = interner.intern(Type::Bot);
         let ty_top = interner.intern(Type::Top);
+        let ty_ctrl = interner.intern(Type::Ctrl);
         let ty_zero = interner.intern(Type::Int(Int::Constant(0)));
         let ty_one = interner.intern(Type::Int(Int::Constant(1)));
         let ty_int_bot = interner.intern(Type::Int(Int::Bot));
@@ -59,6 +61,7 @@ impl<'a> Types<'a> {
             interner,
             ty_bot,
             ty_top,
+            ty_ctrl,
             ty_zero,
             ty_one,
             ty_int_bot,

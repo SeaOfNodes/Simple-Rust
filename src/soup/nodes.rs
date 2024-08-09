@@ -7,7 +7,7 @@ use std::ops::{Index, IndexMut};
 
 use crate::bit_set;
 use crate::bit_set::BitSet;
-use crate::soup::types::Ty;
+use crate::soup::types::{Ty, Type};
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub struct NodeId(NonZeroU32);
@@ -44,7 +44,7 @@ pub struct Nodes<'t> {
 
 impl<'t> Nodes<'t> {
     pub fn new() -> Self {
-        let dummy = Node::Start(StartNode {
+        let dummy = Node::Not(NotNode {
             base: NodeBase {
                 id: NodeId::DUMMY,
                 inputs: vec![],
@@ -175,7 +175,7 @@ pub struct NodeBase {
 pub enum Node<'t> {
     Constant(ConstantNode<'t>),
     Return(ReturnNode),
-    Start(StartNode),
+    Start(StartNode<'t>),
     Add(AddNode),
     Sub(SubNode),
     Mul(MulNode),
@@ -196,8 +196,9 @@ pub struct ReturnNode {
     pub base: NodeBase,
 }
 
-pub struct StartNode {
+pub struct StartNode<'t> {
     pub base: NodeBase,
+    pub args: Ty<'t>,
 }
 
 impl<'t> Node<'t> {
@@ -505,10 +506,12 @@ impl NodeBase {
     }
 }
 
-impl StartNode {
-    pub fn new(id: NodeId) -> Self {
+impl<'t> StartNode<'t> {
+    pub fn new(id: NodeId, args: Ty<'t>) -> Self {
+        debug_assert!(matches!(&*args, Type::Tuple { .. }));
         Self {
             base: NodeBase::new(id, vec![]),
+            args,
         }
     }
 }

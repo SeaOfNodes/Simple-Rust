@@ -41,7 +41,8 @@ impl<'t> Soup<'t> {
         function: &Function,
         types: &mut Types<'t>,
     ) -> Result<(NodeId, NodeId), Vec<String>> {
-        let start = self.create_peepholed(types, |id| Node::Start(StartNode::new(id)));
+        let args = types.get_tuple(vec![types.ty_ctrl, self.arg.unwrap_or(types.ty_bot)]);
+        let start = self.create_peepholed(types, |id| Node::Start(StartNode::new(id, args)));
         self.start = start;
         self.ctrl = start;
         // if we didn't call peephole we might have to manually set the computed type like in the java constructor
@@ -211,7 +212,7 @@ impl<'t> Soup<'t> {
                     .unwrap_or(types.ty_bot);
                 types.get_tuple(vec![ctrl, expr])
             }
-            Node::Start(_) => types.ty_bot,
+            Node::Start(n) => n.args,
             Node::Add(n) => self.compute_binary_int(&n.base, types, i64::wrapping_add),
             Node::Sub(n) => self.compute_binary_int(&n.base, types, i64::wrapping_sub),
             Node::Mul(n) => self.compute_binary_int(&n.base, types, i64::wrapping_mul),
