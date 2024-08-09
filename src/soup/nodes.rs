@@ -7,7 +7,7 @@ use std::ops::{Index, IndexMut};
 
 use crate::bit_set;
 use crate::bit_set::BitSet;
-use crate::soup::types::{Ty, Type};
+use crate::soup::types::Ty;
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub struct NodeId(NonZeroU32);
@@ -75,17 +75,6 @@ impl<'t> Nodes<'t> {
         debug_assert_eq!(self[id].id(), id);
         debug_assert_eq!(self.nodes.len(), self.node_ty.len());
         id
-    }
-
-    pub fn get_many_ty<const N: usize>(
-        &self,
-        nodes: [Option<NodeId>; N],
-    ) -> [Option<&'t Type<'t>>; N] {
-        nodes.map(|n| {
-            n.map(|n| &self.node_ty[n.index()])
-                .map(|t| t.map(|t| t.inner()))
-                .unwrap_or(None)
-        })
     }
 
     pub fn ty(&self, node: NodeId) -> Option<Ty<'t>> {

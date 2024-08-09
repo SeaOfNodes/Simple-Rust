@@ -2,8 +2,8 @@ use std::mem;
 
 use crate::soup::graph_visualizer;
 use crate::soup::nodes::{
-    AddNode, ConstantNode, DivNode, MinusNode, MulNode, Node, NodeId, Nodes, ReturnNode, ScopeNode,
-    StartNode, SubNode,
+    AddNode, BoolOp, ConstantNode, DivNode, MinusNode, MulNode, Node, NodeBase, NodeId, Nodes,
+    ReturnNode, ScopeNode, StartNode, SubNode,
 };
 use crate::soup::types::{Int, Ty, Type, Types};
 use crate::syntax::ast::{BinaryOperator, Block, Expression, Function, PrefixOperator, Statement};
@@ -214,47 +214,79 @@ impl<'t> Soup<'t> {
             Node::ConstantNode(c) => c.ty(),
             Node::ReturnNode(_) => types.ty_bot,
             Node::StartNode(_) => types.ty_bot,
-            Node::AddNode(AddNode { base }) => {
-                match self.nodes.get_many_ty([base.inputs[1], base.inputs[2]]) {
-                    [Some(Type::Int(Int::Constant(v1))), Some(Type::Int(Int::Constant(v2)))] => {
-                        types.get_int(v1.wrapping_add(*v2))
-                    }
+            Node::AddNode(n) => self.compute_binary_int(&n.base, types, i64::wrapping_add),
+            Node::SubNode(n) => self.compute_binary_int(&n.base, types, i64::wrapping_sub),
+            Node::MulNode(n) => self.compute_binary_int(&n.base, types, i64::wrapping_mul),
+            Node::DivNode(n) => {
+                self.compute_binary_int(
+                    &n.base,
+                    types,
+                    |a, b| if b == 0 { 0 } else { a.wrapping_div(b) },
+                )
+            }
+            Node::MinusNode(n) => {
+                let Some(input) = n.base.inputs[1].and_then(|n| self.nodes.ty(n)) else {
+                    return types.ty_bot;
+                };
+                match &*input {
+                    Type::Int(Int::Constant(v)) => types.get_int(v.wrapping_neg()),
                     _ => types.ty_bot,
                 }
             }
-            Node::SubNode(SubNode { base }) => {
-                match self.nodes.get_many_ty([base.inputs[1], base.inputs[2]]) {
-                    [Some(Type::Int(Int::Constant(v1))), Some(Type::Int(Int::Constant(v2)))] => {
-                        types.get_int(v1.wrapping_sub(*v2))
-                    }
-                    _ => types.ty_bot,
-                }
-            }
-            Node::MulNode(MulNode { base }) => {
-                match self.nodes.get_many_ty([base.inputs[1], base.inputs[2]]) {
-                    [Some(Type::Int(Int::Constant(v1))), Some(Type::Int(Int::Constant(v2)))] => {
-                        types.get_int(v1.wrapping_mul(*v2))
-                    }
-                    _ => types.ty_bot,
-                }
-            }
-            Node::DivNode(DivNode { base }) => {
-                match self.nodes.get_many_ty([base.inputs[1], base.inputs[2]]) {
-                    [Some(Type::Int(Int::Constant(v1))), Some(Type::Int(Int::Constant(v2)))] => {
-                        // TODO: handle or ignore div by 0
-                        types.get_int(v1.wrapping_div(*v2))
-                    }
-                    _ => types.ty_bot,
-                }
-            }
-            Node::MinusNode(MinusNode { base }) => match self.nodes.get_many_ty([base.inputs[1]]) {
-                [Some(Type::Int(Int::Constant(v)))] => types.get_int(v.wrapping_neg()),
-                _ => types.ty_bot,
-            },
             Node::ScopeNode(_) => types.ty_bot,
-            _ => todo!(),
+            Node::BoolNode(b) => self.compute_binary_int(&b.base, types, |x, y| {
+                match b.op {
+                    BoolOp::EQ => x == y,
+                    BoolOp::LT => x < y,
+                    BoolOp::LE => x <= y,
+                }
+                .into()
+            }),
+            Node::NotNode(n) => {
+                let Some(input) = n.base.inputs[1].and_then(|n| self.nodes.ty(n)) else {
+                    return types.ty_bot;
+                };
+                match &*input {
+                    Type::Int(Int::Constant(0)) => types.ty_one,
+                    Type::Int(Int::Constant(_)) => types.ty_zero,
+                    Type::Int(_) => input,
+                    _ => types.ty_bot,
+                }
+            }
+            Node::ProjNode(n) => {
+                let Some(input) = n.base.inputs[0].and_then(|n| self.nodes.ty(n)) else {
+                    return types.ty_bot;
+                };
+                match &*input {
+                    Type::Tuple { types } => types[n.index],
+                    _ => unreachable!("proj node ctrl must always be tuple, if present"),
+                }
+            }
         }
     }
+
+    fn compute_binary_int<F: FnOnce(i64, i64) -> i64>(
+        &self,
+        base: &NodeBase,
+        types: &mut Types<'t>,
+        op: F,
+    ) -> Ty<'t> {
+        let Some(first) = base.inputs[1].and_then(|n| self.nodes.ty(n)) else {
+            return types.ty_bot;
+        };
+        let Some(second) = base.inputs[2].and_then(|n| self.nodes.ty(n)) else {
+            return types.ty_bot;
+        };
+
+        match [&*first, &*second] {
+            [Type::Int(Int::Constant(v1)), Type::Int(Int::Constant(v2))] => {
+                types.get_int(op(*v1, *v2))
+            }
+            [Type::Int(_), Type::Int(_)] => types.meet(first, second),
+            _ => types.ty_bot,
+        }
+    }
+
     fn peephole(&mut self, node: NodeId, types: &mut Types<'t>) -> NodeId {
         let ty = self.compute(node, types);
 
