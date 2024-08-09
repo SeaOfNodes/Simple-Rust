@@ -134,6 +134,10 @@ impl<'t> Nodes<'t> {
             self[new_def].base_mut().add_use(node);
         }
     }
+
+    pub fn swap_12(&mut self, node: NodeId) {
+        self[node].base_mut().inputs.swap(1, 2);
+    }
 }
 
 impl<'t> Index<NodeId> for Nodes<'t> {

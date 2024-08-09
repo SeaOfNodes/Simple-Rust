@@ -337,10 +337,32 @@ impl<'t> Soup<'t> {
     fn idealize(&mut self, node: NodeId, types: &mut Types<'t>) -> Option<NodeId> {
         match &self.nodes[node] {
             Node::Add(_) => todo!(),
-            Node::Sub(_) => todo!(),
-            Node::Mul(_) => todo!(),
+            Node::Sub(n) => {
+                if n.base.inputs[1]? == n.base.inputs[2]? {
+                    Some(self.nodes.create(|id| {
+                        Node::Constant(ConstantNode::new(id, self.start, types.ty_zero))
+                    }))
+                } else {
+                    None
+                }
+            }
+            Node::Mul(n) => {
+                let left = n.base.inputs[1]?;
+                let right = n.base.inputs[2]?;
+                let left_ty = self.nodes.ty(left)?; // TODO is it safe to ignore this being None?
+                let right_ty = self.nodes.ty(right)?;
+
+                if matches!(&*right_ty, Type::Int(Int::Constant(1))) {
+                    Some(left)
+                } else if left_ty.is_constant() && !right_ty.is_constant() {
+                    self.nodes.swap_12(node);
+                    Some(node)
+                } else {
+                    None
+                }
+            }
             Node::Bool(n) => {
-                if n.base.inputs[1] == n.base.inputs[2] {
+                if n.base.inputs[1]? == n.base.inputs[2]? {
                     let value = if n.op.compute(3, 3) {
                         types.ty_one
                     } else {
