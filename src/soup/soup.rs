@@ -336,7 +336,111 @@ impl<'t> Soup<'t> {
     /// do not peephole directly returned values!
     fn idealize(&mut self, node: NodeId, types: &mut Types<'t>) -> Option<NodeId> {
         match &self.nodes[node] {
-            Node::Add(_) => todo!(),
+            Node::Add(n) => {
+                let lhs = n.base.inputs[1]?;
+                let rhs = n.base.inputs[2]?;
+                let t1 = self.nodes.ty(lhs)?; // TODO is it safe to ignore this being None?
+                let t2 = self.nodes.ty(rhs)?;
+
+                // Already handled by peephole constant folding
+                debug_assert!(t1.is_constant() && t2.is_constant());
+
+                // Add of 0.  We do not check for (0+x) because this will already
+                // canonicalize to (x+0)
+                if t2 == types.ty_zero {
+                    return Some(lhs);
+                }
+
+                // Add of same to a multiply by 2
+                if lhs == rhs {
+                    let start = self.start;
+                    let two = types.ty_two;
+                    let two = self.create_peepholed(types, |id| {
+                        Node::Constant(ConstantNode::new(id, start, two))
+                    });
+                    return Some(
+                        self.nodes
+                            .create(|id| Node::Mul(MulNode::new(id, [lhs, two]))),
+                    );
+                }
+
+                // Goal: a left-spine set of adds, with constants on the rhs (which then fold).
+
+                // Move non-adds to RHS
+                if !matches!(self.nodes[lhs], Node::Add(_))
+                    && matches!(self.nodes[rhs], Node::Add(_))
+                {
+                    return Some(self.nodes.swap_12(node));
+                }
+
+                // Now we might see (add add non) or (add non non) or (add add add) but never (add non add)
+
+                // Do we have  x + (y + z) ?
+                // Swap to    (x + y) + z
+                // Rotate (add add add) to remove the add on RHS
+                if let Node::Add(add) = &self.nodes[rhs] {
+                    let x = lhs;
+                    let y = add.base.inputs[1]?;
+                    let z = add.base.inputs[2]?;
+                    let new_lhs =
+                        self.create_peepholed(types, |id| Node::Add(AddNode::new(id, [x, y])));
+                    return Some(
+                        self.nodes
+                            .create(|id| Node::Add(AddNode::new(id, [new_lhs, z]))),
+                    );
+                }
+
+                // Now we might see (add add non) or (add non non) but never (add non add) nor (add add add)
+                if !matches!(self.nodes[lhs], Node::Add(_)) {
+                    if self.spline_cmp(lhs, rhs) {
+                        return Some(self.nodes.swap_12(node));
+                    } else {
+                        return None;
+                    }
+                }
+
+                // Now we only see (add add non)
+
+                // Do we have (x + con1) + con2?
+                // Replace with (x + (con1+con2) which then fold the constants
+                if self
+                    .nodes
+                    .ty(self.nodes[lhs].base().inputs[2]?)?
+                    .is_constant()
+                    && t2.is_constant()
+                {
+                    let x = self.nodes[lhs].base().inputs[1]?;
+                    let con1 = self.nodes[lhs].base().inputs[2]?;
+                    let con2 = rhs;
+
+                    let new_rhs = self
+                        .create_peepholed(types, |id| Node::Add(AddNode::new(id, [con1, con2])));
+                    return Some(
+                        self.nodes
+                            .create(|id| Node::Add(AddNode::new(id, [x, new_rhs]))),
+                    );
+                }
+
+                // Now we sort along the spline via rotates, to gather similar things together.
+
+                // Do we rotate (x + y) + z
+                // into         (x + z) + y ?
+                if self.spline_cmp(self.nodes[lhs].base().inputs[2]?, rhs) {
+                    // return new AddNode(new AddNode(lhs.in(1), rhs).peephole(), lhs.in(2));
+                    let x = self.nodes[lhs].base().inputs[1]?;
+                    let y = self.nodes[lhs].base().inputs[2]?;
+                    let z = rhs;
+
+                    let new_lhs =
+                        self.create_peepholed(types, |id| Node::Add(AddNode::new(id, [x, z])));
+                    return Some(
+                        self.nodes
+                            .create(|id| Node::Add(AddNode::new(id, [new_lhs, y]))),
+                    );
+                }
+
+                None
+            }
             Node::Sub(n) => {
                 if n.base.inputs[1]? == n.base.inputs[2]? {
                     Some(self.nodes.create(|id| {
@@ -385,5 +489,20 @@ impl<'t> Soup<'t> {
             | Node::Not(_)
             | Node::Proj(_) => None,
         }
+    }
+
+    // Compare two off-spline nodes and decide what order they should be in.
+    // Do we rotate ((x + hi) + lo) into ((x + lo) + hi) ?
+    // Generally constants always go right, then others.
+    // Ties with in a category sort by node ID.
+    // TRUE if swapping hi and lo.
+    fn spline_cmp(&mut self, hi: NodeId, lo: NodeId) -> bool {
+        if self.nodes.ty(lo).is_some_and(|t| t.is_constant()) {
+            return false;
+        }
+        if self.nodes.ty(hi).is_some_and(|t| t.is_constant()) {
+            return true;
+        }
+        lo.index() > hi.index()
     }
 }

@@ -15,7 +15,7 @@ pub struct NodeId(NonZeroU32);
 impl NodeId {
     pub const DUMMY: NodeId = NodeId(NonZeroU32::MAX);
 
-    fn index(self) -> usize {
+    pub fn index(self) -> usize {
         self.0.get() as usize
     }
 }
@@ -135,8 +135,9 @@ impl<'t> Nodes<'t> {
         }
     }
 
-    pub fn swap_12(&mut self, node: NodeId) {
+    pub fn swap_12(&mut self, node: NodeId) -> NodeId {
         self[node].base_mut().inputs.swap(1, 2);
+        node
     }
 }
 

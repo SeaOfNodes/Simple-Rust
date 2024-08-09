@@ -20,6 +20,7 @@ pub struct Types<'a> {
     pub ty_ctrl: Ty<'a>,
     pub ty_zero: Ty<'a>,
     pub ty_one: Ty<'a>,
+    pub ty_two: Ty<'a>,
     pub ty_int_bot: Ty<'a>,
 }
 
@@ -55,6 +56,7 @@ impl<'a> Types<'a> {
         let ty_ctrl = interner.intern(Type::Ctrl);
         let ty_zero = interner.intern(Type::Int(Int::Constant(0)));
         let ty_one = interner.intern(Type::Int(Int::Constant(1)));
+        let ty_two = interner.intern(Type::Int(Int::Constant(2)));
         let ty_int_bot = interner.intern(Type::Int(Int::Bot));
 
         Self {
@@ -64,6 +66,7 @@ impl<'a> Types<'a> {
             ty_ctrl,
             ty_zero,
             ty_one,
+            ty_two,
             ty_int_bot,
         }
     }
@@ -72,6 +75,7 @@ impl<'a> Types<'a> {
         match value {
             0 => self.ty_zero,
             1 => self.ty_one,
+            2 => self.ty_two,
             _ => self.interner.intern(Type::Int(Int::Constant(value))),
         }
     }
