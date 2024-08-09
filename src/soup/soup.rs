@@ -31,11 +31,11 @@ impl<'t> Soup<'t> {
             arg: None,
         }
     }
-    
+
     pub fn set_arg(&mut self, ty: Ty<'t>) {
         self.arg = Some(ty)
     }
-    
+
     pub fn compile_function(
         &mut self,
         function: &Function,
@@ -273,6 +273,7 @@ impl<'t> Soup<'t> {
                 _ => types.ty_bot,
             },
             Node::ScopeNode(_) => types.ty_bot,
+            _ => todo!(),
         }
     }
     fn peephole(&mut self, node: NodeId, types: &mut Types<'t>) -> NodeId {

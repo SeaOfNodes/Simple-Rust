@@ -193,6 +193,9 @@ pub enum Node<'t> {
     DivNode(DivNode),
     MinusNode(MinusNode),
     ScopeNode(ScopeNode),
+    BoolNode(BoolNode),
+    NotNode(NotNode),
+    ProjNode(ProjNode),
 }
 
 pub struct ConstantNode<'t> {
@@ -223,6 +226,9 @@ impl<'t> Node<'t> {
             Node::DivNode(n) => &n.base,
             Node::MinusNode(n) => &n.base,
             Node::ScopeNode(n) => &n.base,
+            Node::BoolNode(n) => &n.base,
+            Node::NotNode(n) => &n.base,
+            Node::ProjNode(n) => &n.base,
         }
     }
 
@@ -237,6 +243,9 @@ impl<'t> Node<'t> {
             Node::DivNode(n) => &mut n.base,
             Node::MinusNode(n) => &mut n.base,
             Node::ScopeNode(n) => &mut n.base,
+            Node::BoolNode(n) => &mut n.base,
+            Node::NotNode(n) => &mut n.base,
+            Node::ProjNode(n) => &mut n.base,
         }
     }
 
@@ -249,23 +258,33 @@ impl<'t> Node<'t> {
             | Node::MulNode(_)
             | Node::DivNode(_)
             | Node::MinusNode(_)
-            | Node::ScopeNode(_) => false,
+            | Node::ScopeNode(_)
+            | Node::BoolNode(_)
+            | Node::NotNode(_)
+            | Node::ProjNode(_) => false,
         }
     }
 
     /// Easy reading label for debugger
     pub fn label(&self) -> Cow<str> {
-        match self {
-            Node::ConstantNode(c) => Cow::Owned(format!("#{}", c.value())),
-            Node::ReturnNode(_) => Cow::Borrowed("Return"),
-            Node::StartNode(_) => Cow::Borrowed("Start"),
-            Node::AddNode(_) => Cow::Borrowed("Add"),
-            Node::SubNode(_) => Cow::Borrowed("Sub"),
-            Node::MulNode(_) => Cow::Borrowed("Mul"),
-            Node::DivNode(_) => Cow::Borrowed("Div"),
-            Node::MinusNode(_) => Cow::Borrowed("Minus"),
-            Node::ScopeNode(_) => Cow::Borrowed("Scope"),
-        }
+        Cow::Borrowed(match self {
+            Node::ConstantNode(c) => return Cow::Owned(format!("#{}", c.value())),
+            Node::ReturnNode(_) => "Return",
+            Node::StartNode(_) => "Start",
+            Node::AddNode(_) => "Add",
+            Node::SubNode(_) => "Sub",
+            Node::MulNode(_) => "Mul",
+            Node::DivNode(_) => "Div",
+            Node::MinusNode(_) => "Minus",
+            Node::ScopeNode(_) => "Scope",
+            Node::BoolNode(b) => match b.op {
+                BoolOp::EQ => "EQ",
+                BoolOp::LT => "LT",
+                BoolOp::LE => "LE",
+            },
+            Node::NotNode(_) => "Not",
+            Node::ProjNode(p) => return Cow::Owned(p.label.clone()), // clone to keep static lifetime for others
+        })
     }
 
     // Unique label for graph visualization, e.g. "Add12" or "Region30" or "EQ99"
@@ -288,6 +307,9 @@ impl<'t> Node<'t> {
             Node::DivNode(_) => Cow::Borrowed("//"),
             Node::MinusNode(_) => Cow::Borrowed("-"),
             Node::ScopeNode(_) => self.label(),
+            Node::BoolNode(b) => Cow::Borrowed(b.op.str()),
+            Node::NotNode(_) => Cow::Borrowed("!"),
+            Node::ProjNode(_) => self.label(),
         }
     }
 
@@ -380,6 +402,21 @@ impl<'t> Nodes<'t> {
                 }
                 Ok(())
             }
+            Node::BoolNode(bool) => {
+                write!(f, "(")?;
+                self.fmt(bool.base.inputs[1], f, visited)?;
+                write!(f, "{}", bool.op.str())?;
+                self.fmt(bool.base.inputs[2], f, visited)?;
+                write!(f, ")")
+            }
+            Node::NotNode(not) => {
+                write!(f, "(!")?;
+                self.fmt(not.base.inputs[1], f, visited)?;
+                write!(f, ")")
+            }
+            Node::ProjNode(proj) => {
+                write!(f, "{}", proj.label)
+            }
         }
     }
 
@@ -419,9 +456,15 @@ impl<'t> Nodes<'t> {
             .ok_or(())
     }
 
-    pub fn scope_update(&mut self, scope_node: NodeId, name: &str, value: NodeId) -> Result<NodeId, ()> {
+    pub fn scope_update(
+        &mut self,
+        scope_node: NodeId,
+        name: &str,
+        value: NodeId,
+    ) -> Result<NodeId, ()> {
         let nesting_level = self.scope_mut(scope_node).scopes.len() - 1;
-        self.scope_lookup_update(scope_node, name, Some(value), nesting_level).ok_or(())
+        self.scope_lookup_update(scope_node, name, Some(value), nesting_level)
+            .ok_or(())
     }
 
     fn scope_lookup_update(
@@ -591,6 +634,63 @@ impl ScopeNode {
         Self {
             base: NodeBase::new(id, vec![]),
             scopes: vec![],
+        }
+    }
+}
+
+enum BoolOp {
+    EQ,
+    LT,
+    LE,
+}
+impl BoolOp {
+    fn str(&self) -> &'static str {
+        match self {
+            BoolOp::EQ => "==",
+            BoolOp::LT => "<",
+            BoolOp::LE => "<=",
+        }
+    }
+}
+
+pub struct BoolNode {
+    pub base: NodeBase,
+    pub op: BoolOp,
+}
+
+impl BoolNode {
+    pub fn new(id: NodeId, [left, right]: [NodeId; 2], op: BoolOp) -> Self {
+        Self {
+            base: NodeBase::new(id, vec![None, Some(left), Some(right)]),
+            op,
+        }
+    }
+}
+
+pub struct NotNode {
+    pub base: NodeBase,
+}
+
+impl NotNode {
+    pub fn new(id: NodeId, input: NodeId) -> Self {
+        Self {
+            base: NodeBase::new(id, vec![None, Some(input)]),
+        }
+    }
+}
+
+pub struct ProjNode {
+    pub base: NodeBase,
+    pub index: usize,
+    pub label: String,
+}
+
+impl ProjNode {
+    pub fn new(id: NodeId, ctrl: NodeId, index: usize, label: String) -> Self {
+        Self {
+            base: NodeBase::new(id, vec![Some(ctrl)]),
+            index,
+            label,
         }
     }
 }
