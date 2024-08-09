@@ -158,11 +158,11 @@ fn test_var_arg() {
 
     assert!(matches!(
         soup.nodes[soup.nodes[stop].base().inputs[0].unwrap()],
-        Node::ProjNode(_)
+        Node::Proj(_)
     ));
     assert!(matches!(
         soup.nodes[soup.nodes[stop].base().inputs[1].unwrap()],
-        Node::ProjNode(_)
+        Node::Proj(_)
     ));
 }
 

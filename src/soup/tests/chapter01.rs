@@ -21,13 +21,13 @@ fn test_simple_program() {
         .compile_function(function, &mut types)
         .expect("should compile");
 
-    let Node::ReturnNode(ret) = &soup.nodes[stop] else {
+    let Node::Return(ret) = &soup.nodes[stop] else {
         unreachable!("expect return");
     };
     assert_eq!(ret.ctrl(), Some(start));
 
     let expr = ret.expr().expect("has expr");
-    let Node::ConstantNode(constant) = &soup.nodes[expr] else {
+    let Node::Constant(constant) = &soup.nodes[expr] else {
         unreachable!("expect constant");
     };
 
@@ -50,11 +50,11 @@ fn test_zero() {
         .compile_function(function, &mut types)
         .expect("should compile");
 
-    let Node::StartNode(start) = &soup.nodes[start] else {
+    let Node::Start(start) = &soup.nodes[start] else {
         unreachable!("expect type start");
     };
     for output in &start.base.outputs {
-        if let Node::ConstantNode(c) = &soup.nodes[*output] {
+        if let Node::Constant(c) = &soup.nodes[*output] {
             assert_eq!(0, c.ty().unwrap_int());
         }
     }

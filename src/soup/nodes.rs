@@ -44,7 +44,7 @@ pub struct Nodes<'t> {
 
 impl<'t> Nodes<'t> {
     pub fn new() -> Self {
-        let dummy = Node::StartNode(StartNode {
+        let dummy = Node::Start(StartNode {
             base: NodeBase {
                 id: NodeId::DUMMY,
                 inputs: vec![],
@@ -173,18 +173,18 @@ pub struct NodeBase {
 }
 
 pub enum Node<'t> {
-    ConstantNode(ConstantNode<'t>),
-    ReturnNode(ReturnNode),
-    StartNode(StartNode),
-    AddNode(AddNode),
-    SubNode(SubNode),
-    MulNode(MulNode),
-    DivNode(DivNode),
-    MinusNode(MinusNode),
-    ScopeNode(ScopeNode),
-    BoolNode(BoolNode),
-    NotNode(NotNode),
-    ProjNode(ProjNode),
+    Constant(ConstantNode<'t>),
+    Return(ReturnNode),
+    Start(StartNode),
+    Add(AddNode),
+    Sub(SubNode),
+    Mul(MulNode),
+    Div(DivNode),
+    Minus(MinusNode),
+    Scope(ScopeNode),
+    Bool(BoolNode),
+    Not(NotNode),
+    Proj(ProjNode),
 }
 
 pub struct ConstantNode<'t> {
@@ -206,80 +206,80 @@ impl<'t> Node<'t> {
     }
     pub fn base(&self) -> &NodeBase {
         match self {
-            Node::ConstantNode(n) => &n.base,
-            Node::ReturnNode(n) => &n.base,
-            Node::StartNode(n) => &n.base,
-            Node::AddNode(n) => &n.base,
-            Node::SubNode(n) => &n.base,
-            Node::MulNode(n) => &n.base,
-            Node::DivNode(n) => &n.base,
-            Node::MinusNode(n) => &n.base,
-            Node::ScopeNode(n) => &n.base,
-            Node::BoolNode(n) => &n.base,
-            Node::NotNode(n) => &n.base,
-            Node::ProjNode(n) => &n.base,
+            Node::Constant(n) => &n.base,
+            Node::Return(n) => &n.base,
+            Node::Start(n) => &n.base,
+            Node::Add(n) => &n.base,
+            Node::Sub(n) => &n.base,
+            Node::Mul(n) => &n.base,
+            Node::Div(n) => &n.base,
+            Node::Minus(n) => &n.base,
+            Node::Scope(n) => &n.base,
+            Node::Bool(n) => &n.base,
+            Node::Not(n) => &n.base,
+            Node::Proj(n) => &n.base,
         }
     }
 
     pub fn base_mut(&mut self) -> &mut NodeBase {
         match self {
-            Node::ConstantNode(n) => &mut n.base,
-            Node::ReturnNode(n) => &mut n.base,
-            Node::StartNode(n) => &mut n.base,
-            Node::AddNode(n) => &mut n.base,
-            Node::SubNode(n) => &mut n.base,
-            Node::MulNode(n) => &mut n.base,
-            Node::DivNode(n) => &mut n.base,
-            Node::MinusNode(n) => &mut n.base,
-            Node::ScopeNode(n) => &mut n.base,
-            Node::BoolNode(n) => &mut n.base,
-            Node::NotNode(n) => &mut n.base,
-            Node::ProjNode(n) => &mut n.base,
+            Node::Constant(n) => &mut n.base,
+            Node::Return(n) => &mut n.base,
+            Node::Start(n) => &mut n.base,
+            Node::Add(n) => &mut n.base,
+            Node::Sub(n) => &mut n.base,
+            Node::Mul(n) => &mut n.base,
+            Node::Div(n) => &mut n.base,
+            Node::Minus(n) => &mut n.base,
+            Node::Scope(n) => &mut n.base,
+            Node::Bool(n) => &mut n.base,
+            Node::Not(n) => &mut n.base,
+            Node::Proj(n) => &mut n.base,
         }
     }
 
     pub fn is_cfg(&self) -> bool {
         match self {
-            Node::StartNode(_) | Node::ReturnNode(_) => true,
-            Node::ConstantNode(_)
-            | Node::AddNode(_)
-            | Node::SubNode(_)
-            | Node::MulNode(_)
-            | Node::DivNode(_)
-            | Node::MinusNode(_)
-            | Node::ScopeNode(_)
-            | Node::BoolNode(_)
-            | Node::NotNode(_)
-            | Node::ProjNode(_) => false,
+            Node::Start(_) | Node::Return(_) => true,
+            Node::Constant(_)
+            | Node::Add(_)
+            | Node::Sub(_)
+            | Node::Mul(_)
+            | Node::Div(_)
+            | Node::Minus(_)
+            | Node::Scope(_)
+            | Node::Bool(_)
+            | Node::Not(_)
+            | Node::Proj(_) => false,
         }
     }
 
     /// Easy reading label for debugger
     pub fn label(&self) -> Cow<str> {
         Cow::Borrowed(match self {
-            Node::ConstantNode(c) => return Cow::Owned(format!("{}", c.ty())),
-            Node::ReturnNode(_) => "Return",
-            Node::StartNode(_) => "Start",
-            Node::AddNode(_) => "Add",
-            Node::SubNode(_) => "Sub",
-            Node::MulNode(_) => "Mul",
-            Node::DivNode(_) => "Div",
-            Node::MinusNode(_) => "Minus",
-            Node::ScopeNode(_) => "Scope",
-            Node::BoolNode(b) => match b.op {
+            Node::Constant(c) => return Cow::Owned(format!("{}", c.ty())),
+            Node::Return(_) => "Return",
+            Node::Start(_) => "Start",
+            Node::Add(_) => "Add",
+            Node::Sub(_) => "Sub",
+            Node::Mul(_) => "Mul",
+            Node::Div(_) => "Div",
+            Node::Minus(_) => "Minus",
+            Node::Scope(_) => "Scope",
+            Node::Bool(b) => match b.op {
                 BoolOp::EQ => "EQ",
                 BoolOp::LT => "LT",
                 BoolOp::LE => "LE",
             },
-            Node::NotNode(_) => "Not",
-            Node::ProjNode(p) => return Cow::Owned(p.label.clone()), // clone to keep static lifetime for others
+            Node::Not(_) => "Not",
+            Node::Proj(p) => return Cow::Owned(p.label.clone()), // clone to keep static lifetime for others
         })
     }
 
     // Unique label for graph visualization, e.g. "Add12" or "Region30" or "EQ99"
     pub fn unique_name(&self) -> String {
         match self {
-            Node::ConstantNode(_) => format!("Con_{}", self.base().id),
+            Node::Constant(_) => format!("Con_{}", self.base().id),
             _ => format!("{}{}", self.label(), self.base().id),
         }
     }
@@ -287,18 +287,18 @@ impl<'t> Node<'t> {
     // Graphical label, e.g. "+" or "Region" or "=="
     pub fn glabel(&self) -> Cow<str> {
         match self {
-            Node::ConstantNode(_) => self.label(),
-            Node::ReturnNode(_) => self.label(),
-            Node::StartNode(_) => self.label(),
-            Node::AddNode(_) => Cow::Borrowed("+"),
-            Node::SubNode(_) => Cow::Borrowed("-"),
-            Node::MulNode(_) => Cow::Borrowed("*"),
-            Node::DivNode(_) => Cow::Borrowed("//"),
-            Node::MinusNode(_) => Cow::Borrowed("-"),
-            Node::ScopeNode(_) => self.label(),
-            Node::BoolNode(b) => Cow::Borrowed(b.op.str()),
-            Node::NotNode(_) => Cow::Borrowed("!"),
-            Node::ProjNode(_) => self.label(),
+            Node::Constant(_) => self.label(),
+            Node::Return(_) => self.label(),
+            Node::Start(_) => self.label(),
+            Node::Add(_) => Cow::Borrowed("+"),
+            Node::Sub(_) => Cow::Borrowed("-"),
+            Node::Mul(_) => Cow::Borrowed("*"),
+            Node::Div(_) => Cow::Borrowed("//"),
+            Node::Minus(_) => Cow::Borrowed("-"),
+            Node::Scope(_) => self.label(),
+            Node::Bool(b) => Cow::Borrowed(b.op.str()),
+            Node::Not(_) => Cow::Borrowed("!"),
+            Node::Proj(_) => self.label(),
         }
     }
 
@@ -336,47 +336,47 @@ impl<'t> Nodes<'t> {
         visited.add(node);
         match &self[node] {
             n if self.is_dead(node) => write!(f, "{}:DEAD", n.unique_name()),
-            Node::ReturnNode(r) => {
+            Node::Return(r) => {
                 write!(f, "return ")?;
                 self.fmt(r.expr(), f, visited)?;
                 write!(f, ";")
             }
-            Node::AddNode(add) => {
+            Node::Add(add) => {
                 write!(f, "(")?;
                 self.fmt(add.base.inputs[1], f, visited)?;
                 write!(f, "+")?;
                 self.fmt(add.base.inputs[2], f, visited)?;
                 write!(f, ")")
             }
-            Node::ConstantNode(c) => write!(f, "{}", c.ty()),
-            n @ Node::StartNode(_) => write!(f, "{}", n.label()),
-            Node::SubNode(sub) => {
+            Node::Constant(c) => write!(f, "{}", c.ty()),
+            n @ Node::Start(_) => write!(f, "{}", n.label()),
+            Node::Sub(sub) => {
                 write!(f, "(")?;
                 self.fmt(sub.base.inputs[1], f, visited)?;
                 write!(f, "-")?;
                 self.fmt(sub.base.inputs[2], f, visited)?;
                 write!(f, ")")
             }
-            Node::MulNode(mul) => {
+            Node::Mul(mul) => {
                 write!(f, "(")?;
                 self.fmt(mul.base.inputs[1], f, visited)?;
                 write!(f, "*")?;
                 self.fmt(mul.base.inputs[2], f, visited)?;
                 write!(f, ")")
             }
-            Node::DivNode(div) => {
+            Node::Div(div) => {
                 write!(f, "(")?;
                 self.fmt(div.base.inputs[1], f, visited)?;
                 write!(f, "*")?;
                 self.fmt(div.base.inputs[2], f, visited)?;
                 write!(f, ")")
             }
-            Node::MinusNode(minus) => {
+            Node::Minus(minus) => {
                 write!(f, "(-")?;
                 self.fmt(minus.base.inputs[1], f, visited)?;
                 write!(f, ")")
             }
-            n @ Node::ScopeNode(scope) => {
+            n @ Node::Scope(scope) => {
                 write!(f, "{}", n.label())?;
                 for s in &scope.scopes {
                     write!(f, "[")?;
@@ -391,26 +391,26 @@ impl<'t> Nodes<'t> {
                 }
                 Ok(())
             }
-            Node::BoolNode(bool) => {
+            Node::Bool(bool) => {
                 write!(f, "(")?;
                 self.fmt(bool.base.inputs[1], f, visited)?;
                 write!(f, "{}", bool.op.str())?;
                 self.fmt(bool.base.inputs[2], f, visited)?;
                 write!(f, ")")
             }
-            Node::NotNode(not) => {
+            Node::Not(not) => {
                 write!(f, "(!")?;
                 self.fmt(not.base.inputs[1], f, visited)?;
                 write!(f, ")")
             }
-            Node::ProjNode(proj) => {
+            Node::Proj(proj) => {
                 write!(f, "{}", proj.label)
             }
         }
     }
 
     fn scope_mut(&mut self, scope_node: NodeId) -> &mut ScopeNode {
-        let Node::ScopeNode(scope) = &mut self[scope_node] else {
+        let Node::Scope(scope) = &mut self[scope_node] else {
             panic!("Must be called with a scope node id")
         };
         scope

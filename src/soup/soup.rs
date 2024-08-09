@@ -41,11 +41,11 @@ impl<'t> Soup<'t> {
         function: &Function,
         types: &mut Types<'t>,
     ) -> Result<(NodeId, NodeId), Vec<String>> {
-        let start = self.create_peepholed(types, |id| Node::StartNode(StartNode::new(id)));
+        let start = self.create_peepholed(types, |id| Node::Start(StartNode::new(id)));
         self.start = start;
         self.ctrl = start;
         // if we didn't call peephole we might have to manually set the computed type like in the java constructor
-        self.scope = self.create_peepholed(types, |id| Node::ScopeNode(ScopeNode::new(id)));
+        self.scope = self.create_peepholed(types, |id| Node::Scope(ScopeNode::new(id)));
 
         let stop = match &function.body {
             None => todo!(),
@@ -79,7 +79,7 @@ impl<'t> Soup<'t> {
                     let ctrl = self.ctrl;
                     saw_return = true;
                     result = Some(self.create_peepholed(types, |id| {
-                        Node::ReturnNode(ReturnNode::new(id, ctrl, data))
+                        Node::Return(ReturnNode::new(id, ctrl, data))
                     }));
                 }
                 Statement::If(_) => todo!(),
@@ -111,9 +111,7 @@ impl<'t> Soup<'t> {
     fn create_unit(&mut self, types: &mut Types<'t>) -> NodeId {
         let ty = types.ty_zero; // TODO return Unit or something like that
         let start = self.start;
-        self.create_peepholed(types, |id| {
-            Node::ConstantNode(ConstantNode::new(id, start, ty))
-        })
+        self.create_peepholed(types, |id| Node::Constant(ConstantNode::new(id, start, ty)))
     }
 
     fn compile_expression(&mut self, expression: &Expression, types: &mut Types<'t>) -> NodeId {
@@ -121,9 +119,7 @@ impl<'t> Soup<'t> {
             Expression::Immediate(immediate) => {
                 let ty = types.get_int(*immediate);
                 let start = self.start;
-                self.create_peepholed(types, |id| {
-                    Node::ConstantNode(ConstantNode::new(id, start, ty))
-                })
+                self.create_peepholed(types, |id| Node::Constant(ConstantNode::new(id, start, ty)))
             }
             Expression::Identifier(identifier) => {
                 match self.nodes.scope_lookup(self.scope, &identifier.value) {
@@ -167,25 +163,19 @@ impl<'t> Soup<'t> {
                 let left_node = self.compile_expression(left, types);
                 let right_node = self.compile_expression(right, types);
                 self.create_peepholed(types, |id| match operator {
-                    BinaryOperator::Plus => {
-                        Node::AddNode(AddNode::new(id, [left_node, right_node]))
-                    }
-                    BinaryOperator::Minus => {
-                        Node::SubNode(SubNode::new(id, [left_node, right_node]))
-                    }
+                    BinaryOperator::Plus => Node::Add(AddNode::new(id, [left_node, right_node])),
+                    BinaryOperator::Minus => Node::Sub(SubNode::new(id, [left_node, right_node])),
                     BinaryOperator::Multiply => {
-                        Node::MulNode(MulNode::new(id, [left_node, right_node]))
+                        Node::Mul(MulNode::new(id, [left_node, right_node]))
                     }
-                    BinaryOperator::Divide => {
-                        Node::DivNode(DivNode::new(id, [left_node, right_node]))
-                    }
+                    BinaryOperator::Divide => Node::Div(DivNode::new(id, [left_node, right_node])),
                     _ => todo!(),
                 })
             }
             Expression::Prefix { operator, operand } => {
                 let operand = self.compile_expression(operand, types);
                 self.create_peepholed(types, |id| match operator {
-                    PrefixOperator::Minus => Node::MinusNode(MinusNode::new(id, operand)),
+                    PrefixOperator::Minus => Node::Minus(MinusNode::new(id, operand)),
                     _ => todo! {},
                 })
             }
@@ -211,20 +201,20 @@ impl<'t> Soup<'t> {
 
     fn compute(&self, node: NodeId, types: &mut Types<'t>) -> Ty<'t> {
         match &self.nodes[node] {
-            Node::ConstantNode(c) => c.ty(),
-            Node::ReturnNode(_) => types.ty_bot,
-            Node::StartNode(_) => types.ty_bot,
-            Node::AddNode(n) => self.compute_binary_int(&n.base, types, i64::wrapping_add),
-            Node::SubNode(n) => self.compute_binary_int(&n.base, types, i64::wrapping_sub),
-            Node::MulNode(n) => self.compute_binary_int(&n.base, types, i64::wrapping_mul),
-            Node::DivNode(n) => {
+            Node::Constant(c) => c.ty(),
+            Node::Return(_) => types.ty_bot,
+            Node::Start(_) => types.ty_bot,
+            Node::Add(n) => self.compute_binary_int(&n.base, types, i64::wrapping_add),
+            Node::Sub(n) => self.compute_binary_int(&n.base, types, i64::wrapping_sub),
+            Node::Mul(n) => self.compute_binary_int(&n.base, types, i64::wrapping_mul),
+            Node::Div(n) => {
                 self.compute_binary_int(
                     &n.base,
                     types,
                     |a, b| if b == 0 { 0 } else { a.wrapping_div(b) },
                 )
             }
-            Node::MinusNode(n) => {
+            Node::Minus(n) => {
                 let Some(input) = n.base.inputs[1].and_then(|n| self.nodes.ty(n)) else {
                     return types.ty_bot;
                 };
@@ -233,8 +223,8 @@ impl<'t> Soup<'t> {
                     _ => types.ty_bot,
                 }
             }
-            Node::ScopeNode(_) => types.ty_bot,
-            Node::BoolNode(b) => self.compute_binary_int(&b.base, types, |x, y| {
+            Node::Scope(_) => types.ty_bot,
+            Node::Bool(b) => self.compute_binary_int(&b.base, types, |x, y| {
                 match b.op {
                     BoolOp::EQ => x == y,
                     BoolOp::LT => x < y,
@@ -242,7 +232,7 @@ impl<'t> Soup<'t> {
                 }
                 .into()
             }),
-            Node::NotNode(n) => {
+            Node::Not(n) => {
                 let Some(input) = n.base.inputs[1].and_then(|n| self.nodes.ty(n)) else {
                     return types.ty_bot;
                 };
@@ -253,7 +243,7 @@ impl<'t> Soup<'t> {
                     _ => types.ty_bot,
                 }
             }
-            Node::ProjNode(n) => {
+            Node::Proj(n) => {
                 let Some(input) = n.base.inputs[0].and_then(|n| self.nodes.ty(n)) else {
                     return types.ty_bot;
                 };
@@ -296,11 +286,11 @@ impl<'t> Soup<'t> {
             return node;
         }
 
-        if !matches!(self.nodes[node], Node::ConstantNode(_)) && ty.is_constant() {
+        if !matches!(self.nodes[node], Node::Constant(_)) && ty.is_constant() {
             self.nodes.kill(node);
             return self
                 .nodes
-                .create(|id| Node::ConstantNode(ConstantNode::new(id, self.start, ty)));
+                .create(|id| Node::Constant(ConstantNode::new(id, self.start, ty)));
         }
 
         if let Some(n) = self.idealize(node, types) {

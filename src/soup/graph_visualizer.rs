@@ -25,7 +25,7 @@ pub fn generate_dot_output(soup: &Soup) -> Result<String, fmt::Error> {
 fn nodes(sb: &mut String, nodes: &Nodes, all: &HashSet<NodeId>) -> fmt::Result {
     writeln!(sb, "\tsubgraph cluster_Nodes {{")?; // Magic "cluster_" in the subgraph name
     for n in all.iter().map(|n| &nodes[*n]) {
-        if matches!(n, Node::ScopeNode(_)) {
+        if matches!(n, Node::Scope(_)) {
             continue;
         }
         write!(sb, "\t\t{} [ ", n.unique_name())?;
@@ -39,7 +39,7 @@ fn nodes(sb: &mut String, nodes: &Nodes, all: &HashSet<NodeId>) -> fmt::Result {
 }
 
 fn scopes(sb: &mut String, nodes: &Nodes, scope_node: NodeId) -> fmt::Result {
-    let Node::ScopeNode(scope) = &nodes[scope_node] else {
+    let Node::Scope(scope) = &nodes[scope_node] else {
         unreachable!();
     };
 
@@ -81,7 +81,7 @@ fn make_port_name(scope_name: &str, var_name: &str) -> String {
 fn node_edges(sb: &mut String, nodes: &Nodes, all: &HashSet<NodeId>) -> fmt::Result {
     writeln!(sb, "\tedge [ fontname=Helvetica, fontsize=8 ];")?;
     for n in all.iter().map(|n| &nodes[*n]) {
-        if matches!(n, Node::ScopeNode(_)) {
+        if matches!(n, Node::Scope(_)) {
             continue;
         }
         for (i, def) in n.base().inputs.iter().enumerate() {
@@ -94,7 +94,7 @@ fn node_edges(sb: &mut String, nodes: &Nodes, all: &HashSet<NodeId>) -> fmt::Res
 
             write!(sb, "[taillabel={i}")?;
 
-            if matches!(n, Node::ConstantNode(_)) && matches!(def, Node::StartNode(_)) {
+            if matches!(n, Node::Constant(_)) && matches!(def, Node::Start(_)) {
                 write!(sb, " style=dotted")?;
             } else if def.is_cfg() {
                 write!(sb, " color=red")?;
@@ -108,7 +108,7 @@ fn node_edges(sb: &mut String, nodes: &Nodes, all: &HashSet<NodeId>) -> fmt::Res
 
 fn scope_edges(sb: &mut String, nodes: &Nodes, scope_node: NodeId) -> fmt::Result {
     writeln!(sb, "\tedge [style=dashed color=cornflowerblue];")?;
-    let Node::ScopeNode(scope) = &nodes[scope_node] else {
+    let Node::Scope(scope) = &nodes[scope_node] else {
         unreachable!();
     };
     for (level, s) in scope.scopes.iter().enumerate() {
@@ -132,7 +132,7 @@ fn find_all(soup: &Soup) -> HashSet<NodeId> {
         walk(&soup.nodes, &mut all, *output);
     }
 
-    let Node::ScopeNode(scope) = &soup.nodes[soup.scope] else {
+    let Node::Scope(scope) = &soup.nodes[soup.scope] else {
         unreachable!();
     };
     for s in &scope.scopes {
