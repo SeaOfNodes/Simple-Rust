@@ -22,6 +22,7 @@ pub struct Types<'a> {
     pub ty_one: Ty<'a>,
     pub ty_two: Ty<'a>,
     pub ty_int_bot: Ty<'a>,
+    pub ty_if: Ty<'a>,
 }
 
 struct Interner<'a> {
@@ -58,6 +59,9 @@ impl<'a> Types<'a> {
         let ty_one = interner.intern(Type::Int(Int::Constant(1)));
         let ty_two = interner.intern(Type::Int(Int::Constant(2)));
         let ty_int_bot = interner.intern(Type::Int(Int::Bot));
+        let ty_if = interner.intern(Type::Tuple {
+            types: vec![ty_ctrl, ty_ctrl],
+        });
 
         Self {
             interner,
@@ -68,6 +72,7 @@ impl<'a> Types<'a> {
             ty_one,
             ty_two,
             ty_int_bot,
+            ty_if,
         }
     }
 
