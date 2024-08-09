@@ -5,7 +5,7 @@ use crate::soup::nodes::{
     AddNode, ConstantNode, DivNode, MinusNode, MulNode, Node, NodeId, Nodes, ReturnNode, ScopeNode,
     StartNode, SubNode,
 };
-use crate::soup::types::{Ty, Type, Types};
+use crate::soup::types::{Int, Ty, Type, Types};
 use crate::syntax::ast::{BinaryOperator, Block, Expression, Function, PrefixOperator, Statement};
 use crate::syntax::formatter::{CodeStyle, FormatCode};
 
@@ -216,49 +216,31 @@ impl<'t> Soup<'t> {
             Node::StartNode(_) => types.ty_bot,
             Node::AddNode(AddNode { base }) => {
                 match self.nodes.get_many_ty([base.inputs[1], base.inputs[2]]) {
-                    [Some(Type::Int {
-                        value: v1,
-                        constant: true,
-                    }), Some(Type::Int {
-                        value: v2,
-                        constant: true,
-                    })] => types.get_int(v1.wrapping_add(*v2)),
+                    [Some(Type::Int(Int::Constant(v1))), Some(Type::Int(Int::Constant(v2)))] => {
+                        types.get_int(v1.wrapping_add(*v2))
+                    }
                     _ => types.ty_bot,
                 }
             }
             Node::SubNode(SubNode { base }) => {
                 match self.nodes.get_many_ty([base.inputs[1], base.inputs[2]]) {
-                    [Some(Type::Int {
-                        value: v1,
-                        constant: true,
-                    }), Some(Type::Int {
-                        value: v2,
-                        constant: true,
-                    })] => types.get_int(v1.wrapping_sub(*v2)),
+                    [Some(Type::Int(Int::Constant(v1))), Some(Type::Int(Int::Constant(v2)))] => {
+                        types.get_int(v1.wrapping_sub(*v2))
+                    }
                     _ => types.ty_bot,
                 }
             }
             Node::MulNode(MulNode { base }) => {
                 match self.nodes.get_many_ty([base.inputs[1], base.inputs[2]]) {
-                    [Some(Type::Int {
-                        value: v1,
-                        constant: true,
-                    }), Some(Type::Int {
-                        value: v2,
-                        constant: true,
-                    })] => types.get_int(v1.wrapping_mul(*v2)),
+                    [Some(Type::Int(Int::Constant(v1))), Some(Type::Int(Int::Constant(v2)))] => {
+                        types.get_int(v1.wrapping_mul(*v2))
+                    }
                     _ => types.ty_bot,
                 }
             }
             Node::DivNode(DivNode { base }) => {
                 match self.nodes.get_many_ty([base.inputs[1], base.inputs[2]]) {
-                    [Some(Type::Int {
-                        value: v1,
-                        constant: true,
-                    }), Some(Type::Int {
-                        value: v2,
-                        constant: true,
-                    })] => {
+                    [Some(Type::Int(Int::Constant(v1))), Some(Type::Int(Int::Constant(v2)))] => {
                         // TODO: handle or ignore div by 0
                         types.get_int(v1.wrapping_div(*v2))
                     }
@@ -266,10 +248,7 @@ impl<'t> Soup<'t> {
                 }
             }
             Node::MinusNode(MinusNode { base }) => match self.nodes.get_many_ty([base.inputs[1]]) {
-                [Some(Type::Int {
-                    value,
-                    constant: true,
-                })] => types.get_int(value.wrapping_neg()),
+                [Some(Type::Int(Int::Constant(v)))] => types.get_int(v.wrapping_neg()),
                 _ => types.ty_bot,
             },
             Node::ScopeNode(_) => types.ty_bot,

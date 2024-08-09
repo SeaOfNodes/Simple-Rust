@@ -268,7 +268,7 @@ impl<'t> Node<'t> {
     /// Easy reading label for debugger
     pub fn label(&self) -> Cow<str> {
         Cow::Borrowed(match self {
-            Node::ConstantNode(c) => return Cow::Owned(format!("#{}", c.value())),
+            Node::ConstantNode(c) => return Cow::Owned(format!("{}", c.ty())),
             Node::ReturnNode(_) => "Return",
             Node::StartNode(_) => "Start",
             Node::AddNode(_) => "Add",
@@ -359,7 +359,7 @@ impl<'t> Nodes<'t> {
                 self.fmt(add.base.inputs[2], f, visited)?;
                 write!(f, ")")
             }
-            Node::ConstantNode(c) => write!(f, "{}", c.value()),
+            Node::ConstantNode(c) => write!(f, "{}", c.ty()),
             n @ Node::StartNode(_) => write!(f, "{}", n.label()),
             Node::SubNode(sub) => {
                 write!(f, "(")?;
@@ -552,9 +552,6 @@ impl<'t> ConstantNode<'t> {
         self.base.inputs[0]
     }
 
-    pub fn value(&self) -> i64 {
-        self.ty.unwrap_int()
-    }
     pub fn ty(&self) -> Ty<'t> {
         self.ty
     }
@@ -638,7 +635,7 @@ impl ScopeNode {
     }
 }
 
-enum BoolOp {
+pub enum BoolOp {
     EQ,
     LT,
     LE,

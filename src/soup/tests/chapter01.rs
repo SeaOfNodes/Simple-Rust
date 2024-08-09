@@ -32,7 +32,7 @@ fn test_simple_program() {
     };
 
     assert_eq!(Some(start), constant.start());
-    assert_eq!(1, constant.value());
+    assert_eq!(1, constant.ty().unwrap_int());
 }
 
 #[test]
@@ -55,7 +55,7 @@ fn test_zero() {
     };
     for output in &start.base.outputs {
         if let Node::ConstantNode(c) = &soup.nodes[*output] {
-            assert_eq!(0, c.value());
+            assert_eq!(0, c.ty().unwrap_int());
         }
     }
 }

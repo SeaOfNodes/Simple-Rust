@@ -49,10 +49,7 @@ impl<'a> Types<'a> {
 
         let ty_bot = interner.intern(Type::Bot);
         let ty_top = interner.intern(Type::Top);
-        let ty_zero = interner.intern(Type::Int {
-            value: 0,
-            constant: true,
-        });
+        let ty_zero = interner.intern(Type::Int(Int::Constant(0)));
 
         Self {
             interner,
@@ -65,10 +62,7 @@ impl<'a> Types<'a> {
     pub fn get_int(&mut self, value: i64) -> Ty<'a> {
         match value {
             0 => self.ty_zero,
-            _ => self.interner.intern(Type::Int {
-                value,
-                constant: true,
-            }),
+            _ => self.interner.intern(Type::Int(Int::Constant(value))),
         }
     }
 

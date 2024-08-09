@@ -1,3 +1,5 @@
+use std::fmt;
+use std::fmt::Display;
 use std::hash::Hash;
 use std::sync::Arc;
 
@@ -6,11 +8,19 @@ use crate::soup::types::Ty;
 
 #[derive(Eq, PartialEq, Clone, Hash, Debug)]
 pub enum Type<'a> {
+    Bot,  // all
+    Top,  // any
+    Ctrl, // control flow bottom
+    Int(Int),
+    Tuple { types: Vec<Ty<'a>> },
+    Module(Arc<ParsedModule>),
+}
+
+#[derive(Eq, PartialEq, Clone, Hash, Debug)]
+pub enum Int {
     Bot,
     Top,
-    Int { value: i64, constant: bool },
-    Module(Arc<ParsedModule>),
-    Todo(Ty<'a>),
+    Constant(i64),
 }
 
 impl<'t> Type<'t> {
@@ -18,14 +28,16 @@ impl<'t> Type<'t> {
         match self {
             Type::Bot => false,
             Type::Top => true,
-            Type::Int { constant, .. } => *constant,
+            Type::Ctrl => false,
+            Type::Int(i) => matches!(i, Int::Constant(_)),
+            Type::Tuple { .. } => false,
             Type::Module { .. } => todo!(),
-            Type::Todo(_) => unreachable!(),
         }
     }
+
     pub fn unwrap_int(&'t self) -> i64 {
         match self {
-            Type::Int { value, .. } => *value,
+            Type::Int(Int::Constant(value)) => *value,
             _ => unreachable!(),
         }
     }
@@ -35,5 +47,29 @@ impl<'t> Type<'t> {
             Type::Module(m) => m,
             _ => unreachable!(),
         }
+    }
+}
+
+impl<'t> Display for Type<'t> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Type::Bot => "Bot",
+            Type::Top => "Top",
+            Type::Ctrl => "Ctrl",
+            Type::Int(Int::Bot) => "IntBot",
+            Type::Int(Int::Top) => "IntTop",
+            Type::Int(Int::Constant(c)) => return write!(f, "{c}"),
+            Type::Tuple { types } => {
+                write!(f, "[")?;
+                for (i, ty) in types.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{ty}")?;
+                }
+                return write!(f, "]");
+            }
+            Type::Module(_) => todo!(),
+        })
     }
 }

@@ -1,7 +1,7 @@
-use std::fmt::{Debug, Formatter};
+use std::{fmt, ptr};
+use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
-use std::ptr;
 
 use crate::soup::types::Type;
 
@@ -33,8 +33,14 @@ impl Hash for Ty<'_> {
 }
 
 impl Debug for Ty<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         Debug::fmt(self.0, f)
+    }
+}
+
+impl<'t> Display for Ty<'t> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Display::fmt(self.0, f)
     }
 }
 
