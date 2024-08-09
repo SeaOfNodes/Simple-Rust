@@ -508,6 +508,26 @@ impl<'t> Nodes<'t> {
             None
         }
     }
+
+    pub fn shallow_copy(&mut self, node: NodeId, ops: [NodeId; 2]) -> NodeId {
+        match &self[node] {
+            Node::Constant(_)
+            | Node::Return(_)
+            | Node::Start(_)
+            | Node::Minus(_)
+            | Node::Scope(_)
+            | Node::Not(_)
+            | Node::Proj(_) => unreachable!(),
+            Node::Add(n) => self.create(|id| Node::Add(AddNode::new(id, ops))),
+            Node::Sub(n) => self.create(|id| Node::Sub(SubNode::new(id, ops))),
+            Node::Mul(n) => self.create(|id| Node::Mul(MulNode::new(id, ops))),
+            Node::Div(n) => self.create(|id| Node::Div(DivNode::new(id, ops))),
+            Node::Bool(n) => {
+                let op = n.op;
+                self.create(|id| Node::Bool(BoolNode::new(id, ops, op)))
+            }
+        }
+    }
 }
 
 impl NodeBase {
@@ -658,6 +678,7 @@ impl ScopeNode {
     }
 }
 
+#[derive(Copy, Clone)]
 pub enum BoolOp {
     EQ,
     LT,
