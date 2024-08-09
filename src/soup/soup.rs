@@ -2,8 +2,8 @@ use std::mem;
 
 use crate::soup::graph_visualizer;
 use crate::soup::nodes::{
-    AddNode, BoolOp, ConstantNode, DivNode, MinusNode, MulNode, Node, NodeBase, NodeId, Nodes,
-    ProjNode, ReturnNode, ScopeNode, StartNode, SubNode,
+    AddNode, BoolNode, BoolOp, ConstantNode, DivNode, MinusNode, MulNode, Node, NodeBase, NodeId,
+    Nodes, NotNode, ProjNode, ReturnNode, ScopeNode, StartNode, SubNode,
 };
 use crate::soup::types::{Int, Ty, Type, Types};
 use crate::syntax::ast::{BinaryOperator, Block, Expression, Function, PrefixOperator, Statement};
@@ -52,12 +52,14 @@ impl<'t> Soup<'t> {
             Node::Proj(ProjNode::new(id, start, 0, ScopeNode::CTRL.to_string()))
         });
         self.nodes
-            .scope_define(self.scope, ScopeNode::CTRL.to_string(), ctrl);
+            .scope_define(self.scope, ScopeNode::CTRL.to_string(), ctrl)
+            .expect("not in scope");
         let arg0 = self.create_peepholed(types, |id| {
             Node::Proj(ProjNode::new(id, start, 1, ScopeNode::ARG0.to_string()))
         });
         self.nodes
-            .scope_define(self.scope, ScopeNode::ARG0.to_string(), arg0);
+            .scope_define(self.scope, ScopeNode::ARG0.to_string(), arg0)
+            .expect("not in scope");
 
         let stop = self.compile_block(&body, types);
 
@@ -171,15 +173,27 @@ impl<'t> Soup<'t> {
             } => {
                 let left_node = self.compile_expression(left, types);
                 let right_node = self.compile_expression(right, types);
-                self.create_peepholed(types, |id| match operator {
-                    BinaryOperator::Plus => Node::Add(AddNode::new(id, [left_node, right_node])),
-                    BinaryOperator::Minus => Node::Sub(SubNode::new(id, [left_node, right_node])),
-                    BinaryOperator::Multiply => {
-                        Node::Mul(MulNode::new(id, [left_node, right_node]))
+                let lr = [left_node, right_node];
+                let rl = [right_node, left_node];
+                let v = self.create_peepholed(types, |id| match operator {
+                    BinaryOperator::Plus => Node::Add(AddNode::new(id, lr)),
+                    BinaryOperator::Minus => Node::Sub(SubNode::new(id, lr)),
+                    BinaryOperator::Multiply => Node::Mul(MulNode::new(id, lr)),
+                    BinaryOperator::Divide => Node::Div(DivNode::new(id, lr)),
+                    BinaryOperator::Equal | BinaryOperator::NotEqual => {
+                        Node::Bool(BoolNode::new(id, lr, BoolOp::EQ))
                     }
-                    BinaryOperator::Divide => Node::Div(DivNode::new(id, [left_node, right_node])),
+                    BinaryOperator::LessOrEqual => Node::Bool(BoolNode::new(id, lr, BoolOp::LE)),
+                    BinaryOperator::LessThan => Node::Bool(BoolNode::new(id, lr, BoolOp::LT)),
+                    BinaryOperator::GreaterOrEqual => Node::Bool(BoolNode::new(id, rl, BoolOp::LE)),
+                    BinaryOperator::GreaterThan => Node::Bool(BoolNode::new(id, rl, BoolOp::LT)),
                     _ => todo!(),
-                })
+                });
+                if let BinaryOperator::NotEqual = operator {
+                    self.create_peepholed(types, |id| Node::Not(NotNode::new(id, v)))
+                } else {
+                    v
+                }
             }
             Expression::Prefix { operator, operand } => {
                 let operand = self.compile_expression(operand, types);
