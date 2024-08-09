@@ -262,14 +262,9 @@ impl<'t> Soup<'t> {
                 }
             }
             Node::Scope(_) => types.ty_bot,
-            Node::Bool(b) => self.compute_binary_int(&b.base, types, |x, y| {
-                match b.op {
-                    BoolOp::EQ => x == y,
-                    BoolOp::LT => x < y,
-                    BoolOp::LE => x <= y,
-                }
-                .into()
-            }),
+            Node::Bool(b) => {
+                self.compute_binary_int(&b.base, types, |x, y| b.op.compute(x, y) as i64)
+            }
             Node::Not(n) => {
                 let Some(input) = n.base.inputs[1].and_then(|n| self.nodes.ty(n)) else {
                     return types.ty_bot;
@@ -338,7 +333,35 @@ impl<'t> Soup<'t> {
         node // no progress
     }
 
-    fn idealize(&mut self, _node: NodeId, _types: &mut Types<'t>) -> Option<NodeId> {
-        None
+    /// do not peephole directly returned values!
+    fn idealize(&mut self, node: NodeId, types: &mut Types<'t>) -> Option<NodeId> {
+        match &self.nodes[node] {
+            Node::Add(_) => todo!(),
+            Node::Sub(_) => todo!(),
+            Node::Mul(_) => todo!(),
+            Node::Bool(n) => {
+                if n.base.inputs[1] == n.base.inputs[2] {
+                    let value = if n.op.compute(3, 3) {
+                        types.ty_one
+                    } else {
+                        types.ty_zero
+                    };
+                    Some(
+                        self.nodes
+                            .create(|id| Node::Constant(ConstantNode::new(id, self.start, value))),
+                    )
+                } else {
+                    None
+                }
+            }
+            Node::Constant(_)
+            | Node::Return(_)
+            | Node::Start(_)
+            | Node::Div(_)
+            | Node::Minus(_)
+            | Node::Scope(_)
+            | Node::Not(_)
+            | Node::Proj(_) => None,
+        }
     }
 }

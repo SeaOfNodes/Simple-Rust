@@ -643,6 +643,14 @@ impl BoolOp {
             BoolOp::LE => "<=",
         }
     }
+
+    pub(crate) fn compute(&self, x: i64, y: i64) -> bool {
+        match self {
+            BoolOp::EQ => x == y,
+            BoolOp::LT => x < y,
+            BoolOp::LE => x <= y,
+        }
+    }
 }
 
 pub struct BoolNode {
