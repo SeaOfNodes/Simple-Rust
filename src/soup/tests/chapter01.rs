@@ -21,23 +21,22 @@ fn test_simple_program() {
         .compile_function(function, &mut types)
         .expect("should compile");
 
-    let ret = if let Node::Stop(s) = &soup.nodes[stop] {
-        s.ret().unwrap()
-    } else {
-        unreachable!()
-    };
-    let Node::Return(ret) = &soup.nodes[ret] else {
-        unreachable!()
-    };
-    assert!(matches!(soup.nodes[ret.ctrl().unwrap()], Node::Proj(_)));
+    assert!(matches!(&soup.nodes[stop], Node::Stop));
+    let ret = soup.nodes.unique_input(stop).unwrap();
 
-    let expr = ret.expr().expect("has expr");
+    assert!(matches!(&soup.nodes[ret], Node::Return));
+    assert!(matches!(
+        soup.nodes[soup.nodes.inputs[ret][0].expect("has ctrl")],
+        Node::Proj(_)
+    ));
+
+    let expr = soup.nodes.inputs[ret][1].expect("has expr");
     let Node::Constant(constant) = &soup.nodes[expr] else {
         unreachable!("expect constant");
     };
 
-    assert_eq!(Some(soup.start), constant.start());
-    assert_eq!(1, constant.ty().unwrap_int());
+    assert_eq!(Some(soup.start), soup.nodes.inputs[expr][0]);
+    assert_eq!(1, constant.unwrap_int());
 }
 
 #[test]
@@ -55,12 +54,12 @@ fn test_zero() {
         .compile_function(function, &mut types)
         .expect("should compile");
 
-    let Node::Start(start) = &soup.nodes[soup.start] else {
+    let Node::Start { .. } = &soup.nodes[soup.start] else {
         unreachable!("expect type start");
     };
-    for output in &start.base.outputs {
+    for output in &soup.nodes.outputs[soup.start] {
         if let Node::Constant(c) = &soup.nodes[*output] {
-            assert_eq!(0, c.ty().unwrap_int());
+            assert_eq!(0, c.unwrap_int());
         }
     }
 }

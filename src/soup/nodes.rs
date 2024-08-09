@@ -7,6 +7,7 @@ use std::ops::{Index, IndexMut};
 
 use crate::bit_set;
 use crate::bit_set::BitSet;
+use crate::id_vec::IdVec;
 use crate::soup::types::{Ty, Type};
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
@@ -27,73 +28,93 @@ impl bit_set::Index for NodeId {
 }
 
 impl Display for NodeId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         Display::fmt(&self.0.get(), f)
     }
 }
 impl Debug for NodeId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         Debug::fmt(&self.0.get(), f)
     }
 }
 
+/// Using `IdVec` has two advantages over `Vec`+helper methods:
+/// 1) `self.inputs[x]` and `self.outputs[x]` can be borrowed simultaneously
+///    while `self.inputs(x)` and `self.outputs_mut(x)` can't
+/// 2) methods like `self.inputs(x)` and `self.inputs_mut(x)` require two versions for mutability
+///    while `self.inputs[x]` automatically decides
 pub struct Nodes<'t> {
+    /// indexed by self[id]
     nodes: Vec<Node<'t>>,
-    node_ty: Vec<Option<Ty<'t>>>,
+
+    pub ty: IdVec<NodeId, Option<Ty<'t>>>,
+
+    /// Inputs to the node. These are use-def references to Nodes.
+    ///
+    /// Generally fixed length, ordered, nulls allowed, no unused
+    /// trailing space. Ordering is required because e.g. "a/ b"
+    /// is different from "b/ a". The first input (offset 0) is
+    /// often a isCFG node.
+    pub inputs: IdVec<NodeId, Vec<Option<NodeId>>>,
+
+    /// Outputs reference Nodes that are not null and have this Node
+    /// as an input. These nodes are users of this node, thus these
+    /// are def-use references to Nodes.
+    ///
+    /// Outputs directly match inputs, making a directed graph that
+    /// can be walked in either direction. These outputs are typically
+    /// used for efficient optimizations but otherwise have no semantics
+    /// meaning
+    pub outputs: IdVec<NodeId, Vec<NodeId>>,
 }
+
+pub type NodeCreation<'t> = (Node<'t>, Vec<Option<NodeId>>);
 
 impl<'t> Nodes<'t> {
     pub fn new() -> Self {
-        let dummy = Node::Not(NotNode {
-            base: NodeBase {
-                id: NodeId::DUMMY,
-                inputs: vec![],
-                outputs: vec![],
-            },
-        });
+        let dummy = Node::Stop;
         Nodes {
             nodes: vec![dummy],
-            node_ty: vec![None],
+            inputs: IdVec::new(vec![vec![]]),
+            outputs: IdVec::new(vec![vec![]]),
+            ty: IdVec::new(vec![None]),
         }
     }
     pub fn len(&self) -> usize {
         self.nodes.len()
     }
-    pub fn create<F: FnOnce(NodeId) -> Node<'t>>(&mut self, f: F) -> NodeId {
+
+    pub fn create(&mut self, (node, inputs): NodeCreation<'t>) -> NodeId {
         let id = u32::try_from(self.nodes.len())
             .and_then(NonZeroU32::try_from)
             .map(NodeId)
             .unwrap();
-        self.nodes.push(f(id));
-        self.node_ty.push(None);
-        for i in 0..self[id].base().inputs.len() {
-            if let Some(input) = self[id].base().inputs[i] {
-                self[input].base_mut().add_use(id);
+        self.nodes.push(node);
+        self.inputs.push(inputs);
+        self.outputs.push(vec![]);
+        self.ty.push(None);
+        for i in 0..self.inputs[id].len() {
+            if let Some(input) = self.inputs[id][i] {
+                self.add_use(input, id);
             }
         }
 
-        debug_assert_eq!(self[id].id(), id);
-        debug_assert_eq!(self.nodes.len(), self.node_ty.len());
+        debug_assert_eq!(self.len(), self.inputs.len());
+        debug_assert_eq!(self.len(), self.outputs.len());
+        debug_assert_eq!(self.len(), self.ty.len());
         id
     }
 
-    pub fn ty(&self, node: NodeId) -> Option<Ty<'t>> {
-        self.node_ty[node.index()]
-    }
-    pub fn get_ty_mut(&mut self, node: NodeId) -> &mut Option<Ty<'t>> {
-        &mut self.node_ty[node.index()]
-    }
-
     pub fn is_dead(&self, node: NodeId) -> bool {
-        self[node].is_unused() && self[node].base().inputs.is_empty() && self.ty(node).is_none()
+        self.is_unused(node) && self.inputs[node].is_empty() && self.ty[node].is_none()
     }
 
     pub fn pop_n(&mut self, node: NodeId, n: usize) {
         for _ in 0..n {
-            let old_def = self[node].base_mut().inputs.pop().unwrap();
+            let old_def = self.inputs[node].pop().unwrap();
             if let Some(old_def) = old_def {
-                self[old_def].base_mut().del_use(node);
-                if self[old_def].base_mut().is_unused() {
+                self.del_use(old_def, node);
+                if self.is_unused(old_def) {
                     self.kill(old_def);
                 }
             }
@@ -101,49 +122,63 @@ impl<'t> Nodes<'t> {
     }
 
     pub fn kill(&mut self, node: NodeId) {
-        debug_assert!(self[node].is_unused());
-        self.pop_n(node, self[node].base().inputs.len());
-        self[node].base_mut().inputs = vec![]; // deallocate
-        *self.get_ty_mut(node) = None; // flag as dead
+        debug_assert!(self.is_unused(node));
+        self.pop_n(node, self.inputs[node].len());
+        self.inputs[node] = vec![]; // deallocate
+        self.ty[node] = None; // flag as dead
         debug_assert!(self.is_dead(node));
     }
 
     pub fn set_def(&mut self, this: NodeId, index: usize, new_def: Option<NodeId>) {
-        let old_def = self[this].base().inputs[index];
+        let old_def = self.inputs[this][index];
         if old_def == new_def {
             return;
         }
 
         if let Some(new_def) = new_def {
-            self[new_def].base_mut().add_use(this);
+            self.add_use(new_def, this);
         }
 
         if let Some(old_def) = old_def {
-            self[old_def].base_mut().del_use(this);
-            if self[old_def].base_mut().is_unused() {
+            self.del_use(old_def, this);
+            if self.is_unused(old_def) {
                 self.kill(old_def);
             }
         }
 
-        self[this].base_mut().inputs[index] = new_def;
+        self.inputs[this][index] = new_def;
     }
 
     pub fn add_def(&mut self, node: NodeId, new_def: Option<NodeId>) {
-        self[node].base_mut().inputs.push(new_def);
+        self.inputs[node].push(new_def);
         if let Some(new_def) = new_def {
-            self[new_def].base_mut().add_use(node);
+            self.add_use(new_def, node);
         }
     }
 
+    pub fn add_use(&mut self, node: NodeId, use_: NodeId) {
+        self.outputs[node].push(use_)
+    }
+
+    pub fn del_use(&mut self, node: NodeId, use_: NodeId) {
+        if let Some(pos) = self.outputs[node].iter().rposition(|n| *n == use_) {
+            self.outputs[node].swap_remove(pos);
+        }
+    }
+
+    pub fn is_unused(&self, node: NodeId) -> bool {
+        self.outputs[node].is_empty()
+    }
+
     pub fn swap_12(&mut self, node: NodeId) -> NodeId {
-        self[node].base_mut().inputs.swap(1, 2);
+        self.inputs[node].swap(1, 2);
         node
     }
     pub fn keep(&mut self, node: NodeId) {
-        self[node].base_mut().add_use(NodeId::DUMMY);
+        self.add_use(node, NodeId::DUMMY);
     }
     pub fn unkeep(&mut self, node: NodeId) {
-        self[node].base_mut().del_use(NodeId::DUMMY);
+        self.del_use(node, NodeId::DUMMY);
     }
 }
 
@@ -161,184 +196,91 @@ impl<'t> IndexMut<NodeId> for Nodes<'t> {
     }
 }
 
-pub struct NodeBase {
-    id: NodeId,
-
-    /// Inputs to the node. These are use-def references to Nodes.
-    ///
-    /// Generally fixed length, ordered, nulls allowed, no unused
-    /// trailing space. Ordering is required because e. g. "a/ b"
-    /// is different from "b/ a". The first input (offset 0) is
-    /// often a isCFG node.
-    pub inputs: Vec<Option<NodeId>>,
-
-    /// Outputs reference Nodes that are not null and have this Node
-    /// as an input. These nodes are users of this node, thus these
-    /// are def-use references to Nodes.
-    ///
-    /// Outputs directly match inputs, making a directed graph that
-    /// can be walked in either direction. These outputs are typically
-    /// used for efficient optimizations but otherwise have no semantics
-    /// meaning
-    pub outputs: Vec<NodeId>,
-}
-
 pub enum Node<'t> {
-    Constant(ConstantNode<'t>),
-    Return(ReturnNode),
-    Start(StartNode<'t>),
-    Add(AddNode),
-    Sub(SubNode),
-    Mul(MulNode),
-    Div(DivNode),
-    Minus(MinusNode),
+    Constant(Ty<'t>),
+    Return,
+    Start { args: Ty<'t> },
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Minus,
     Scope(ScopeNode),
-    Bool(BoolNode),
-    Not(NotNode),
+    Bool(BoolOp),
+    Not,
     Proj(ProjNode),
-    If(IfNode),
+    If,
     Phi(PhiNode),
-    Region(RegionNode),
-    Stop(StopNode),
-}
-
-pub struct ConstantNode<'t> {
-    pub base: NodeBase,
-    ty: Ty<'t>,
-}
-
-pub struct ReturnNode {
-    pub base: NodeBase,
-}
-
-pub struct StartNode<'t> {
-    pub base: NodeBase,
-    pub args: Ty<'t>,
+    Region,
+    Stop,
 }
 
 impl<'t> Node<'t> {
-    pub fn id(&self) -> NodeId {
-        self.base().id
-    }
-    pub fn base(&self) -> &NodeBase {
-        match self {
-            Node::Constant(n) => &n.base,
-            Node::Return(n) => &n.base,
-            Node::Start(n) => &n.base,
-            Node::Add(n) => &n.base,
-            Node::Sub(n) => &n.base,
-            Node::Mul(n) => &n.base,
-            Node::Div(n) => &n.base,
-            Node::Minus(n) => &n.base,
-            Node::Scope(n) => &n.base,
-            Node::Bool(n) => &n.base,
-            Node::Not(n) => &n.base,
-            Node::Proj(n) => &n.base,
-            Node::If(n) => &n.base,
-            Node::Phi(n) => &n.base,
-            Node::Region(n) => &n.base,
-            Node::Stop(n) => &n.base,
-        }
-    }
-
-    pub fn base_mut(&mut self) -> &mut NodeBase {
-        match self {
-            Node::Constant(n) => &mut n.base,
-            Node::Return(n) => &mut n.base,
-            Node::Start(n) => &mut n.base,
-            Node::Add(n) => &mut n.base,
-            Node::Sub(n) => &mut n.base,
-            Node::Mul(n) => &mut n.base,
-            Node::Div(n) => &mut n.base,
-            Node::Minus(n) => &mut n.base,
-            Node::Scope(n) => &mut n.base,
-            Node::Bool(n) => &mut n.base,
-            Node::Not(n) => &mut n.base,
-            Node::Proj(n) => &mut n.base,
-            Node::If(n) => &mut n.base,
-            Node::Phi(n) => &mut n.base,
-            Node::Region(n) => &mut n.base,
-            Node::Stop(n) => &mut n.base,
-        }
-    }
-
     /// Easy reading label for debugger
     pub fn label(&self) -> Cow<str> {
         Cow::Borrowed(match self {
-            Node::Constant(c) => return Cow::Owned(format!("{}", c.ty())),
-            Node::Return(_) => "Return",
-            Node::Start(_) => "Start",
-            Node::Add(_) => "Add",
-            Node::Sub(_) => "Sub",
-            Node::Mul(_) => "Mul",
-            Node::Div(_) => "Div",
-            Node::Minus(_) => "Minus",
+            Node::Constant(ty) => return Cow::Owned(format!("{ty}")),
+            Node::Return => "Return",
+            Node::Start { .. } => "Start",
+            Node::Add => "Add",
+            Node::Sub => "Sub",
+            Node::Mul => "Mul",
+            Node::Div => "Div",
+            Node::Minus => "Minus",
             Node::Scope(_) => "Scope",
-            Node::Bool(b) => match b.op {
+            Node::Bool(op) => match op {
                 BoolOp::EQ => "EQ",
                 BoolOp::LT => "LT",
                 BoolOp::LE => "LE",
             },
-            Node::Not(_) => "Not",
+            Node::Not => "Not",
             Node::Proj(p) => return Cow::Owned(p.label.clone()), // clone to keep static lifetime for others
-            Node::If(_) => "If",
+            Node::If => "If",
             Node::Phi(p) => return Cow::Owned(format!("Phi_{}", p.label)),
-            Node::Region(_) => "Region",
-            Node::Stop(_) => "Stop",
+            Node::Region => "Region",
+            Node::Stop => "Stop",
         })
-    }
-
-    // Unique label for graph visualization, e.g. "Add12" or "Region30" or "EQ99"
-    pub fn unique_name(&self) -> String {
-        match self {
-            Node::Constant(_) => format!("Con_{}", self.base().id),
-            _ => format!("{}{}", self.label(), self.base().id),
-        }
     }
 
     // Graphical label, e.g. "+" or "Region" or "=="
     pub fn glabel(&self) -> Cow<str> {
         match self {
             Node::Constant(_) => self.label(),
-            Node::Return(_) => self.label(),
-            Node::Start(_) => self.label(),
-            Node::Add(_) => Cow::Borrowed("+"),
-            Node::Sub(_) => Cow::Borrowed("-"),
-            Node::Mul(_) => Cow::Borrowed("*"),
-            Node::Div(_) => Cow::Borrowed("//"),
-            Node::Minus(_) => Cow::Borrowed("-"),
+            Node::Return => self.label(),
+            Node::Start { .. } => self.label(),
+            Node::Add => Cow::Borrowed("+"),
+            Node::Sub => Cow::Borrowed("-"),
+            Node::Mul => Cow::Borrowed("*"),
+            Node::Div => Cow::Borrowed("//"),
+            Node::Minus => Cow::Borrowed("-"),
             Node::Scope(_) => self.label(),
-            Node::Bool(b) => Cow::Borrowed(b.op.str()),
-            Node::Not(_) => Cow::Borrowed("!"),
+            Node::Bool(op) => Cow::Borrowed(op.str()),
+            Node::Not => Cow::Borrowed("!"),
             Node::Proj(_) => self.label(),
-            Node::If(_) => self.label(),
+            Node::If => self.label(),
             Node::Phi(p) => Cow::Owned(format!("&phi;_{}", p.label)),
-            Node::Region(_) => self.label(),
-            Node::Stop(_) => self.label(),
+            Node::Region => self.label(),
+            Node::Stop => self.label(),
         }
-    }
-
-    pub fn is_unused(&self) -> bool {
-        self.base().is_unused()
     }
 
     pub fn is_multi_node(&self) -> bool {
         match self {
-            Node::Start(_) | Node::If(_) => true,
+            Node::Start { .. } | Node::If => true,
             Node::Constant(_)
-            | Node::Return(_)
-            | Node::Add(_)
-            | Node::Sub(_)
-            | Node::Mul(_)
-            | Node::Div(_)
-            | Node::Minus(_)
+            | Node::Return
+            | Node::Add
+            | Node::Sub
+            | Node::Mul
+            | Node::Div
+            | Node::Minus
             | Node::Scope(_)
             | Node::Bool(_)
-            | Node::Not(_)
+            | Node::Not
             | Node::Proj(_)
             | Node::Phi(_)
-            | Node::Region(_)
-            | Node::Stop(_) => false,
+            | Node::Region
+            | Node::Stop => false,
         }
     }
 }
@@ -370,46 +312,47 @@ impl<'t> Nodes<'t> {
             return write!(f, "<?>");
         };
         visited.add(node);
+        let inputs = &self.inputs[node];
         match &self[node] {
-            n if self.is_dead(node) => write!(f, "{}:DEAD", n.unique_name()),
-            Node::Return(r) => {
+            _ if self.is_dead(node) => write!(f, "{}:DEAD", self.unique_name(node)),
+            Node::Return => {
                 write!(f, "return ")?;
-                self.fmt(r.expr(), f, visited)?;
+                self.fmt(inputs[1], f, visited)?;
                 write!(f, ";")
             }
-            Node::Add(add) => {
+            Node::Add => {
                 write!(f, "(")?;
-                self.fmt(add.base.inputs[1], f, visited)?;
+                self.fmt(inputs[1], f, visited)?;
                 write!(f, "+")?;
-                self.fmt(add.base.inputs[2], f, visited)?;
+                self.fmt(inputs[2], f, visited)?;
                 write!(f, ")")
             }
-            Node::Constant(c) => write!(f, "{}", c.ty()),
-            n @ Node::Start(_) => write!(f, "{}", n.label()),
-            Node::Sub(sub) => {
+            Node::Constant(ty) => write!(f, "{}", ty),
+            n @ Node::Start { .. } => write!(f, "{}", n.label()),
+            Node::Sub => {
                 write!(f, "(")?;
-                self.fmt(sub.base.inputs[1], f, visited)?;
+                self.fmt(inputs[1], f, visited)?;
                 write!(f, "-")?;
-                self.fmt(sub.base.inputs[2], f, visited)?;
+                self.fmt(inputs[2], f, visited)?;
                 write!(f, ")")
             }
-            Node::Mul(mul) => {
+            Node::Mul => {
                 write!(f, "(")?;
-                self.fmt(mul.base.inputs[1], f, visited)?;
+                self.fmt(inputs[1], f, visited)?;
                 write!(f, "*")?;
-                self.fmt(mul.base.inputs[2], f, visited)?;
+                self.fmt(inputs[2], f, visited)?;
                 write!(f, ")")
             }
-            Node::Div(div) => {
+            Node::Div => {
                 write!(f, "(")?;
-                self.fmt(div.base.inputs[1], f, visited)?;
+                self.fmt(inputs[1], f, visited)?;
                 write!(f, "*")?;
-                self.fmt(div.base.inputs[2], f, visited)?;
+                self.fmt(inputs[2], f, visited)?;
                 write!(f, ")")
             }
-            Node::Minus(minus) => {
+            Node::Minus => {
                 write!(f, "(-")?;
-                self.fmt(minus.base.inputs[1], f, visited)?;
+                self.fmt(inputs[1], f, visited)?;
                 write!(f, ")")
             }
             n @ Node::Scope(scope) => {
@@ -421,35 +364,35 @@ impl<'t> Nodes<'t> {
                             write!(f, ", ")?;
                         }
                         write!(f, "{name}:")?;
-                        self.fmt(scope.base.inputs[*input], f, visited)?;
+                        self.fmt(inputs[*input], f, visited)?;
                     }
                     write!(f, "]")?;
                 }
                 Ok(())
             }
-            Node::Bool(bool) => {
+            Node::Bool(op) => {
                 write!(f, "(")?;
-                self.fmt(bool.base.inputs[1], f, visited)?;
-                write!(f, "{}", bool.op.str())?;
-                self.fmt(bool.base.inputs[2], f, visited)?;
+                self.fmt(inputs[1], f, visited)?;
+                write!(f, "{}", op.str())?;
+                self.fmt(inputs[2], f, visited)?;
                 write!(f, ")")
             }
-            Node::Not(not) => {
+            Node::Not => {
                 write!(f, "(!")?;
-                self.fmt(not.base.inputs[1], f, visited)?;
+                self.fmt(inputs[1], f, visited)?;
                 write!(f, ")")
             }
             Node::Proj(proj) => {
                 write!(f, "{}", proj.label)
             }
-            Node::If(i) => {
+            Node::If => {
                 write!(f, "if( ")?;
-                self.fmt(i.base.inputs[1], f, visited)?;
+                self.fmt(inputs[1], f, visited)?;
                 write!(f, " )")
             }
-            Node::Phi(phi) => {
+            Node::Phi(_) => {
                 write!(f, "Phi(")?;
-                for (i, input) in phi.base.inputs.iter().enumerate() {
+                for (i, input) in inputs.iter().enumerate() {
                     if i > 0 {
                         write!(f, ",")?;
                     }
@@ -457,15 +400,15 @@ impl<'t> Nodes<'t> {
                 }
                 write!(f, ")")
             }
-            n @ Node::Region(region) => {
+            n @ Node::Region => {
                 write!(f, "{}{}", n.label(), node.index())
             }
-            Node::Stop(stop) => {
-                if let Some(ret) = stop.ret() {
+            Node::Stop => {
+                if let Some(ret) = self.unique_input(node) {
                     self.fmt(Some(ret), f, visited)
                 } else {
                     write!(f, "Stop[ ")?;
-                    for ret in &stop.base.inputs {
+                    for ret in inputs {
                         self.fmt(*ret, f, visited)?;
                         write!(f, " ")?;
                     }
@@ -475,23 +418,39 @@ impl<'t> Nodes<'t> {
         }
     }
 
+    // Unique label for graph visualization, e.g. "Add12" or "Region30" or "EQ99"
+    pub fn unique_name(&self, node: NodeId) -> String {
+        match &self[node] {
+            Node::Constant(_) => format!("Con_{}", node),
+            _ => format!("{}{}", self[node].label(), node),
+        }
+    }
+
     pub fn is_cfg(&self, node: NodeId) -> bool {
         match &self[node] {
-            Node::Start(_) | Node::Return(_) | Node::Stop(_) => true,
-            Node::If(_) | Node::Region(_) => true,
+            Node::Start { .. } | Node::Return | Node::Stop => true,
+            Node::If | Node::Region => true,
             Node::Proj(p) => {
-                p.index == 0 || p.base.inputs[0].is_some_and(|n| matches!(&self[n], Node::If(_)))
+                p.index == 0 || self.inputs[node][0].is_some_and(|n| matches!(&self[n], Node::If))
             }
             Node::Constant(_)
-            | Node::Add(_)
-            | Node::Sub(_)
-            | Node::Mul(_)
-            | Node::Div(_)
-            | Node::Minus(_)
+            | Node::Add
+            | Node::Sub
+            | Node::Mul
+            | Node::Div
+            | Node::Minus
             | Node::Scope(_)
             | Node::Bool(_)
             | Node::Phi(_)
-            | Node::Not(_) => false,
+            | Node::Not => false,
+        }
+    }
+
+    pub fn unique_input(&self, stop: NodeId) -> Option<NodeId> {
+        if self.inputs[stop].len() == 1 {
+            self.inputs[stop][0]
+        } else {
+            None // ambiguous
         }
     }
 
@@ -516,9 +475,10 @@ impl<'t> Nodes<'t> {
         name: String,
         value: NodeId,
     ) -> Result<(), ()> {
+        let len = self.inputs[scope_node].len();
         let scope = self.scope_mut(scope_node);
         let syms = scope.scopes.last_mut().unwrap();
-        if let Some(_old) = syms.insert(name, scope.base.inputs.len()) {
+        if let Some(_old) = syms.insert(name, len) {
             return Err(());
         }
         self.add_def(scope_node, Some(value));
@@ -552,7 +512,7 @@ impl<'t> Nodes<'t> {
         let scope = self.scope_mut(scope_node);
         let syms = &mut scope.scopes[nesting_level];
         if let Some(index) = syms.get(name).copied() {
-            let old = scope.base.inputs[index];
+            let old = self.inputs[scope_node][index];
             if value.is_some() {
                 self.set_def(scope_node, index, value);
                 value
@@ -569,174 +529,95 @@ impl<'t> Nodes<'t> {
     pub fn shallow_copy(&mut self, node: NodeId, ops: [NodeId; 2]) -> NodeId {
         match &self[node] {
             Node::Constant(_)
-            | Node::Return(_)
-            | Node::Start(_)
-            | Node::Minus(_)
+            | Node::Return
+            | Node::Start { .. }
+            | Node::Minus
             | Node::Scope(_)
-            | Node::Not(_)
-            | Node::If(_)
+            | Node::Not
+            | Node::If
             | Node::Phi(_)
-            | Node::Region(_)
-            | Node::Stop(_)
+            | Node::Region
+            | Node::Stop
             | Node::Proj(_) => unreachable!(),
-            Node::Add(_) => self.create(|id| Node::Add(AddNode::new(id, ops))),
-            Node::Sub(_) => self.create(|id| Node::Sub(SubNode::new(id, ops))),
-            Node::Mul(_) => self.create(|id| Node::Mul(MulNode::new(id, ops))),
-            Node::Div(_) => self.create(|id| Node::Div(DivNode::new(id, ops))),
-            Node::Bool(n) => {
-                let op = n.op;
-                self.create(|id| Node::Bool(BoolNode::new(id, ops, op)))
-            }
+            Node::Add => self.create(Node::make_add(ops)),
+            Node::Sub => self.create(Node::make_sub(ops)),
+            Node::Mul => self.create(Node::make_mul(ops)),
+            Node::Div => self.create(Node::make_div(ops)),
+            Node::Bool(op) => self.create(Node::make_bool(ops, *op)),
         }
     }
 }
 
-impl NodeBase {
-    fn new(id: NodeId, inputs: Vec<Option<NodeId>>) -> Self {
-        Self {
-            id,
-            inputs,
-            outputs: vec![],
-        }
-    }
-
-    fn add_use(&mut self, node: NodeId) {
-        self.outputs.push(node)
-    }
-
-    fn del_use(&mut self, node: NodeId) {
-        if let Some(pos) = self.outputs.iter().rposition(|n| *n == node) {
-            self.outputs.swap_remove(pos);
-        }
-    }
-
-    fn is_unused(&self) -> bool {
-        self.outputs.is_empty()
-    }
-}
-
-impl<'t> StartNode<'t> {
-    pub fn new(id: NodeId, args: Ty<'t>) -> Self {
+impl<'t> Node<'t> {
+    pub fn make_start(args: Ty<'t>) -> NodeCreation<'t> {
         debug_assert!(matches!(&*args, Type::Tuple { .. }));
-        Self {
-            base: NodeBase::new(id, vec![]),
-            args,
-        }
+        (Node::Start { args }, vec![])
     }
-}
-
-impl ReturnNode {
-    pub fn new(id: NodeId, ctrl: NodeId, data: NodeId) -> Self {
-        Self {
-            base: NodeBase::new(id, vec![Some(ctrl), Some(data)]),
-        }
+    pub fn make_return(ctrl: NodeId, data: NodeId) -> NodeCreation<'t> {
+        (Node::Return, vec![Some(ctrl), Some(data)])
     }
 
-    pub fn ctrl(&self) -> Option<NodeId> {
-        return self.base.inputs[0];
+    pub fn make_constant(start: NodeId, ty: Ty<'t>) -> NodeCreation<'t> {
+        (Node::Constant(ty), vec![Some(start)])
     }
 
-    pub fn expr(&self) -> Option<NodeId> {
-        return self.base.inputs[1];
+    pub fn make_add([left, right]: [NodeId; 2]) -> NodeCreation<'t> {
+        (Node::Add, vec![None, Some(left), Some(right)])
     }
-}
-
-impl<'t> ConstantNode<'t> {
-    pub fn new(id: NodeId, start: NodeId, ty: Ty<'t>) -> Self {
-        Self {
-            base: NodeBase::new(id, vec![Some(start)]),
-            ty,
-        }
+    pub fn make_sub([left, right]: [NodeId; 2]) -> NodeCreation<'t> {
+        (Node::Sub, vec![None, Some(left), Some(right)])
     }
-
-    pub fn start(&self) -> Option<NodeId> {
-        self.base.inputs[0]
+    pub fn make_mul([left, right]: [NodeId; 2]) -> NodeCreation<'t> {
+        (Node::Mul, vec![None, Some(left), Some(right)])
+    }
+    pub fn make_div([left, right]: [NodeId; 2]) -> NodeCreation<'t> {
+        (Node::Div, vec![None, Some(left), Some(right)])
     }
 
-    pub fn ty(&self) -> Ty<'t> {
-        self.ty
+    pub fn make_minus(expr: NodeId) -> NodeCreation<'t> {
+        (Node::Minus, vec![None, Some(expr)])
     }
 
-    pub fn is_constant(&self) -> bool {
-        true
+    pub fn make_scope() -> NodeCreation<'t> {
+        (Node::Scope(ScopeNode { scopes: vec![] }), vec![])
     }
-}
 
-pub struct AddNode {
-    pub base: NodeBase,
-}
-
-impl AddNode {
-    pub fn new(id: NodeId, [left, right]: [NodeId; 2]) -> Self {
-        Self {
-            base: NodeBase::new(id, vec![None, Some(left), Some(right)]),
-        }
+    pub fn make_bool([left, right]: [NodeId; 2], op: BoolOp) -> NodeCreation<'t> {
+        (Node::Bool(op), vec![None, Some(left), Some(right)])
     }
-}
 
-pub struct SubNode {
-    pub base: NodeBase,
-}
-
-impl SubNode {
-    pub fn new(id: NodeId, [left, right]: [NodeId; 2]) -> Self {
-        Self {
-            base: NodeBase::new(id, vec![None, Some(left), Some(right)]),
-        }
+    pub fn make_not(expr: NodeId) -> NodeCreation<'t> {
+        (Node::Not, vec![None, Some(expr)])
     }
-}
 
-pub struct MulNode {
-    pub base: NodeBase,
-}
-
-impl MulNode {
-    pub fn new(id: NodeId, [left, right]: [NodeId; 2]) -> Self {
-        Self {
-            base: NodeBase::new(id, vec![None, Some(left), Some(right)]),
-        }
+    pub fn make_proj(ctrl: NodeId, index: usize, label: String) -> NodeCreation<'t> {
+        (Node::Proj(ProjNode { index, label }), vec![Some(ctrl)])
     }
-}
 
-pub struct DivNode {
-    pub base: NodeBase,
-}
-
-impl DivNode {
-    pub fn new(id: NodeId, [left, right]: [NodeId; 2]) -> Self {
-        Self {
-            base: NodeBase::new(id, vec![None, Some(left), Some(right)]),
-        }
+    pub fn make_if(ctrl: NodeId, pred: NodeId) -> NodeCreation<'t> {
+        (Node::If, vec![Some(ctrl), Some(pred)])
     }
-}
 
-pub struct MinusNode {
-    pub base: NodeBase,
-}
+    pub fn make_phi(label: String, inputs: Vec<Option<NodeId>>) -> NodeCreation<'t> {
+        (Node::Phi(PhiNode { label }), inputs)
+    }
 
-impl MinusNode {
-    pub fn new(id: NodeId, expr: NodeId) -> Self {
-        Self {
-            base: NodeBase::new(id, vec![None, Some(expr)]),
-        }
+    pub fn make_region(inputs: Vec<Option<NodeId>>) -> NodeCreation<'t> {
+        (Node::Region, inputs)
+    }
+
+    pub fn make_stop() -> NodeCreation<'t> {
+        (Node::Stop, vec![])
     }
 }
 
 pub struct ScopeNode {
-    pub base: NodeBase,
     pub scopes: Vec<HashMap<String, usize>>,
 }
 
 impl ScopeNode {
     pub const CTRL: &'static str = "$ctrl";
     pub const ARG0: &'static str = "arg";
-
-    pub fn new(id: NodeId) -> Self {
-        Self {
-            base: NodeBase::new(id, vec![]),
-            scopes: vec![],
-        }
-    }
 }
 
 #[derive(Copy, Clone)]
@@ -763,102 +644,11 @@ impl BoolOp {
     }
 }
 
-pub struct BoolNode {
-    pub base: NodeBase,
-    pub op: BoolOp,
-}
-
-impl BoolNode {
-    pub fn new(id: NodeId, [left, right]: [NodeId; 2], op: BoolOp) -> Self {
-        Self {
-            base: NodeBase::new(id, vec![None, Some(left), Some(right)]),
-            op,
-        }
-    }
-}
-
-pub struct NotNode {
-    pub base: NodeBase,
-}
-
-impl NotNode {
-    pub fn new(id: NodeId, input: NodeId) -> Self {
-        Self {
-            base: NodeBase::new(id, vec![None, Some(input)]),
-        }
-    }
-}
-
 pub struct ProjNode {
-    pub base: NodeBase,
     pub index: usize,
     pub label: String,
 }
 
-impl ProjNode {
-    pub fn new(id: NodeId, ctrl: NodeId, index: usize, label: String) -> Self {
-        Self {
-            base: NodeBase::new(id, vec![Some(ctrl)]),
-            index,
-            label,
-        }
-    }
-}
-
-pub struct IfNode {
-    pub base: NodeBase,
-}
-
-impl IfNode {
-    pub fn new(id: NodeId, ctrl: NodeId, pred: NodeId) -> Self {
-        Self {
-            base: NodeBase::new(id, vec![Some(ctrl), Some(pred)]),
-        }
-    }
-}
-
 pub struct PhiNode {
-    pub base: NodeBase,
     pub label: String,
-}
-
-impl PhiNode {
-    pub fn new(id: NodeId, label: String, inputs: Vec<Option<NodeId>>) -> Self {
-        Self {
-            base: NodeBase::new(id, inputs),
-            label,
-        }
-    }
-}
-
-pub struct RegionNode {
-    pub base: NodeBase,
-}
-
-impl RegionNode {
-    pub fn new(id: NodeId, inputs: Vec<Option<NodeId>>) -> Self {
-        Self {
-            base: NodeBase::new(id, inputs),
-        }
-    }
-}
-
-pub struct StopNode {
-    pub base: NodeBase,
-}
-
-impl StopNode {
-    pub fn new(id: NodeId) -> Self {
-        Self {
-            base: NodeBase::new(id, vec![]),
-        }
-    }
-
-    pub fn ret(&self) -> Option<NodeId> {
-        if self.base.inputs.len() == 1 {
-            self.base.inputs[0]
-        } else {
-            None // ambiguous
-        }
-    }
 }

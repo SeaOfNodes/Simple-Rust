@@ -24,13 +24,13 @@ pub fn generate_dot_output(soup: &Soup) -> Result<String, fmt::Error> {
 
 fn nodes(sb: &mut String, nodes: &Nodes, all: &HashSet<NodeId>) -> fmt::Result {
     writeln!(sb, "\tsubgraph cluster_Nodes {{")?; // Magic "cluster_" in the subgraph name
-    for n in all.iter().map(|n| &nodes[*n]) {
-        if matches!(n, Node::Proj(_) | Node::Scope(_)) {
+    for &n in all.iter() {
+        if matches!(&nodes[n], Node::Proj(_) | Node::Scope(_)) {
             continue;
         }
-        write!(sb, "\t\t{} [ ", n.unique_name())?;
-        let lab = n.glabel();
-        if n.is_multi_node() {
+        write!(sb, "\t\t{} [ ", nodes.unique_name(n))?;
+        let lab = nodes[n].glabel();
+        if nodes[n].is_multi_node() {
             writeln!(sb, "shape=plaintext label=<")?;
             writeln!(
                 sb,
@@ -40,7 +40,7 @@ fn nodes(sb: &mut String, nodes: &Nodes, all: &HashSet<NodeId>) -> fmt::Result {
             write!(sb, "\t\t\t<TR>")?;
 
             let mut do_proj_table = false;
-            for use_ in &n.base().outputs {
+            for use_ in &nodes.outputs[n] {
                 if let proj @ Node::Proj(p) = &nodes[*use_] {
                     if !do_proj_table {
                         do_proj_table = true;
@@ -66,7 +66,7 @@ fn nodes(sb: &mut String, nodes: &Nodes, all: &HashSet<NodeId>) -> fmt::Result {
             writeln!(sb, "</TR>")?;
             write!(sb, "\t\t\t</TABLE>>\n\t\t")?;
         } else {
-            if nodes.is_cfg(n.id()) {
+            if nodes.is_cfg(n) {
                 write!(sb, "shape=box style=filled fillcolor=yellow ")?;
             }
             write!(sb, "label=\"{lab}\" ")?;
@@ -84,7 +84,7 @@ fn scopes(sb: &mut String, nodes: &Nodes, scope_node: NodeId) -> fmt::Result {
     writeln!(sb, "\tnode [shape=plaintext];")?;
 
     for (level, s) in scope.scopes.iter().enumerate() {
-        let scope_name = make_scope_name(&nodes[scope_node], level);
+        let scope_name = make_scope_name(nodes, scope_node, level);
 
         writeln!(sb, "\tsubgraph cluster_{scope_name} {{")?;
         writeln!(sb, "\t\t{scope_name} [label=<")?;
@@ -108,8 +108,8 @@ fn scopes(sb: &mut String, nodes: &Nodes, scope_node: NodeId) -> fmt::Result {
     Ok(())
 }
 
-fn make_scope_name(scope: &Node, level: usize) -> String {
-    format!("{}_{level}", scope.unique_name())
+fn make_scope_name(nodes: &Nodes, scope: NodeId, level: usize) -> String {
+    format!("{}_{level}", nodes.unique_name(scope))
 }
 
 fn make_port_name(scope_name: &str, var_name: &str) -> String {
@@ -118,23 +118,22 @@ fn make_port_name(scope_name: &str, var_name: &str) -> String {
 
 fn node_edges(sb: &mut String, nodes: &Nodes, all: &HashSet<NodeId>) -> fmt::Result {
     writeln!(sb, "\tedge [ fontname=Helvetica, fontsize=8 ];")?;
-    for n in all.iter().map(|n| &nodes[*n]) {
-        if matches!(n, Node::Constant(_) | Node::Proj(_) | Node::Scope(_)) {
+    for &n in all.iter() {
+        if matches!(
+            &nodes[n],
+            Node::Constant(_) | Node::Proj(_) | Node::Scope(_)
+        ) {
             continue;
         }
-        for (i, def) in n.base().inputs.iter().enumerate() {
-            let def = if let Some(def) = def {
-                &nodes[*def]
-            } else {
-                continue;
-            };
-            write!(sb, "\t{} -> {}", n.unique_name(), def_name(nodes, def.id()))?;
+        for (i, def) in nodes.inputs[n].iter().enumerate() {
+            let Some(def) = *def else { continue };
+            write!(sb, "\t{} -> {}", nodes.unique_name(n), def_name(nodes, def))?;
 
             write!(sb, "[taillabel={i}")?;
 
-            if matches!(n, Node::Constant(_)) && matches!(def, Node::Start(_)) {
+            if matches!(nodes[n], Node::Constant(_)) && matches!(nodes[def], Node::Start { .. }) {
                 write!(sb, " style=dotted")?;
-            } else if nodes.is_cfg(def.id()) {
+            } else if nodes.is_cfg(def) {
                 write!(sb, " color=red")?;
             }
 
@@ -150,10 +149,10 @@ fn scope_edges(sb: &mut String, nodes: &Nodes, scope_node: NodeId) -> fmt::Resul
         unreachable!();
     };
     for (level, s) in scope.scopes.iter().enumerate() {
-        let scope_name = make_scope_name(&nodes[scope_node], level);
+        let scope_name = make_scope_name(nodes, scope_node, level);
 
         for (name, index) in s {
-            if let Some(def) = scope.base.inputs[*index] {
+            if let Some(def) = nodes.inputs[scope_node][*index] {
                 let port_name = make_port_name(&scope_name, name);
                 let def_name = def_name(&nodes, def);
                 writeln!(sb, "\t{scope_name}:\"{port_name}\" -> {def_name};")?;
@@ -166,17 +165,17 @@ fn scope_edges(sb: &mut String, nodes: &Nodes, scope_node: NodeId) -> fmt::Resul
 fn def_name(nodes: &Nodes, def: NodeId) -> String {
     match &nodes[def] {
         Node::Proj(p) => {
-            let mname = nodes[p.base.inputs[0].unwrap()].unique_name();
+            let mname = nodes.unique_name(nodes.inputs[def][0].unwrap());
             format!("{mname}:p{}", p.index)
         }
-        n => n.unique_name(),
+        _ => nodes.unique_name(def),
     }
 }
 
 fn find_all(soup: &Soup) -> HashSet<NodeId> {
     let start = soup.start;
     let mut all = HashSet::new();
-    for output in &soup.nodes[start].base().outputs {
+    for output in &soup.nodes.outputs[start] {
         walk(&soup.nodes, &mut all, *output);
     }
 
@@ -185,7 +184,7 @@ fn find_all(soup: &Soup) -> HashSet<NodeId> {
     };
     for s in &scope.scopes {
         for index in s.values() {
-            if let Some(input) = scope.base.inputs[*index] {
+            if let Some(input) = soup.nodes.inputs[soup.scope][*index] {
                 walk(&soup.nodes, &mut all, input)
             }
         }
@@ -201,11 +200,11 @@ fn walk(nodes: &Nodes, all: &mut HashSet<NodeId>, node: NodeId) {
 
     all.insert(node);
 
-    for n in nodes[node].base().inputs.iter().flatten() {
+    for n in nodes.inputs[node].iter().flatten() {
         walk(nodes, all, *n);
     }
 
-    for n in &nodes[node].base().outputs {
+    for n in &nodes.outputs[node] {
         walk(nodes, all, *n);
     }
 }

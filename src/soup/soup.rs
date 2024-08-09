@@ -1,10 +1,7 @@
 use std::mem;
 
 use crate::soup::graph_visualizer;
-use crate::soup::nodes::{
-    AddNode, BoolNode, BoolOp, ConstantNode, DivNode, MinusNode, MulNode, Node, NodeBase, NodeId,
-    Nodes, NotNode, ProjNode, ReturnNode, ScopeNode, StartNode, StopNode, SubNode,
-};
+use crate::soup::nodes::{BoolOp, Node, NodeCreation, NodeId, Nodes, ScopeNode};
 use crate::soup::types::{Int, Ty, Type, Types};
 use crate::syntax::ast::{BinaryOperator, Block, Expression, Function, PrefixOperator, Statement};
 use crate::syntax::formatter::{CodeStyle, FormatCode};
@@ -42,26 +39,28 @@ impl<'t> Soup<'t> {
         types: &mut Types<'t>,
     ) -> Result<NodeId, Vec<String>> {
         let args = types.get_tuple(vec![types.ty_ctrl, self.arg.unwrap_or(types.ty_bot)]);
-        let start = self.create_peepholed(types, |id| Node::Start(StartNode::new(id, args)));
+        let start = self.create_peepholed(types, Node::make_start(args));
         self.start = start;
 
-        self.stop = self.nodes.create(|id| Node::Stop(StopNode::new(id)));
+        self.stop = self.nodes.create(Node::make_stop());
 
         // if we didn't call peephole we might have to manually set the computed type like in the java constructor
-        self.scope = self.create_peepholed(types, |id| Node::Scope(ScopeNode::new(id)));
+        self.scope = self.create_peepholed(types, Node::make_scope());
 
         let body = function.body.as_ref().unwrap();
 
         self.nodes.scope_push(self.scope);
-        let ctrl = self.create_peepholed(types, |id| {
-            Node::Proj(ProjNode::new(id, start, 0, ScopeNode::CTRL.to_string()))
-        });
+        let ctrl = self.create_peepholed(
+            types,
+            Node::make_proj(start, 0, ScopeNode::CTRL.to_string()),
+        );
         self.nodes
             .scope_define(self.scope, ScopeNode::CTRL.to_string(), ctrl)
             .expect("not in scope");
-        let arg0 = self.create_peepholed(types, |id| {
-            Node::Proj(ProjNode::new(id, start, 1, ScopeNode::ARG0.to_string()))
-        });
+        let arg0 = self.create_peepholed(
+            types,
+            Node::make_proj(start, 1, ScopeNode::ARG0.to_string()),
+        );
         self.nodes
             .scope_define(self.scope, ScopeNode::ARG0.to_string(), arg0)
             .expect("not in scope");
@@ -70,7 +69,7 @@ impl<'t> Soup<'t> {
 
         self.nodes.scope_pop(self.scope);
 
-        if !matches!(self.nodes[ret], Node::Return(_)) {
+        if !matches!(self.nodes[ret], Node::Return) {
             todo!("create return for value block");
         }
 
@@ -99,9 +98,7 @@ impl<'t> Soup<'t> {
                 Statement::Return(ret) => {
                     let data = self.compile_expression(&ret.value, types);
                     let ctrl = self.ctrl().unwrap();
-                    result = Some(self.create_peepholed(types, |id| {
-                        Node::Return(ReturnNode::new(id, ctrl, data))
-                    }));
+                    result = Some(self.create_peepholed(types, Node::make_return(ctrl, data)));
                     self.nodes.add_def(self.stop, result);
                     self.set_ctrl(None);
                 }
@@ -134,7 +131,7 @@ impl<'t> Soup<'t> {
     fn create_unit(&mut self, types: &mut Types<'t>) -> NodeId {
         let ty = types.ty_zero; // TODO return Unit or something like that
         let start = self.start;
-        self.create_peepholed(types, |id| Node::Constant(ConstantNode::new(id, start, ty)))
+        self.create_peepholed(types, Node::make_constant(start, ty))
     }
 
     fn compile_expression(&mut self, expression: &Expression, types: &mut Types<'t>) -> NodeId {
@@ -142,7 +139,7 @@ impl<'t> Soup<'t> {
             Expression::Immediate(immediate) => {
                 let ty = types.get_int(*immediate);
                 let start = self.start;
-                self.create_peepholed(types, |id| Node::Constant(ConstantNode::new(id, start, ty)))
+                self.create_peepholed(types, Node::make_constant(start, ty))
             }
             Expression::Identifier(identifier) => {
                 match self.nodes.scope_lookup(self.scope, &identifier.value) {
@@ -187,32 +184,38 @@ impl<'t> Soup<'t> {
                 let right_node = self.compile_expression(right, types);
                 let lr = [left_node, right_node];
                 let rl = [right_node, left_node];
-                let v = self.create_peepholed(types, |id| match operator {
-                    BinaryOperator::Plus => Node::Add(AddNode::new(id, lr)),
-                    BinaryOperator::Minus => Node::Sub(SubNode::new(id, lr)),
-                    BinaryOperator::Multiply => Node::Mul(MulNode::new(id, lr)),
-                    BinaryOperator::Divide => Node::Div(DivNode::new(id, lr)),
-                    BinaryOperator::Equal | BinaryOperator::NotEqual => {
-                        Node::Bool(BoolNode::new(id, lr, BoolOp::EQ))
-                    }
-                    BinaryOperator::LessOrEqual => Node::Bool(BoolNode::new(id, lr, BoolOp::LE)),
-                    BinaryOperator::LessThan => Node::Bool(BoolNode::new(id, lr, BoolOp::LT)),
-                    BinaryOperator::GreaterOrEqual => Node::Bool(BoolNode::new(id, rl, BoolOp::LE)),
-                    BinaryOperator::GreaterThan => Node::Bool(BoolNode::new(id, rl, BoolOp::LT)),
-                    _ => todo!(),
-                });
+                let v = self.create_peepholed(
+                    types,
+                    match operator {
+                        BinaryOperator::Plus => Node::make_add(lr),
+                        BinaryOperator::Minus => Node::make_sub(lr),
+                        BinaryOperator::Multiply => Node::make_mul(lr),
+                        BinaryOperator::Divide => Node::make_div(lr),
+                        BinaryOperator::Equal | BinaryOperator::NotEqual => {
+                            Node::make_bool(lr, BoolOp::EQ)
+                        }
+                        BinaryOperator::LessOrEqual => Node::make_bool(lr, BoolOp::LE),
+                        BinaryOperator::LessThan => Node::make_bool(lr, BoolOp::LT),
+                        BinaryOperator::GreaterOrEqual => Node::make_bool(rl, BoolOp::LE),
+                        BinaryOperator::GreaterThan => Node::make_bool(rl, BoolOp::LT),
+                        _ => todo!(),
+                    },
+                );
                 if let BinaryOperator::NotEqual = operator {
-                    self.create_peepholed(types, |id| Node::Not(NotNode::new(id, v)))
+                    self.create_peepholed(types, Node::make_not(v))
                 } else {
                     v
                 }
             }
             Expression::Prefix { operator, operand } => {
                 let operand = self.compile_expression(operand, types);
-                self.create_peepholed(types, |id| match operator {
-                    PrefixOperator::Minus => Node::Minus(MinusNode::new(id, operand)),
-                    _ => todo! {},
-                })
+                self.create_peepholed(
+                    types,
+                    match operator {
+                        PrefixOperator::Minus => Node::make_minus(operand),
+                        _ => todo! {},
+                    },
+                )
             }
             Expression::Parenthesized(inner) => self.compile_expression(inner, types),
             Expression::Block(block) => self.compile_block(block, types),
@@ -220,22 +223,18 @@ impl<'t> Soup<'t> {
         }
     }
 
-    pub fn create_peepholed<F: FnOnce(NodeId) -> Node<'t>>(
-        &mut self,
-        types: &mut Types<'t>,
-        f: F,
-    ) -> NodeId {
-        let id = self.nodes.create(f);
+    pub fn create_peepholed(&mut self, types: &mut Types<'t>, c: NodeCreation<'t>) -> NodeId {
+        let id = self.nodes.create(c);
         let better = self.peephole(id, types);
         debug_assert_eq!(better, self.peephole(better, types));
         if better != id {
-            // TODO: we could re-use the last slot. self.nodes.undo_create()
+            // TODO: we could re-use the dead slots: self.nodes.trim_end()
         }
         better
     }
 
     fn ctrl(&self) -> Option<NodeId> {
-        self.nodes[self.scope].base().inputs[0]
+        self.nodes.inputs[self.scope][0]
     }
     fn set_ctrl(&mut self, node: Option<NodeId>) {
         self.nodes.set_def(self.scope, 0, node);
@@ -243,29 +242,29 @@ impl<'t> Soup<'t> {
 
     fn compute(&self, node: NodeId, types: &mut Types<'t>) -> Ty<'t> {
         match &self.nodes[node] {
-            Node::Constant(c) => c.ty(),
-            Node::Return(n) => {
-                let ctrl = n.base.inputs[0]
-                    .and_then(|n| self.nodes.ty(n))
+            Node::Constant(ty) => *ty,
+            Node::Return => {
+                let ctrl = self.nodes.inputs[node][0]
+                    .and_then(|n| self.nodes.ty[n])
                     .unwrap_or(types.ty_bot);
-                let expr = n.base.inputs[1]
-                    .and_then(|n| self.nodes.ty(n))
+                let expr = self.nodes.inputs[node][1]
+                    .and_then(|n| self.nodes.ty[n])
                     .unwrap_or(types.ty_bot);
                 types.get_tuple(vec![ctrl, expr])
             }
-            Node::Start(n) => n.args,
-            Node::Add(n) => self.compute_binary_int(&n.base, types, i64::wrapping_add),
-            Node::Sub(n) => self.compute_binary_int(&n.base, types, i64::wrapping_sub),
-            Node::Mul(n) => self.compute_binary_int(&n.base, types, i64::wrapping_mul),
-            Node::Div(n) => {
+            Node::Start { args } => *args,
+            Node::Add => self.compute_binary_int(node, types, i64::wrapping_add),
+            Node::Sub => self.compute_binary_int(node, types, i64::wrapping_sub),
+            Node::Mul => self.compute_binary_int(node, types, i64::wrapping_mul),
+            Node::Div => {
                 self.compute_binary_int(
-                    &n.base,
+                    node,
                     types,
                     |a, b| if b == 0 { 0 } else { a.wrapping_div(b) },
                 )
             }
-            Node::Minus(n) => {
-                let Some(input) = n.base.inputs[1].and_then(|n| self.nodes.ty(n)) else {
+            Node::Minus => {
+                let Some(input) = self.nodes.inputs[node][1].and_then(|n| self.nodes.ty[n]) else {
                     return types.ty_bot;
                 };
                 match &*input {
@@ -274,11 +273,9 @@ impl<'t> Soup<'t> {
                 }
             }
             Node::Scope(_) => types.ty_bot,
-            Node::Bool(b) => {
-                self.compute_binary_int(&b.base, types, |x, y| b.op.compute(x, y) as i64)
-            }
-            Node::Not(n) => {
-                let Some(input) = n.base.inputs[1].and_then(|n| self.nodes.ty(n)) else {
+            Node::Bool(op) => self.compute_binary_int(node, types, |x, y| op.compute(x, y) as i64),
+            Node::Not => {
+                let Some(input) = self.nodes.inputs[node][1].and_then(|n| self.nodes.ty[n]) else {
                     return types.ty_bot;
                 };
                 match &*input {
@@ -289,7 +286,7 @@ impl<'t> Soup<'t> {
                 }
             }
             Node::Proj(n) => {
-                let Some(input) = n.base.inputs[0].and_then(|n| self.nodes.ty(n)) else {
+                let Some(input) = self.nodes.inputs[node][0].and_then(|n| self.nodes.ty[n]) else {
                     return types.ty_bot;
                 };
                 match &*input {
@@ -297,23 +294,23 @@ impl<'t> Soup<'t> {
                     _ => unreachable!("proj node ctrl must always be tuple, if present"),
                 }
             }
-            Node::If(_) => types.ty_if,
+            Node::If => types.ty_if,
             Node::Phi(_) => types.ty_bot,
-            Node::Region(_) => types.ty_ctrl,
-            Node::Stop(_) => types.ty_bot,
+            Node::Region => types.ty_ctrl,
+            Node::Stop => types.ty_bot,
         }
     }
 
     fn compute_binary_int<F: FnOnce(i64, i64) -> i64>(
         &self,
-        base: &NodeBase,
+        node: NodeId,
         types: &mut Types<'t>,
         op: F,
     ) -> Ty<'t> {
-        let Some(first) = base.inputs[1].and_then(|n| self.nodes.ty(n)) else {
+        let Some(first) = self.nodes.inputs[node][1].and_then(|n| self.nodes.ty[n]) else {
             return types.ty_bot;
         };
-        let Some(second) = base.inputs[2].and_then(|n| self.nodes.ty(n)) else {
+        let Some(second) = self.nodes.inputs[node][2].and_then(|n| self.nodes.ty[n]) else {
             return types.ty_bot;
         };
 
@@ -327,7 +324,7 @@ impl<'t> Soup<'t> {
     }
 
     fn dead_code_elimination(&mut self, old: NodeId, new: NodeId) -> NodeId {
-        if new != old && self.nodes[old].is_unused() {
+        if new != old && self.nodes.is_unused(old) {
             self.nodes.keep(new);
             self.nodes.kill(old);
             self.nodes.unkeep(new);
@@ -338,7 +335,7 @@ impl<'t> Soup<'t> {
     fn peephole(&mut self, node: NodeId, types: &mut Types<'t>) -> NodeId {
         let ty = self.compute(node, types);
 
-        *self.nodes.get_ty_mut(node) = Some(ty);
+        self.nodes.ty[node] = Some(ty);
 
         if self.disable_peephole {
             return node;
@@ -346,8 +343,7 @@ impl<'t> Soup<'t> {
 
         if !matches!(self.nodes[node], Node::Constant(_)) && ty.is_constant() {
             let start = self.start;
-            let new_node =
-                self.create_peepholed(types, |id| Node::Constant(ConstantNode::new(id, start, ty)));
+            let new_node = self.create_peepholed(types, Node::make_constant(start, ty));
             return self.dead_code_elimination(node, new_node);
         }
 
@@ -362,11 +358,11 @@ impl<'t> Soup<'t> {
     /// do not peephole directly returned values!
     fn idealize(&mut self, node: NodeId, types: &mut Types<'t>) -> Option<NodeId> {
         match &self.nodes[node] {
-            Node::Add(n) => {
-                let lhs = n.base.inputs[1]?;
-                let rhs = n.base.inputs[2]?;
-                let t1 = self.nodes.ty(lhs)?; // TODO is it safe to ignore this being None?
-                let t2 = self.nodes.ty(rhs)?;
+            Node::Add => {
+                let lhs = self.nodes.inputs[node][1]?;
+                let rhs = self.nodes.inputs[node][2]?;
+                let t1 = self.nodes.ty[lhs]?; // TODO is it safe to ignore this being None?
+                let t2 = self.nodes.ty[rhs]?;
 
                 // Already handled by peephole constant folding
                 debug_assert!(!t1.is_constant() || !t2.is_constant(), "{t1} {t2}");
@@ -379,23 +375,15 @@ impl<'t> Soup<'t> {
 
                 // Add of same to a multiply by 2
                 if lhs == rhs {
-                    let start = self.start;
-                    let two = types.ty_two;
-                    let two = self.create_peepholed(types, |id| {
-                        Node::Constant(ConstantNode::new(id, start, two))
-                    });
-                    return Some(
-                        self.nodes
-                            .create(|id| Node::Mul(MulNode::new(id, [lhs, two]))),
-                    );
+                    let two =
+                        self.create_peepholed(types, Node::make_constant(self.start, types.ty_two));
+                    return Some(self.nodes.create(Node::make_mul([lhs, two])));
                 }
 
                 // Goal: a left-spine set of adds, with constants on the rhs (which then fold).
 
                 // Move non-adds to RHS
-                if !matches!(self.nodes[lhs], Node::Add(_))
-                    && matches!(self.nodes[rhs], Node::Add(_))
-                {
+                if !matches!(self.nodes[lhs], Node::Add) && matches!(self.nodes[rhs], Node::Add) {
                     return Some(self.nodes.swap_12(node));
                 }
 
@@ -404,20 +392,16 @@ impl<'t> Soup<'t> {
                 // Do we have  x + (y + z) ?
                 // Swap to    (x + y) + z
                 // Rotate (add add add) to remove the add on RHS
-                if let Node::Add(add) = &self.nodes[rhs] {
+                if let Node::Add = &self.nodes[rhs] {
                     let x = lhs;
-                    let y = add.base.inputs[1]?;
-                    let z = add.base.inputs[2]?;
-                    let new_lhs =
-                        self.create_peepholed(types, |id| Node::Add(AddNode::new(id, [x, y])));
-                    return Some(
-                        self.nodes
-                            .create(|id| Node::Add(AddNode::new(id, [new_lhs, z]))),
-                    );
+                    let y = self.nodes.inputs[rhs][1]?;
+                    let z = self.nodes.inputs[rhs][2]?;
+                    let new_lhs = self.create_peepholed(types, Node::make_add([x, y]));
+                    return Some(self.nodes.create(Node::make_add([new_lhs, z])));
                 }
 
                 // Now we might see (add add non) or (add non non) but never (add non add) nor (add add add)
-                if !matches!(self.nodes[lhs], Node::Add(_)) {
+                if !matches!(self.nodes[lhs], Node::Add) {
                     if self.spline_cmp(lhs, rhs) {
                         return Some(self.nodes.swap_12(node));
                     } else {
@@ -429,58 +413,46 @@ impl<'t> Soup<'t> {
 
                 // Do we have (x + con1) + con2?
                 // Replace with (x + (con1+con2) which then fold the constants
-                if self
-                    .nodes
-                    .ty(self.nodes[lhs].base().inputs[2]?)?
-                    .is_constant()
-                    && t2.is_constant()
-                {
-                    let x = self.nodes[lhs].base().inputs[1]?;
-                    let con1 = self.nodes[lhs].base().inputs[2]?;
+                if self.nodes.ty[self.nodes.inputs[lhs][2]?]?.is_constant() && t2.is_constant() {
+                    let x = self.nodes.inputs[lhs][1]?;
+                    let con1 = self.nodes.inputs[lhs][2]?;
                     let con2 = rhs;
 
-                    let new_rhs = self
-                        .create_peepholed(types, |id| Node::Add(AddNode::new(id, [con1, con2])));
-                    return Some(
-                        self.nodes
-                            .create(|id| Node::Add(AddNode::new(id, [x, new_rhs]))),
-                    );
+                    let new_rhs = self.create_peepholed(types, Node::make_add([con1, con2]));
+                    return Some(self.nodes.create(Node::make_add([x, new_rhs])));
                 }
 
                 // Now we sort along the spline via rotates, to gather similar things together.
 
                 // Do we rotate (x + y) + z
                 // into         (x + z) + y ?
-                if self.spline_cmp(self.nodes[lhs].base().inputs[2]?, rhs) {
+                if self.spline_cmp(self.nodes.inputs[lhs][2]?, rhs) {
                     // return new AddNode(new AddNode(lhs.in(1), rhs).peephole(), lhs.in(2));
-                    let x = self.nodes[lhs].base().inputs[1]?;
-                    let y = self.nodes[lhs].base().inputs[2]?;
+                    let x = self.nodes.inputs[lhs][1]?;
+                    let y = self.nodes.inputs[lhs][2]?;
                     let z = rhs;
 
-                    let new_lhs =
-                        self.create_peepholed(types, |id| Node::Add(AddNode::new(id, [x, z])));
-                    return Some(
-                        self.nodes
-                            .create(|id| Node::Add(AddNode::new(id, [new_lhs, y]))),
-                    );
+                    let new_lhs = self.create_peepholed(types, Node::make_add([x, z]));
+                    return Some(self.nodes.create(Node::make_add([new_lhs, y])));
                 }
 
                 None
             }
-            Node::Sub(n) => {
-                if n.base.inputs[1]? == n.base.inputs[2]? {
-                    Some(self.nodes.create(|id| {
-                        Node::Constant(ConstantNode::new(id, self.start, types.ty_zero))
-                    }))
+            Node::Sub => {
+                if self.nodes.inputs[node][1]? == self.nodes.inputs[node][2]? {
+                    Some(
+                        self.nodes
+                            .create(Node::make_constant(self.start, types.ty_zero)),
+                    )
                 } else {
                     None
                 }
             }
-            Node::Mul(n) => {
-                let left = n.base.inputs[1]?;
-                let right = n.base.inputs[2]?;
-                let left_ty = self.nodes.ty(left)?; // TODO is it safe to ignore this being None?
-                let right_ty = self.nodes.ty(right)?;
+            Node::Mul => {
+                let left = self.nodes.inputs[node][1]?;
+                let right = self.nodes.inputs[node][2]?;
+                let left_ty = self.nodes.ty[left]?;
+                let right_ty = self.nodes.ty[right]?;
 
                 if matches!(&*right_ty, Type::Int(Int::Constant(1))) {
                     Some(left)
@@ -491,33 +463,30 @@ impl<'t> Soup<'t> {
                     None
                 }
             }
-            Node::Bool(n) => {
-                if n.base.inputs[1]? == n.base.inputs[2]? {
-                    let value = if n.op.compute(3, 3) {
+            Node::Bool(op) => {
+                if self.nodes.inputs[node][1]? == self.nodes.inputs[node][2]? {
+                    let value = if op.compute(3, 3) {
                         types.ty_one
                     } else {
                         types.ty_zero
                     };
-                    Some(
-                        self.nodes
-                            .create(|id| Node::Constant(ConstantNode::new(id, self.start, value))),
-                    )
+                    Some(self.nodes.create(Node::make_constant(self.start, value)))
                 } else {
                     None
                 }
             }
             Node::Phi(_) => todo!(),
             Node::Constant(_)
-            | Node::Return(_)
-            | Node::Start(_)
-            | Node::Div(_)
-            | Node::Minus(_)
+            | Node::Return
+            | Node::Start { .. }
+            | Node::Div
+            | Node::Minus
             | Node::Scope(_)
-            | Node::Not(_)
+            | Node::Not
             | Node::Proj(_)
-            | Node::If(_)
-            | Node::Region(_)
-            | Node::Stop(_) => None,
+            | Node::If
+            | Node::Region
+            | Node::Stop => None,
         }
     }
 
@@ -527,10 +496,10 @@ impl<'t> Soup<'t> {
     // Ties with in a category sort by node ID.
     // TRUE if swapping hi and lo.
     fn spline_cmp(&mut self, hi: NodeId, lo: NodeId) -> bool {
-        if self.nodes.ty(lo).is_some_and(|t| t.is_constant()) {
+        if self.nodes.ty[lo].is_some_and(|t| t.is_constant()) {
             return false;
         }
-        if self.nodes.ty(hi).is_some_and(|t| t.is_constant()) {
+        if self.nodes.ty[hi].is_some_and(|t| t.is_constant()) {
             return true;
         }
         lo.index() > hi.index()

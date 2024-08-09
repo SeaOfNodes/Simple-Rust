@@ -156,18 +156,16 @@ fn test_var_arg() {
         .compile_function(function, &mut types)
         .expect("should compile");
 
-    let ret = if let Node::Stop(s) = &soup.nodes[stop] {
-        s.ret().unwrap()
-    } else {
-        unreachable!()
-    };
-    
+    assert!(matches!(&soup.nodes[stop], Node::Stop));
+    let ret = soup.nodes.unique_input(stop).expect("has one ret");
+    assert!(matches!(&soup.nodes[ret], Node::Return));
+
     assert!(matches!(
-        soup.nodes[soup.nodes[ret].base().inputs[0].unwrap()],
+        soup.nodes[soup.nodes.inputs[ret][0].unwrap()],
         Node::Proj(_)
     ));
     assert!(matches!(
-        soup.nodes[soup.nodes[ret].base().inputs[1].unwrap()],
+        soup.nodes[soup.nodes.inputs[ret][1].unwrap()],
         Node::Proj(_)
     ));
 }
