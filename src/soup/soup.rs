@@ -353,7 +353,7 @@ impl<'t> Soup<'t> {
                 let t2 = self.nodes.ty(rhs)?;
 
                 // Already handled by peephole constant folding
-                debug_assert!(t1.is_constant() && t2.is_constant());
+                debug_assert!(!t1.is_constant() || !t2.is_constant(), "{t1} {t2}");
 
                 // Add of 0.  We do not check for (0+x) because this will already
                 // canonicalize to (x+0)

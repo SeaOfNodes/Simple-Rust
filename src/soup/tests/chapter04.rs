@@ -94,7 +94,7 @@ fn test_add_add_mul() {
 #[test]
 fn test_peephole_3() {
     let parser = Parser::new(
-        "fun main(arg: Int) -> Int { return 1+arg+2+arg+3; #show_graph }",
+        "fun main(arg: Int) -> Int { return 1+arg+2+arg+3; #show_graph; }",
         Path::new("dummy.ro"),
     );
     let ast = parser.parse().expect("should parse");
