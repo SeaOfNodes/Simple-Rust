@@ -139,6 +139,12 @@ impl<'t> Nodes<'t> {
         self[node].base_mut().inputs.swap(1, 2);
         node
     }
+    pub fn keep(&mut self, node: NodeId) {
+        self[node].base_mut().add_use(NodeId::DUMMY);
+    }
+    pub fn unkeep(&mut self, node: NodeId) {
+        self[node].base_mut().del_use(NodeId::DUMMY);
+    }
 }
 
 impl<'t> Index<NodeId> for Nodes<'t> {

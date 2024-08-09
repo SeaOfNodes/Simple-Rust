@@ -310,6 +310,15 @@ impl<'t> Soup<'t> {
         }
     }
 
+    fn dead_code_elimination(&mut self, old: NodeId, new: NodeId) -> NodeId {
+        if new != old && self.nodes[old].is_unused() {
+            self.nodes.keep(new);
+            self.nodes.kill(old);
+            self.nodes.unkeep(new);
+        }
+        new
+    }
+
     fn peephole(&mut self, node: NodeId, types: &mut Types<'t>) -> NodeId {
         let ty = self.compute(node, types);
 
@@ -320,14 +329,15 @@ impl<'t> Soup<'t> {
         }
 
         if !matches!(self.nodes[node], Node::Constant(_)) && ty.is_constant() {
-            self.nodes.kill(node);
-            return self
-                .nodes
-                .create(|id| Node::Constant(ConstantNode::new(id, self.start, ty)));
+            let start = self.start;
+            let new_node =
+                self.create_peepholed(types, |id| Node::Constant(ConstantNode::new(id, start, ty)));
+            return self.dead_code_elimination(node, new_node);
         }
 
-        if let Some(n) = self.idealize(node, types) {
-            return n;
+        if let Some(idealized) = self.idealize(node, types) {
+            let new_node = self.peephole(idealized, types);
+            return self.dead_code_elimination(node, new_node);
         }
 
         node // no progress
