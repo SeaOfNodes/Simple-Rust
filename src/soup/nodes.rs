@@ -619,6 +619,9 @@ pub struct ScopeNode {
 }
 
 impl ScopeNode {
+    pub const CTRL: &'static str = "$ctrl";
+    pub const ARG0: &'static str = "arg";
+
     pub fn new(id: NodeId) -> Self {
         Self {
             base: NodeBase::new(id, vec![]),

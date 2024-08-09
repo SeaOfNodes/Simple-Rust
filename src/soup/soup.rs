@@ -3,7 +3,7 @@ use std::mem;
 use crate::soup::graph_visualizer;
 use crate::soup::nodes::{
     AddNode, BoolOp, ConstantNode, DivNode, MinusNode, MulNode, Node, NodeBase, NodeId, Nodes,
-    ReturnNode, ScopeNode, StartNode, SubNode,
+    ProjNode, ReturnNode, ScopeNode, StartNode, SubNode,
 };
 use crate::soup::types::{Int, Ty, Type, Types};
 use crate::syntax::ast::{BinaryOperator, Block, Expression, Function, PrefixOperator, Statement};
@@ -12,7 +12,6 @@ use crate::syntax::formatter::{CodeStyle, FormatCode};
 pub struct Soup<'t> {
     pub nodes: Nodes<'t>,
     pub(crate) start: NodeId,
-    ctrl: NodeId,
     pub(crate) scope: NodeId,
     pub disable_peephole: bool,
     errors: Vec<String>,
@@ -24,7 +23,6 @@ impl<'t> Soup<'t> {
         Self {
             nodes: Nodes::new(),
             start: NodeId::DUMMY,
-            ctrl: NodeId::DUMMY,
             scope: NodeId::DUMMY,
             disable_peephole: false,
             errors: vec![],
@@ -44,14 +42,26 @@ impl<'t> Soup<'t> {
         let args = types.get_tuple(vec![types.ty_ctrl, self.arg.unwrap_or(types.ty_bot)]);
         let start = self.create_peepholed(types, |id| Node::Start(StartNode::new(id, args)));
         self.start = start;
-        self.ctrl = start;
         // if we didn't call peephole we might have to manually set the computed type like in the java constructor
         self.scope = self.create_peepholed(types, |id| Node::Scope(ScopeNode::new(id)));
 
-        let stop = match &function.body {
-            None => todo!(),
-            Some(body) => self.compile_block(&body, types),
-        };
+        let body = function.body.as_ref().unwrap();
+
+        self.nodes.scope_push(self.scope);
+        let ctrl = self.create_peepholed(types, |id| {
+            Node::Proj(ProjNode::new(id, start, 0, ScopeNode::CTRL.to_string()))
+        });
+        self.nodes
+            .scope_define(self.scope, ScopeNode::CTRL.to_string(), ctrl);
+        let arg0 = self.create_peepholed(types, |id| {
+            Node::Proj(ProjNode::new(id, start, 1, ScopeNode::ARG0.to_string()))
+        });
+        self.nodes
+            .scope_define(self.scope, ScopeNode::ARG0.to_string(), arg0);
+
+        let stop = self.compile_block(&body, types);
+
+        self.nodes.scope_pop(self.scope);
 
         if self.errors.is_empty() {
             Ok((start, stop))
@@ -62,26 +72,24 @@ impl<'t> Soup<'t> {
 
     fn compile_block(&mut self, block: &Block, types: &mut Types<'t>) -> NodeId {
         let mut result = None;
-        let mut saw_return = false;
-        let mut reported_unreachable = false;
 
         self.nodes.scope_push(self.scope);
         for statement in &block.statements {
-            if saw_return && !matches!(statement, Statement::Meta(_)) && !reported_unreachable {
+            if self.ctrl().is_none() && !matches!(statement, Statement::Meta(_)) {
                 let s = statement.format(&CodeStyle::DEFAULT);
                 self.errors
                     .push(format!("Unreachable statement after return: {s}"));
-                reported_unreachable = true;
+                break;
             }
             match statement {
                 Statement::Expression(e) => result = Some(self.compile_expression(e, types)),
                 Statement::Return(ret) => {
                     let data = self.compile_expression(&ret.value, types);
-                    let ctrl = self.ctrl;
-                    saw_return = true;
+                    let ctrl = self.ctrl().unwrap();
                     result = Some(self.create_peepholed(types, |id| {
                         Node::Return(ReturnNode::new(id, ctrl, data))
                     }));
+                    self.set_ctrl(None);
                 }
                 Statement::If(_) => todo!(),
                 Statement::Var(var) => {
@@ -198,6 +206,13 @@ impl<'t> Soup<'t> {
             // TODO: we could re-use the last slot. self.nodes.undo_create()
         }
         better
+    }
+
+    fn ctrl(&self) -> Option<NodeId> {
+        self.nodes[self.scope].base().inputs[0]
+    }
+    fn set_ctrl(&mut self, node: Option<NodeId>) {
+        self.nodes.set_def(self.scope, 0, node);
     }
 
     fn compute(&self, node: NodeId, types: &mut Types<'t>) -> Ty<'t> {
