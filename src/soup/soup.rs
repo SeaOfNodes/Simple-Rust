@@ -202,7 +202,15 @@ impl<'t> Soup<'t> {
     fn compute(&self, node: NodeId, types: &mut Types<'t>) -> Ty<'t> {
         match &self.nodes[node] {
             Node::Constant(c) => c.ty(),
-            Node::Return(_) => types.ty_bot,
+            Node::Return(n) => {
+                let ctrl = n.base.inputs[0]
+                    .and_then(|n| self.nodes.ty(n))
+                    .unwrap_or(types.ty_bot);
+                let expr = n.base.inputs[1]
+                    .and_then(|n| self.nodes.ty(n))
+                    .unwrap_or(types.ty_bot);
+                types.get_tuple(vec![ctrl, expr])
+            }
             Node::Start(_) => types.ty_bot,
             Node::Add(n) => self.compute_binary_int(&n.base, types, i64::wrapping_add),
             Node::Sub(n) => self.compute_binary_int(&n.base, types, i64::wrapping_sub),

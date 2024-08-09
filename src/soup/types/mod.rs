@@ -73,6 +73,10 @@ impl<'a> Types<'a> {
         }
     }
 
+    pub fn get_tuple(&mut self, types: Vec<Ty<'a>>) -> Ty<'a> {
+        self.interner.intern(Type::Tuple { types })
+    }
+
     pub fn get_module(&mut self, module: Arc<ParsedModule>) -> Ty<'a> {
         self.interner.intern(Type::Module(module))
     }
