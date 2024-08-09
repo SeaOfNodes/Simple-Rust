@@ -241,6 +241,7 @@ impl<'t> Node<'t> {
     pub fn is_cfg(&self) -> bool {
         match self {
             Node::Start(_) | Node::Return(_) => true,
+            Node::Proj(p) => p.index == 0,
             Node::Constant(_)
             | Node::Add(_)
             | Node::Sub(_)
@@ -249,8 +250,7 @@ impl<'t> Node<'t> {
             | Node::Minus(_)
             | Node::Scope(_)
             | Node::Bool(_)
-            | Node::Not(_)
-            | Node::Proj(_) => false,
+            | Node::Not(_) => false,
         }
     }
 
