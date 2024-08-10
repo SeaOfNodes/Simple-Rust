@@ -8,18 +8,17 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Arc;
 
+use codegen::asm::{FunctionSymbol, MachineCode};
+use codegen::elf;
 use data::arena::Arena;
 
-use crate::asm::{FunctionSymbol, MachineCode};
 use crate::modules::{Modules, ParsedModule};
 use crate::soup::soup::Soup;
 use crate::soup::types::{Ty, Types};
 use crate::syntax::ast::Item;
 
-pub mod asm;
+pub mod codegen;
 pub mod data;
-pub mod elf;
-pub mod lir;
 mod modules;
 pub mod soup;
 pub mod syntax;

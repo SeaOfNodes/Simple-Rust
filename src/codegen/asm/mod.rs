@@ -1,7 +1,7 @@
 use std::convert::TryFrom;
 
-use crate::asm::mem::{Mem, RM, Scale};
-use crate::asm::reg::{Reg, RegSet};
+use crate::codegen::asm::mem::{Mem, RM, Scale};
+use crate::codegen::asm::reg::{Reg, RegSet};
 
 pub mod mem;
 pub mod reg;
@@ -396,7 +396,7 @@ mod tests {
     use iced_x86::{Decoder, DecoderOptions, Formatter, Instruction, NasmFormatter};
     use iced_x86::code_asm::*;
 
-    use crate::asm::mem::{Mem, Scale};
+    use crate::codegen::asm::mem::{Mem, Scale};
 
     use super::*;
 

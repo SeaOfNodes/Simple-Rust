@@ -12,13 +12,13 @@ use std::io::Write;
 
 use header::Elf64_Ehdr;
 
-use crate::asm::{MachineCode, RelocationKind};
-use crate::elf::data_types::*;
-use crate::elf::header::*;
-use crate::elf::relocation::Elf64_Rela;
-use crate::elf::section::*;
-use crate::elf::string_table::*;
-use crate::elf::symbol_table::*;
+use crate::codegen::asm::{MachineCode, RelocationKind};
+use crate::codegen::elf::data_types::*;
+use crate::codegen::elf::header::*;
+use crate::codegen::elf::relocation::Elf64_Rela;
+use crate::codegen::elf::section::*;
+use crate::codegen::elf::string_table::*;
+use crate::codegen::elf::symbol_table::*;
 
 pub mod data_types;
 pub mod header;

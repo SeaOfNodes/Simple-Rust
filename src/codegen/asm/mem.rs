@@ -1,4 +1,4 @@
-use crate::asm::reg::Reg;
+use crate::codegen::asm::reg::Reg;
 
 #[derive(Eq, PartialEq, Clone, Copy)]
 pub enum RM {

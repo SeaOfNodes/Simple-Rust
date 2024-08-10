@@ -1,9 +1,9 @@
 use std::fmt::{Debug, Display, Formatter};
 use std::mem;
 
-use crate::asm::MachineCode;
-use crate::asm::reg::Reg;
-use crate::lir::stack_slots::StackSlots;
+use crate::codegen::asm::MachineCode;
+use crate::codegen::asm::reg::Reg;
+use crate::codegen::lir::stack_slots::StackSlots;
 use crate::soup::location::Location;
 
 mod stack_slots;

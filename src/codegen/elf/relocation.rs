@@ -1,4 +1,4 @@
-use crate::elf::data_types::*;
+use crate::codegen::elf::data_types::*;
 
 #[repr(C)]
 pub struct Elf64_Rel {
