@@ -1,7 +1,7 @@
 use std::fmt;
 use std::fmt::Display;
 
-use crate::bit_set::BitSet;
+use crate::data::id_set::IdSet;
 use crate::soup::nodes::{Node, NodeId, Nodes};
 
 pub struct PrintNodes<'a, 't> {
@@ -11,7 +11,7 @@ pub struct PrintNodes<'a, 't> {
 
 impl Display for PrintNodes<'_, '_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut visited = BitSet::zeros(self.nodes.nodes.len());
+        let mut visited = IdSet::zeros(self.nodes.nodes.len());
         self.nodes.fmt(self.node, f, &mut visited)
     }
 }
@@ -24,7 +24,7 @@ impl<'t> Nodes<'t> {
         &self,
         node: Option<NodeId>,
         f: &mut fmt::Formatter,
-        visited: &mut BitSet<NodeId>,
+        visited: &mut IdSet<NodeId>,
     ) -> fmt::Result {
         let Some(node) = node else {
             return write!(f, "<?>");

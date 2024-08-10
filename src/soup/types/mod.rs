@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::arena::Arena;
+use crate::data::arena::Arena;
 use crate::modules::ParsedModule;
 pub use crate::soup::types::r#type::*;
 pub use crate::soup::types::ty::Ty;

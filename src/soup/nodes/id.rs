@@ -2,7 +2,7 @@ use std::fmt;
 use std::fmt::{Debug, Display};
 use std::num::NonZeroU32;
 
-use crate::bit_set;
+use crate::data::id::Id;
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub struct NodeId(pub(super) NonZeroU32);
@@ -15,7 +15,7 @@ impl NodeId {
     }
 }
 
-impl bit_set::Index for NodeId {
+impl Id for NodeId {
     fn index(&self) -> usize {
         NodeId::index(*self)
     }

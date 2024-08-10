@@ -1,22 +1,14 @@
 use std::marker::PhantomData;
 
-pub(crate) trait Index {
-    fn index(&self) -> usize;
-}
+use crate::data::id::Id;
 
-impl Index for usize {
-    fn index(&self) -> usize {
-        *self
-    }
-}
-
-pub(crate) struct BitSet<E> {
+pub struct IdSet<E> {
     words: Vec<usize>,
     phantom_data: PhantomData<E>,
 }
 
-impl<E: Index> BitSet<E> {
-    pub(crate) fn zeros(capacity: usize) -> Self {
+impl<E: Id> IdSet<E> {
+    pub fn zeros(capacity: usize) -> Self {
         Self {
             words: vec![
                 0;
@@ -44,34 +36,34 @@ impl<E: Index> BitSet<E> {
         (word, bit)
     }
 
-    pub(crate) fn add(&mut self, element: E) {
-        let (word, bit) = BitSet::index(&element);
+    pub fn add(&mut self, element: E) {
+        let (word, bit) = IdSet::index(&element);
         self.ensure_size(word);
         self.words[word] |= 1 << bit;
         debug_assert!(self.get(element));
     }
 
-    pub(crate) fn remove(&mut self, element: E) {
-        let (word, bit) = BitSet::index(&element);
+    pub fn remove(&mut self, element: E) {
+        let (word, bit) = IdSet::index(&element);
         if let Some(word) = self.words.get_mut(word) {
             *word &= !(1 << bit);
         }
         debug_assert!(!self.get(element));
     }
 
-    pub(crate) fn get(&self, element: E) -> bool {
-        let (word, bit) = BitSet::index(&element);
+    pub fn get(&self, element: E) -> bool {
+        let (word, bit) = IdSet::index(&element);
         self.words.get(word).is_some_and(|w| (w & (1 << bit)) != 0)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::BitSet;
+    use super::IdSet;
 
     #[test]
     fn basic() {
-        let mut set = BitSet::zeros(0);
+        let mut set = IdSet::zeros(0);
         set.add(42);
         assert!(set.get(42));
         set.add(43);
