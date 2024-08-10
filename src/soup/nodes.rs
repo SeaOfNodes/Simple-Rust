@@ -1,9 +1,9 @@
-use std::collections::HashMap;
 use std::num::NonZeroU32;
 use std::ops::{Index, IndexMut};
 
 pub use id::NodeId;
-pub use node::{BoolOp, Node, PhiNode, ProjNode, ScopeNode};
+pub use node::{BoolOp, Node, PhiNode, ProjNode};
+pub use scope::ScopeNode;
 
 use crate::datastructures::id::Id;
 use crate::datastructures::id_vec::IdVec;
@@ -12,6 +12,7 @@ use crate::soup::types::Ty;
 mod id;
 mod node;
 mod print;
+mod scope;
 
 /// Using `IdVec` has two advantages over `Vec`+helper methods:
 /// 1) `self.inputs[x]` and `self.outputs[x]` can be borrowed simultaneously
@@ -152,32 +153,9 @@ impl<'t> Nodes<'t> {
     pub fn keep(&mut self, node: NodeId) {
         self.add_use(node, NodeId::DUMMY);
     }
+
     pub fn unkeep(&mut self, node: NodeId) {
         self.del_use(node, NodeId::DUMMY);
-    }
-}
-
-impl<'t> Index<NodeId> for Nodes<'t> {
-    type Output = Node<'t>;
-
-    fn index(&self, index: NodeId) -> &Self::Output {
-        &self.nodes[index.index()]
-    }
-}
-
-impl<'t> IndexMut<NodeId> for Nodes<'t> {
-    fn index_mut(&mut self, index: NodeId) -> &mut Self::Output {
-        &mut self.nodes[index.index()]
-    }
-}
-
-impl<'t> Nodes<'t> {
-    // Unique label for graph visualization, e.g. "Add12" or "Region30" or "EQ99"
-    pub fn unique_name(&self, node: NodeId) -> String {
-        match &self[node] {
-            Node::Constant(_) => format!("Con_{}", node),
-            _ => format!("{}{}", self[node].label(), node),
-        }
     }
 
     pub fn is_cfg(&self, node: NodeId) -> bool {
@@ -207,76 +185,18 @@ impl<'t> Nodes<'t> {
             None // ambiguous
         }
     }
+}
 
-    fn scope_mut(&mut self, scope_node: NodeId) -> &mut ScopeNode {
-        let Node::Scope(scope) = &mut self[scope_node] else {
-            panic!("Must be called with a scope node id")
-        };
-        scope
-    }
-    pub fn scope_push(&mut self, scope_node: NodeId) {
-        self.scope_mut(scope_node).scopes.push(HashMap::new());
-    }
+impl<'t> Index<NodeId> for Nodes<'t> {
+    type Output = Node<'t>;
 
-    pub fn scope_pop(&mut self, scope_node: NodeId) {
-        let last = self.scope_mut(scope_node).scopes.pop().unwrap();
-        self.pop_n(scope_node, last.len());
+    fn index(&self, index: NodeId) -> &Self::Output {
+        &self.nodes[index.index()]
     }
+}
 
-    pub fn scope_define(
-        &mut self,
-        scope_node: NodeId,
-        name: String,
-        value: NodeId,
-    ) -> Result<(), ()> {
-        let len = self.inputs[scope_node].len();
-        let scope = self.scope_mut(scope_node);
-        let syms = scope.scopes.last_mut().unwrap();
-        if let Some(_old) = syms.insert(name, len) {
-            return Err(());
-        }
-        self.add_def(scope_node, Some(value));
-        Ok(())
-    }
-
-    pub fn scope_lookup(&mut self, scope_node: NodeId, name: &str) -> Result<NodeId, ()> {
-        let nesting_level = self.scope_mut(scope_node).scopes.len() - 1;
-        self.scope_lookup_update(scope_node, name, None, nesting_level)
-            .ok_or(())
-    }
-
-    pub fn scope_update(
-        &mut self,
-        scope_node: NodeId,
-        name: &str,
-        value: NodeId,
-    ) -> Result<NodeId, ()> {
-        let nesting_level = self.scope_mut(scope_node).scopes.len() - 1;
-        self.scope_lookup_update(scope_node, name, Some(value), nesting_level)
-            .ok_or(())
-    }
-
-    fn scope_lookup_update(
-        &mut self,
-        scope_node: NodeId,
-        name: &str,
-        value: Option<NodeId>,
-        nesting_level: usize,
-    ) -> Option<NodeId> {
-        let scope = self.scope_mut(scope_node);
-        let syms = &mut scope.scopes[nesting_level];
-        if let Some(index) = syms.get(name).copied() {
-            let old = self.inputs[scope_node][index];
-            if value.is_some() {
-                self.set_def(scope_node, index, value);
-                value
-            } else {
-                old
-            }
-        } else if nesting_level > 0 {
-            self.scope_lookup_update(scope_node, name, value, nesting_level - 1)
-        } else {
-            None
-        }
+impl<'t> IndexMut<NodeId> for Nodes<'t> {
+    fn index_mut(&mut self, index: NodeId) -> &mut Self::Output {
+        &mut self.nodes[index.index()]
     }
 }

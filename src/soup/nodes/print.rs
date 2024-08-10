@@ -21,6 +21,14 @@ impl<'t> Nodes<'t> {
         PrintNodes { node, nodes: self }
     }
 
+    // Unique label for graph visualization, e.g. "Add12" or "Region30" or "EQ99"
+    pub fn unique_name(&self, node: NodeId) -> String {
+        match &self[node] {
+            Node::Constant(_) => format!("Con_{}", node),
+            _ => format!("{}{}", self[node].label(), node),
+        }
+    }
+
     fn fmt(
         &self,
         node: Option<NodeId>,

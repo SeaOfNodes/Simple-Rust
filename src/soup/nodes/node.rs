@@ -1,7 +1,6 @@
 use std::borrow::Cow;
-use std::collections::HashMap;
 
-use crate::soup::nodes::{NodeCreation, NodeId};
+use crate::soup::nodes::{NodeCreation, NodeId, ScopeNode};
 use crate::soup::types::{Ty, Type};
 
 #[derive(Clone, Debug)]
@@ -22,16 +21,6 @@ pub enum Node<'t> {
     Phi(PhiNode),
     Region,
     Stop,
-}
-
-#[derive(Clone, Debug)]
-pub struct ScopeNode {
-    pub scopes: Vec<HashMap<String, usize>>,
-}
-
-impl ScopeNode {
-    pub const CTRL: &'static str = "$ctrl";
-    pub const ARG0: &'static str = "arg";
 }
 
 #[derive(Copy, Clone, Debug)]
