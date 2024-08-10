@@ -88,6 +88,47 @@ impl<'t> Nodes<'t> {
             return Some(self.create(Node::make_add([x, new_rhs])));
         }
 
+        {
+            let phi = self.inputs[lhs][2]?;
+            if matches!(self[phi], Node::Phi(_)) && self.all_cons(phi) &&
+            // Do we have ((x + (phi cons)) + con) ?
+            // Do we have ((x + (phi cons)) + (phi cons)) ?
+            // Push constant up through the phi: x + (phi con0+con0 con1+con1...)
+
+            // Note that this is the exact reverse of Phi pulling a common op
+            // down to reduce total op-count.  We don't get in an endless push-
+            // up push-down peephole cycle because the constants all fold first.
+                (t2.is_constant() || (matches!(&self[rhs], Node::Phi(_)) && self.inputs[phi][0] == self.inputs[rhs][0] && self.all_cons(rhs) ))
+            {
+                let mut ns = vec![None; self.inputs[phi].len()];
+                ns[0] = self.inputs[phi][0];
+
+                // Push constant up through the phi: x + (phi con0+con0 con1+con1...)
+                for i in 1..ns.len() {
+                    //                 ns[i] = new AddNode(phi.in(i),t2.isConstant() ? rhs : rhs.in(i)).peephole();
+                    ns[i] = Some(self.create_peepholed(
+                        types,
+                        Node::make_add([
+                            self.inputs[phi][i]?,
+                            if t2.is_constant() {
+                                rhs
+                            } else {
+                                self.inputs[rhs][i]?
+                            },
+                        ]),
+                    ));
+                }
+
+                let label = format!(
+                    "{}{}",
+                    self[phi].phi_label().unwrap(),
+                    self[rhs].phi_label().unwrap_or("")
+                );
+                let new_phi = self.create_peepholed(types, Node::make_phi(label, ns));
+                return Some(self.create(Node::make_add([self.inputs[lhs][1]?, new_phi])));
+            }
+        }
+
         // Now we sort along the spline via rotates, to gather similar things together.
 
         // Do we rotate (x + y) + z
@@ -144,7 +185,7 @@ impl<'t> Nodes<'t> {
 
     // Compare two off-spline nodes and decide what order they should be in.
     // Do we rotate ((x + hi) + lo) into ((x + lo) + hi) ?
-    // Generally constants always go right, then others.
+    // Generally constants always go right, then Phi-of-constants, then muls, then others.
     // Ties with in a category sort by node ID.
     // TRUE if swapping hi and lo.
     fn spline_cmp(&mut self, hi: NodeId, lo: NodeId) -> bool {
@@ -154,6 +195,21 @@ impl<'t> Nodes<'t> {
         if self.ty[hi].is_some_and(|t| t.is_constant()) {
             return true;
         }
+
+        if matches!(self[lo], Node::Phi(_)) && self.all_cons(lo) {
+            return false;
+        }
+        if matches!(self[hi], Node::Phi(_)) && self.all_cons(hi) {
+            return true;
+        }
+
+        if matches!(self[lo], Node::Phi(_)) && !matches!(self[hi], Node::Phi(_)) {
+            return true;
+        }
+        if matches!(self[hi], Node::Phi(_)) && !matches!(self[lo], Node::Phi(_)) {
+            return false;
+        }
+
         lo.index() > hi.index()
     }
 }

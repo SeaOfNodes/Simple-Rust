@@ -205,6 +205,14 @@ impl<'t> Nodes<'t> {
             None // ambiguous
         }
     }
+
+    /// ignores input 0
+    pub fn all_cons(&self, node: NodeId) -> bool {
+        self.inputs[node]
+            .iter()
+            .skip(1)
+            .all(|n| self.ty[n.unwrap()].unwrap().is_constant())
+    }
 }
 
 impl<'t> Index<NodeId> for Nodes<'t> {

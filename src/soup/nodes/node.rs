@@ -126,6 +126,15 @@ impl<'t> Node<'t> {
             | Node::Stop => false,
         }
     }
+
+    pub fn phi_label(&self) -> Option<&str> {
+        if let Node::Phi(p) = self {
+            Some(&p.label)
+        } else {
+            None
+        }
+    }
+    
     pub fn make_start(args: Ty<'t>) -> NodeCreation<'t> {
         debug_assert!(matches!(&*args, Type::Tuple { .. }));
         (Node::Start { args }, vec![])
