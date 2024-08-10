@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use crate::soup::nodes::{NodeCreation, NodeId};
 use crate::soup::types::{Ty, Type};
 
+#[derive(Clone, Debug)]
 pub enum Node<'t> {
     Constant(Ty<'t>),
     Return,
@@ -23,6 +24,7 @@ pub enum Node<'t> {
     Stop,
 }
 
+#[derive(Clone, Debug)]
 pub struct ScopeNode {
     pub scopes: Vec<HashMap<String, usize>>,
 }
@@ -32,7 +34,7 @@ impl ScopeNode {
     pub const ARG0: &'static str = "arg";
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum BoolOp {
     EQ,
     LT,
@@ -56,11 +58,13 @@ impl BoolOp {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct ProjNode {
     pub index: usize,
     pub label: String,
 }
 
+#[derive(Clone, Debug)]
 pub struct PhiNode {
     pub label: String,
 }

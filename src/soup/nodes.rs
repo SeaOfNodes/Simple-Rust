@@ -279,25 +279,4 @@ impl<'t> Nodes<'t> {
             None
         }
     }
-
-    pub fn shallow_copy(&mut self, node: NodeId, ops: [NodeId; 2]) -> NodeId {
-        match &self[node] {
-            Node::Constant(_)
-            | Node::Return
-            | Node::Start { .. }
-            | Node::Minus
-            | Node::Scope(_)
-            | Node::Not
-            | Node::If
-            | Node::Phi(_)
-            | Node::Region
-            | Node::Stop
-            | Node::Proj(_) => unreachable!(),
-            Node::Add => self.create(Node::make_add(ops)),
-            Node::Sub => self.create(Node::make_sub(ops)),
-            Node::Mul => self.create(Node::make_mul(ops)),
-            Node::Div => self.create(Node::make_div(ops)),
-            Node::Bool(op) => self.create(Node::make_bool(ops, *op)),
-        }
-    }
 }
