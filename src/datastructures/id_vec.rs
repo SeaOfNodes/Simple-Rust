@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 
-use crate::data::id::Id;
+use crate::datastructures::id::Id;
 
 pub struct IdVec<I, T>(Vec<T>, PhantomData<I>);
 

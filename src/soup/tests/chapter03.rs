@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::data::arena::Arena;
+use crate::datastructures::arena::Arena;
 use crate::soup::soup::Soup;
 use crate::soup::types::Types;
 use crate::syntax::ast::Item;

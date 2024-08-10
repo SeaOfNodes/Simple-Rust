@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use codegen::asm::{FunctionSymbol, MachineCode};
 use codegen::elf;
-use data::arena::Arena;
+use datastructures::arena::Arena;
 
 use crate::modules::{Modules, ParsedModule};
 use crate::soup::soup::Soup;
@@ -18,7 +18,7 @@ use crate::soup::types::{Ty, Types};
 use crate::syntax::ast::Item;
 
 pub mod codegen;
-pub mod data;
+pub mod datastructures;
 mod modules;
 pub mod soup;
 pub mod syntax;

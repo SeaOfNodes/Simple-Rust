@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use crate::data::id::Id;
+use crate::datastructures::id::Id;
 
 pub struct IdSet<E> {
     words: Vec<usize>,

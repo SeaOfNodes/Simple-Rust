@@ -2,7 +2,7 @@ use std::fmt;
 use std::fmt::{Debug, Display};
 use std::num::NonZeroU32;
 
-use crate::data::id::Id;
+use crate::datastructures::id::Id;
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub struct NodeId(pub(super) NonZeroU32);

@@ -1,7 +1,7 @@
 use std::fmt;
 use std::fmt::Display;
 
-use crate::data::id_set::IdSet;
+use crate::datastructures::id_set::IdSet;
 use crate::soup::nodes::{Node, NodeId, Nodes};
 
 pub struct PrintNodes<'a, 't> {
