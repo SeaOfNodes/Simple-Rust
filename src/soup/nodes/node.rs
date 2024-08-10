@@ -134,7 +134,30 @@ impl<'t> Node<'t> {
             None
         }
     }
-    
+
+    pub fn operation(&self) -> usize {
+        match self {
+            Node::Constant(_) => 0,
+            Node::Return => 1,
+            Node::Start { .. } => 2,
+            Node::Add => 3,
+            Node::Sub => 4,
+            Node::Mul => 5,
+            Node::Div => 6,
+            Node::Minus => 7,
+            Node::Scope(_) => 8,
+            Node::Bool(BoolOp::EQ) => 9,
+            Node::Bool(BoolOp::LT) => 10,
+            Node::Bool(BoolOp::LE) => 11,
+            Node::Not => 12,
+            Node::Proj(_) => 13,
+            Node::If => 14,
+            Node::Phi(_) => 15,
+            Node::Region => 16,
+            Node::Stop => 17,
+        }
+    }
+
     pub fn make_start(args: Ty<'t>) -> NodeCreation<'t> {
         debug_assert!(matches!(&*args, Type::Tuple { .. }));
         (Node::Start { args }, vec![])

@@ -213,6 +213,25 @@ impl<'t> Nodes<'t> {
             .skip(1)
             .all(|n| self.ty[n.unwrap()].unwrap().is_constant())
     }
+
+    fn same_op(&self, node: NodeId) -> bool {
+        for i in 2..self.inputs[node].len() {
+            if self[self.inputs[node][1].unwrap()].operation()
+                != self[self.inputs[node][i].unwrap()].operation()
+            {
+                return false;
+            }
+        }
+        true
+    }
+    fn same_inputs(&self, node: NodeId) -> bool {
+        for i in 2..self.inputs[node].len() {
+            if self.inputs[node][1] != self.inputs[node][i] {
+                return false;
+            }
+        }
+        true
+    }
 }
 
 impl<'t> Index<NodeId> for Nodes<'t> {

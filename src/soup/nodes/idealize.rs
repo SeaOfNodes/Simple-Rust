@@ -10,7 +10,7 @@ impl<'t> Nodes<'t> {
             Node::Sub => self.idealize_sub(node, types),
             Node::Mul => self.idealize_mul(node, types),
             Node::Bool(op) => self.idealize_bool(*op, node, types),
-            Node::Phi(_) => todo!(),
+            Node::Phi(_) => self.idealize_phi(node, types),
             Node::Constant(_)
             | Node::Return
             | Node::Start { .. }
@@ -181,6 +181,44 @@ impl<'t> Nodes<'t> {
         } else {
             None
         }
+    }
+
+    fn idealize_phi(&mut self, node: NodeId, types: &mut Types<'t>) -> Option<NodeId> {
+        // Remove a "junk" Phi: Phi(x,x) is just x
+        if self.same_inputs(node) {
+            return self.inputs[node][1];
+        }
+
+        // Pull "down" a common data op.  One less op in the world.  One more
+        // Phi, but Phis do not make code.
+        //   Phi(op(A,B),op(Q,R),op(X,Y)) becomes
+        //     op(Phi(A,Q,X), Phi(B,R,Y)).
+        let op = self.inputs[node][1].expect("not same_inputs");
+        if self.inputs[op].len() == 3 && self.inputs[op][0].is_none() && !self.is_cfg(op) && self.same_op(node) {
+            let n_in = &self.inputs[node];
+            
+            let mut lhss = vec![None; n_in.len()];
+            let mut rhss = vec![None; n_in.len()];
+            
+            // Set Region
+            lhss[0] = n_in[0];
+            rhss[0] = n_in[0];
+            
+            for i in 1..n_in.len() {
+                lhss[i] = self.inputs[n_in[i].unwrap()][1];
+                lhss[i] = self.inputs[n_in[i].unwrap()][2];
+            }
+            
+            let label = self[node].phi_label().unwrap();
+            let phi_lhs = Node::make_phi(label.to_string(), lhss);
+            let phi_rhs = Node::make_phi(label.to_string(), rhss);
+            
+            let phi_lhs = self.create_peepholed(types, phi_lhs);
+            let phi_rhs = self.create_peepholed(types, phi_rhs);
+            
+            return Some(self.create((self[node].clone(), vec![Some(phi_lhs), Some(phi_rhs)])));
+        }
+        None
     }
 
     // Compare two off-spline nodes and decide what order they should be in.
