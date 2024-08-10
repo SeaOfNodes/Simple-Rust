@@ -9,15 +9,19 @@ pub fn generate_dot_output(soup: &Soup) -> Result<String, fmt::Error> {
     let all = find_all(soup);
 
     let mut sb = String::new();
-    writeln!(sb, "digraph chapter04 {{")?;
+    writeln!(sb, "digraph chapter05 {{")?;
     // TODO write /* file.ro */
     writeln!(sb, "\trankdir=BT;")?;
     writeln!(sb, "\tordering=\"in\";")?;
     writeln!(sb, "\tconcentrate=\"true\";")?;
     nodes(&mut sb, &soup.nodes, &all)?;
-    scopes(&mut sb, &soup.nodes, soup.scope)?;
+    for scope in &soup.x_scopes {
+        scopes(&mut sb, &soup.nodes, *scope)?;
+    }
     node_edges(&mut sb, &soup.nodes, &all)?;
-    scope_edges(&mut sb, &soup.nodes, soup.scope)?;
+    for scope in &soup.x_scopes {
+        scope_edges(&mut sb, &soup.nodes, *scope)?;
+    }
     writeln!(sb, "}}")?;
     Ok(sb)
 }
@@ -69,10 +73,26 @@ fn nodes(sb: &mut String, nodes: &Nodes, all: &HashSet<NodeId>) -> fmt::Result {
             if nodes.is_cfg(n) {
                 write!(sb, "shape=box style=filled fillcolor=yellow ")?;
             }
+            if matches!(&nodes[n], Node::Phi(_)) {
+                write!(sb, "style=filled fillcolor=lightyellow ")?;
+            }
             write!(sb, "label=\"{lab}\" ")?;
         }
         writeln!(sb, "];")?;
     }
+
+    for &n in all {
+        if let Node::Region = &nodes[n] {
+            write!(sb, "\t\t{{ rank=same; {};", nodes.print(Some(n)))?;
+            for &phi in &nodes.outputs[n] {
+                if let Node::Phi(_) = &nodes[phi] {
+                    write!(sb, "{};", nodes.unique_name(phi))?;
+                }
+            }
+            writeln!(sb, "}}")?;
+        }
+    }
+
     writeln!(sb, "\t}}")
 }
 
@@ -127,6 +147,17 @@ fn node_edges(sb: &mut String, nodes: &Nodes, all: &HashSet<NodeId>) -> fmt::Res
         }
         for (i, def) in nodes.inputs[n].iter().enumerate() {
             let Some(def) = *def else { continue };
+
+            if let (Node::Phi(_), Node::Region) = (&nodes[n], &nodes[def]) {
+                writeln!(
+                    sb,
+                    "\t{} -> {} [style=dotted taillabel={i}];",
+                    nodes.unique_name(n),
+                    nodes.unique_name(def)
+                )?;
+                continue;
+            }
+
             write!(sb, "\t{} -> {}", nodes.unique_name(n), def_name(nodes, def))?;
 
             write!(sb, "[taillabel={i}")?;
