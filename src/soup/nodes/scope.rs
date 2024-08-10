@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::soup::nodes::{Node, NodeId, Nodes};
+use crate::soup::types::Types;
 
 #[derive(Clone, Debug)]
 pub struct ScopeNode {
@@ -93,5 +94,35 @@ impl<'t> Nodes<'t> {
             self.add_def(result, self.inputs[scope_node][i])
         }
         result
+    }
+
+    fn scope_merge(&mut self, this: NodeId, that: NodeId, types: &mut Types<'t>) {
+        let c1 = self.inputs[this][0];
+        let c2 = self.inputs[that][0];
+        let region = self.create_peepholed(types, Node::make_region(vec![None, c1, c2]));
+
+        let mut names = vec![None; self.inputs[this].len()];
+        let this_scope = self.scope_mut(this);
+        for syms in &this_scope.scopes {
+            for (name, &index) in syms {
+                debug_assert!(names[index].is_none());
+                names[index] = Some(name.clone());
+            }
+        }
+
+        // Note that we skip i==0, which is bound to '$ctrl'
+        for (i, name) in names.into_iter().enumerate().skip(1) {
+            let this_in = self.inputs[this][i];
+            let that_in = self.inputs[that][i];
+            if this_in != that_in {
+                let phi = self.create_peepholed(
+                    types,
+                    Node::make_phi(name.unwrap(), vec![Some(region), this_in, that_in]),
+                );
+                self.set_def(this, i, Some(phi));
+            }
+        }
+
+        self.kill(that);
     }
 }

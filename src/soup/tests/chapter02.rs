@@ -18,7 +18,7 @@ fn test_simple_program() {
     let mut types = Types::new(&mut arena);
     let mut soup = Soup::new();
 
-    soup.disable_peephole = true;
+    soup.nodes.disable_peephole = true;
 
     let Item::Function(function) = &ast.items[0] else {
         unreachable!("expect function")

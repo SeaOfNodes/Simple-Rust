@@ -35,7 +35,7 @@ fn test_simple_program() {
         unreachable!("expect constant");
     };
 
-    assert_eq!(Some(soup.start), soup.nodes.inputs[expr][0]);
+    assert_eq!(Some(soup.nodes.start), soup.nodes.inputs[expr][0]);
     assert_eq!(1, constant.unwrap_int());
 }
 
@@ -54,10 +54,10 @@ fn test_zero() {
         .compile_function(function, &mut types)
         .expect("should compile");
 
-    let Node::Start { .. } = &soup.nodes[soup.start] else {
+    let Node::Start { .. } = &soup.nodes[soup.nodes.start] else {
         unreachable!("expect type start");
     };
-    for output in &soup.nodes.outputs[soup.start] {
+    for output in &soup.nodes.outputs[soup.nodes.start] {
         if let Node::Constant(c) = &soup.nodes[*output] {
             assert_eq!(0, c.unwrap_int());
         }

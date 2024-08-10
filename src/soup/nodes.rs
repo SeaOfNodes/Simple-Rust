@@ -2,15 +2,17 @@ use std::num::NonZeroU32;
 use std::ops::{Index, IndexMut};
 
 pub use id::NodeId;
-pub use node::{BoolOp, Node, PhiNode, ProjNode};
+pub use node::{BoolOp, Node};
 pub use scope::ScopeNode;
 
 use crate::datastructures::id::Id;
 use crate::datastructures::id_vec::IdVec;
-use crate::soup::types::Ty;
+use crate::soup::types::{Ty, Types};
 
 mod id;
+mod idealize;
 mod node;
+mod peephole;
 mod print;
 mod scope;
 
@@ -42,6 +44,12 @@ pub struct Nodes<'t> {
     /// used for efficient optimizations but otherwise have no semantics
     /// meaning
     pub outputs: IdVec<NodeId, Vec<NodeId>>,
+
+    /// If this is true peephole only computes the type.
+    pub disable_peephole: bool,
+
+    /// the start node to be used for creating constants.
+    pub start: NodeId,
 }
 
 pub type NodeCreation<'t> = (Node<'t>, Vec<Option<NodeId>>);
@@ -54,6 +62,8 @@ impl<'t> Nodes<'t> {
             inputs: IdVec::new(vec![vec![]]),
             outputs: IdVec::new(vec![vec![]]),
             ty: IdVec::new(vec![None]),
+            disable_peephole: false,
+            start: NodeId::DUMMY,
         }
     }
     pub fn len(&self) -> usize {
@@ -79,6 +89,16 @@ impl<'t> Nodes<'t> {
         debug_assert_eq!(self.len(), self.outputs.len());
         debug_assert_eq!(self.len(), self.ty.len());
         id
+    }
+
+    pub fn create_peepholed(&mut self, types: &mut Types<'t>, c: NodeCreation<'t>) -> NodeId {
+        let id = self.create(c);
+        let better = self.peephole(id, types);
+        debug_assert_eq!(better, self.peephole(better, types));
+        if better != id {
+            // TODO: we could re-use the dead slots: self.nodes.trim_end()
+        }
+        better
     }
 
     pub fn is_dead(&self, node: NodeId) -> bool {

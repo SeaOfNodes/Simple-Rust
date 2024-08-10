@@ -173,7 +173,7 @@ fn def_name(nodes: &Nodes, def: NodeId) -> String {
 }
 
 fn find_all(soup: &Soup) -> HashSet<NodeId> {
-    let start = soup.start;
+    let start = soup.nodes.start;
     let mut all = HashSet::new();
     for output in &soup.nodes.outputs[start] {
         walk(&soup.nodes, &mut all, *output);
