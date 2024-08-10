@@ -505,4 +505,34 @@ impl<'t> Soup<'t> {
         }
         lo.index() > hi.index()
     }
+
+    fn merge_scopes(&mut self, this: NodeId, that: NodeId, types: &mut Types<'t>) {
+        let c1 = self.nodes.inputs[this][0];
+        let c2 = self.nodes.inputs[that][0];
+        let region = self.create_peepholed(types, Node::make_region(vec![None, c1, c2]));
+
+        let mut names = vec![None; self.nodes.inputs[this].len()];
+        let this_scope = self.nodes.scope_mut(this);
+        for syms in &this_scope.scopes {
+            for (name, &index) in syms {
+                debug_assert!(names[index].is_none());
+                names[index] = Some(name.clone());
+            }
+        }
+
+        // Note that we skip i==0, which is bound to '$ctrl'
+        for (i, name) in names.into_iter().enumerate().skip(1) {
+            let this_in = self.nodes.inputs[this][i];
+            let that_in = self.nodes.inputs[that][i];
+            if this_in != that_in {
+                let phi = self.create_peepholed(
+                    types,
+                    Node::make_phi(name.unwrap(), vec![Some(region), this_in, that_in]),
+                );
+                self.nodes.set_def(this, i, Some(phi));
+            }
+        }
+
+        self.nodes.kill(that);
+    }
 }

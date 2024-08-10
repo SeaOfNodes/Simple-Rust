@@ -13,7 +13,7 @@ impl ScopeNode {
 }
 
 impl<'t> Nodes<'t> {
-    fn scope_mut(&mut self, scope_node: NodeId) -> &mut ScopeNode {
+    pub(crate) fn scope_mut(&mut self, scope_node: NodeId) -> &mut ScopeNode {
         let Node::Scope(scope) = &mut self[scope_node] else {
             panic!("Must be called with a scope node id")
         };
@@ -83,5 +83,15 @@ impl<'t> Nodes<'t> {
         } else {
             None
         }
+    }
+
+    pub fn scope_dup(&mut self, scope_node: NodeId) -> NodeId {
+        let clone = self.scope_mut(scope_node).clone();
+        let result = self.create((Node::Scope(clone), vec![]));
+        self.add_def(result, self.inputs[scope_node][0]); // ctrl
+        for i in 1..self.inputs[scope_node].len() {
+            self.add_def(result, self.inputs[scope_node][i])
+        }
+        result
     }
 }
