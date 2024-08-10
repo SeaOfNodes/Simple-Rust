@@ -9,15 +9,11 @@ pub struct NodeId(pub(super) NonZeroU32);
 
 impl NodeId {
     pub const DUMMY: NodeId = NodeId(NonZeroU32::MAX);
-
-    pub fn index(self) -> usize {
-        self.0.get() as usize
-    }
 }
 
 impl Id for NodeId {
     fn index(&self) -> usize {
-        NodeId::index(*self)
+        self.0.get() as usize
     }
 }
 

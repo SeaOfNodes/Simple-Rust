@@ -1,6 +1,7 @@
 use std::fmt;
 use std::fmt::Display;
 
+use crate::datastructures::id::Id;
 use crate::datastructures::id_set::IdSet;
 use crate::soup::nodes::{Node, NodeId, Nodes};
 

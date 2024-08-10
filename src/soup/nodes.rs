@@ -5,6 +5,7 @@ use std::ops::{Index, IndexMut};
 pub use id::NodeId;
 pub use node::{BoolOp, Node, PhiNode, ProjNode, ScopeNode};
 
+use crate::datastructures::id::Id;
 use crate::datastructures::id_vec::IdVec;
 use crate::soup::types::Ty;
 

@@ -1,5 +1,6 @@
 use std::mem;
 
+use crate::datastructures::id::Id;
 use crate::soup::graph_visualizer;
 use crate::soup::nodes::{BoolOp, Node, NodeCreation, NodeId, Nodes, ScopeNode};
 use crate::soup::types::{Int, Ty, Type, Types};
