@@ -166,6 +166,9 @@ pub struct Return {
 pub struct If {
     // Unlike {condition, then_expr, optional_else_expr} this
     // representation enforces that both branches are blocks.
+    // 
+    // This might have been simpler:
+    //     enum IfElse { If(Expression, Block, Option<Box<IfElse>>), Else(Block) }
     pub cases: Vec<(Expression, Block)>,
     pub else_block: Option<Block>,
 }

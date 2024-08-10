@@ -3,13 +3,16 @@ use std::mem;
 use crate::soup::graph_visualizer;
 use crate::soup::nodes::{BoolOp, Node, NodeCreation, NodeId, Nodes, ScopeNode};
 use crate::soup::types::{Ty, Types};
-use crate::syntax::ast::{BinaryOperator, Block, Expression, Function, PrefixOperator, Statement};
+use crate::syntax::ast::{
+    BinaryOperator, Block, Expression, Function, If, PrefixOperator, Statement,
+};
 use crate::syntax::formatter::{CodeStyle, FormatCode};
 
 pub struct Soup<'t> {
     pub nodes: Nodes<'t>,
     pub(crate) stop: NodeId,
     pub(crate) scope: NodeId,
+    pub(crate) x_scopes: Vec<NodeId>,
     errors: Vec<String>,
     arg: Option<Ty<'t>>,
 }
@@ -20,6 +23,7 @@ impl<'t> Soup<'t> {
             nodes: Nodes::new(),
             stop: NodeId::DUMMY,
             scope: NodeId::DUMMY,
+            x_scopes: vec![],
             errors: vec![],
             arg: None,
         }
@@ -42,6 +46,7 @@ impl<'t> Soup<'t> {
 
         // if we didn't call peephole we might have to manually set the computed type like in the java constructor
         self.scope = self.create_peepholed(types, Node::make_scope());
+        self.x_scopes.push(self.scope);
 
         let body = function.body.as_ref().unwrap();
 
@@ -64,10 +69,9 @@ impl<'t> Soup<'t> {
         let ret = self.compile_block(&body, types);
 
         self.nodes.scope_pop(self.scope);
+        self.x_scopes.pop();
 
-        if !matches!(self.nodes[ret], Node::Return) {
-            todo!("create return for value block");
-        }
+        // TODO if the block didn't return unconditionally we have to create a return instruction
 
         self.nodes.peephole(self.stop, types);
 
@@ -98,7 +102,10 @@ impl<'t> Soup<'t> {
                     self.nodes.add_def(self.stop, result);
                     self.set_ctrl(None);
                 }
-                Statement::If(_) => todo!(),
+                Statement::If(i) => {
+                    self.compile_if(i, 0, types);
+                    result = Some(self.create_unit(types)); // TODO make if statements return a value
+                }
                 Statement::Var(var) => {
                     let value = self.compile_expression(&var.expression, types);
                     if let Err(()) =
@@ -124,6 +131,59 @@ impl<'t> Soup<'t> {
         result.unwrap_or_else(|| self.create_unit(types))
     }
 
+    fn compile_if(&mut self, if_: &If, case_index: usize, types: &mut Types<'t>) {
+        let (predicate, then_block) = &if_.cases[case_index];
+
+        let predicate = self.compile_expression(predicate, types);
+
+        let if_node = self.create_peepholed(types, Node::make_if(self.ctrl().unwrap(), predicate));
+
+        let if_true = self.create_peepholed(types, Node::make_proj(if_node, 0, "True".to_string()));
+        let if_false =
+            self.create_peepholed(types, Node::make_proj(if_node, 1, "False".to_string()));
+
+        // In if true branch, the ifT proj node becomes the ctrl
+        // But first clone the scope and set it as current
+        let n_defs = self.nodes.inputs[self.scope].len();
+        let mut false_scope = self.nodes.scope_dup(self.scope);
+        self.x_scopes.push(false_scope);
+
+        self.set_ctrl(Some(if_true));
+        self.compile_block(then_block, types);
+
+        let true_scope = self.scope;
+
+        self.scope = false_scope;
+        self.set_ctrl(Some(if_false));
+
+        if case_index + 1 == if_.cases.len() {
+            if let Some(else_block) = &if_.else_block {
+                self.compile_block(else_block, types);
+            }
+        } else {
+            self.compile_if(if_, case_index + 1, types);
+        }
+
+        false_scope = self.scope;
+
+        assert_eq!(
+            n_defs,
+            self.nodes.inputs[true_scope].len(),
+            "Cannot define a new name on one arm of an if"
+        );
+        assert_eq!(
+            n_defs,
+            self.nodes.inputs[false_scope].len(),
+            "Cannot define a new name on one arm of an if"
+        );
+
+        self.scope = true_scope;
+        self.x_scopes.pop();
+
+        let merged = self.nodes.scope_merge(true_scope, false_scope, types);
+        self.set_ctrl(Some(merged));
+    }
+
     fn create_unit(&mut self, types: &mut Types<'t>) -> NodeId {
         // TODO return type Unit or something like that
         self.create_peepholed(types, Node::make_constant(self.nodes.start, types.ty_zero))
@@ -133,6 +193,10 @@ impl<'t> Soup<'t> {
         match expression {
             Expression::Immediate(immediate) => {
                 let ty = types.get_int(*immediate);
+                self.create_peepholed(types, Node::make_constant(self.nodes.start, ty))
+            }
+            Expression::Boolean(b) => {
+                let ty = if *b { types.ty_one } else { types.ty_zero };
                 self.create_peepholed(types, Node::make_constant(self.nodes.start, ty))
             }
             Expression::Identifier(identifier) => {
