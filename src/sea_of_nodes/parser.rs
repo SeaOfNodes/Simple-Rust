@@ -61,7 +61,7 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
         }
     }
 
-    fn src(&self) -> &'s str {
+    pub fn src(&self) -> &'s str {
         self.lexer.source
     }
 
@@ -95,7 +95,7 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
             .scope_define(self.scope, ScopeNode::ARG0.to_string(), arg0)
             .expect("not in scope");
 
-        self.parse_block();
+        self.parse_block()?;
 
         self.nodes.scope_pop(self.scope);
         self.x_scopes.pop();
@@ -221,6 +221,10 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
     /// Dumps out the node graph
     fn show_graph(&mut self) {
         todo!("print dot ouput");
+    }
+    
+    pub fn print_stop(&mut self) -> String {
+        self.nodes.print(Some(self.stop)).to_string()
     }
 
     /// <pre>

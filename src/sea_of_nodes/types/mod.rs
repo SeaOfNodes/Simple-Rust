@@ -1,8 +1,6 @@
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use crate::datastructures::arena::Arena;
-use crate::modules::ParsedModule;
 pub use crate::sea_of_nodes::types::r#type::*;
 pub use crate::sea_of_nodes::types::ty::Ty;
 
@@ -87,10 +85,6 @@ impl<'a> Types<'a> {
 
     pub fn get_tuple(&mut self, types: Vec<Ty<'a>>) -> Ty<'a> {
         self.interner.intern(Type::Tuple { types })
-    }
-
-    pub fn get_module(&mut self, module: Arc<ParsedModule>) -> Ty<'a> {
-        self.interner.intern(Type::Module(module))
     }
 
     pub fn meet(&mut self, a: Ty<'a>, b: Ty<'a>) -> Ty<'a> {

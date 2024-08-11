@@ -1,9 +1,7 @@
 use std::fmt;
 use std::fmt::Display;
 use std::hash::Hash;
-use std::sync::Arc;
 
-use crate::modules::ParsedModule;
 use crate::sea_of_nodes::types::Ty;
 
 #[derive(Eq, PartialEq, Clone, Hash, Debug)]
@@ -13,7 +11,6 @@ pub enum Type<'a> {
     Ctrl, // control flow bottom
     Int(Int),
     Tuple { types: Vec<Ty<'a>> },
-    Module(Arc<ParsedModule>),
 }
 
 #[derive(Eq, PartialEq, Clone, Hash, Debug)]
@@ -31,20 +28,12 @@ impl<'t> Type<'t> {
             Type::Ctrl => false,
             Type::Int(i) => matches!(i, Int::Constant(_)),
             Type::Tuple { .. } => false,
-            Type::Module { .. } => todo!(),
         }
     }
 
     pub fn unwrap_int(&'t self) -> i64 {
         match self {
             Type::Int(Int::Constant(value)) => *value,
-            _ => unreachable!(),
-        }
-    }
-
-    pub fn unwrap_module(&'t self) -> &'t ParsedModule {
-        match self {
-            Type::Module(m) => m,
             _ => unreachable!(),
         }
     }
@@ -69,7 +58,6 @@ impl<'t> Display for Type<'t> {
                 }
                 return write!(f, "]");
             }
-            Type::Module(_) => todo!(),
         })
     }
 }

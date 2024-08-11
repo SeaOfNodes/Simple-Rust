@@ -1,363 +1,177 @@
-use std::path::Path;
-
 use crate::datastructures::arena::Arena;
 use crate::sea_of_nodes::nodes::Node;
-use crate::sea_of_nodes::soup::Soup;
+use crate::sea_of_nodes::parser::Parser;
 use crate::sea_of_nodes::types::Types;
-use crate::syntax::ast::Item;
-use crate::syntax::parser::Parser;
 
 #[test]
 fn test_peephole() {
-    let parser = Parser::new(
-        "fun main(arg: Int) -> Int { return 1+(arg+2); #show_graph; }",
-        Path::new("dummy.ro"),
-    );
-    let ast = parser.parse().expect("should parse");
     let mut arena = Arena::new();
     let mut types = Types::new(&mut arena);
-    let mut soup = Soup::new();
+    let mut parser = Parser::new("return 1+arg+2; #showGraph;", &mut types);
+    let _stop = parser.parse().unwrap();
 
-    let Item::Function(function) = &ast.items[0] else {
-        unreachable!("expect function")
-    };
-    let stop = soup
-        .compile_function(function, &mut types)
-        .expect("should compile");
-
-    assert_eq!("return (arg+3);", soup.nodes.print(Some(stop)).to_string());
+    assert_eq!("return (arg+3);", parser.print_stop());
 }
 
 #[test]
 fn test_peephole_2() {
-    let parser = Parser::new(
-        "fun main(arg: Int) -> Int { return (1+arg)+2; }",
-        Path::new("dummy.ro"),
-    );
-    let ast = parser.parse().expect("should parse");
     let mut arena = Arena::new();
     let mut types = Types::new(&mut arena);
-    let mut soup = Soup::new();
+    let mut parser = Parser::new("return (1+arg)+2;", &mut types);
+    let _stop = parser.parse().unwrap();
 
-    let Item::Function(function) = &ast.items[0] else {
-        unreachable!("expect function")
-    };
-    let stop = soup
-        .compile_function(function, &mut types)
-        .expect("should compile");
-
-    assert_eq!("return (arg+3);", soup.nodes.print(Some(stop)).to_string());
+    assert_eq!("return (arg+3);", parser.print_stop());
 }
 
 #[test]
 fn test_add_0() {
-    let parser = Parser::new(
-        "fun main(arg: Int) -> Int { return 0+arg; }",
-        Path::new("dummy.ro"),
-    );
-    let ast = parser.parse().expect("should parse");
     let mut arena = Arena::new();
     let mut types = Types::new(&mut arena);
-    let mut soup = Soup::new();
+    let mut parser = Parser::new("return 0+arg;", &mut types);
+    let _stop = parser.parse().unwrap();
 
-    let Item::Function(function) = &ast.items[0] else {
-        unreachable!("expect function")
-    };
-    let stop = soup
-        .compile_function(function, &mut types)
-        .expect("should compile");
-
-    assert_eq!("return arg;", soup.nodes.print(Some(stop)).to_string());
+    assert_eq!("return arg;", parser.print_stop());
 }
 
 #[test]
 fn test_add_add_mul() {
-    let parser = Parser::new(
-        "fun main(arg: Int) -> Int { return arg+0+arg; }",
-        Path::new("dummy.ro"),
-    );
-    let ast = parser.parse().expect("should parse");
     let mut arena = Arena::new();
     let mut types = Types::new(&mut arena);
-    let mut soup = Soup::new();
+    let mut parser = Parser::new("return arg+0+arg;", &mut types);
+    let _stop = parser.parse().unwrap();
 
-    let Item::Function(function) = &ast.items[0] else {
-        unreachable!("expect function")
-    };
-    let stop = soup
-        .compile_function(function, &mut types)
-        .expect("should compile");
-
-    assert_eq!("return (arg*2);", soup.nodes.print(Some(stop)).to_string());
+    assert_eq!("return (arg*2);", parser.print_stop());
 }
 
 #[test]
 fn test_peephole_3() {
-    let parser = Parser::new(
-        "fun main(arg: Int) -> Int { return 1+arg+2+arg+3; #show_graph; }",
-        Path::new("dummy.ro"),
-    );
-    let ast = parser.parse().expect("should parse");
     let mut arena = Arena::new();
     let mut types = Types::new(&mut arena);
-    let mut soup = Soup::new();
+    let mut parser = Parser::new("return 1+arg+2+arg+3; #showGraph;", &mut types);
+    let _stop = parser.parse().unwrap();
 
-    let Item::Function(function) = &ast.items[0] else {
-        unreachable!("expect function")
-    };
-    let stop = soup
-        .compile_function(function, &mut types)
-        .expect("should compile");
-
-    assert_eq!(
-        "return ((arg*2)+6);",
-        soup.nodes.print(Some(stop)).to_string()
-    );
+    assert_eq!("return ((arg*2)+6);", parser.print_stop());
 }
 
 #[test]
 fn test_mul_1() {
-    let parser = Parser::new(
-        "fun main(arg: Int) -> Int { return 1*arg; }",
-        Path::new("dummy.ro"),
-    );
-    let ast = parser.parse().expect("should parse");
     let mut arena = Arena::new();
     let mut types = Types::new(&mut arena);
-    let mut soup = Soup::new();
+    let mut parser = Parser::new("return 1*arg;", &mut types);
+    let _stop = parser.parse().unwrap();
 
-    let Item::Function(function) = &ast.items[0] else {
-        unreachable!("expect function")
-    };
-    let stop = soup
-        .compile_function(function, &mut types)
-        .expect("should compile");
-
-    assert_eq!("return arg;", soup.nodes.print(Some(stop)).to_string());
+    assert_eq!("return arg;", parser.print_stop());
 }
 
 #[test]
 fn test_var_arg() {
-    let parser = Parser::new(
-        "fun main(arg: Int) -> Int { return arg; #show_graph; }",
-        Path::new("dummy.ro"),
-    );
-    let ast = parser.parse().expect("should parse");
     let mut arena = Arena::new();
     let mut types = Types::new(&mut arena);
-    let mut soup = Soup::new();
+    let arg = types.ty_bot;
+    let mut parser = Parser::new_with_arg("return arg; #showGraph;", &mut types, arg);
+    let stop = parser.parse().unwrap();
 
-    soup.set_arg(types.ty_bot);
-
-    let Item::Function(function) = &ast.items[0] else {
-        unreachable!("expect function")
-    };
-    let stop = soup
-        .compile_function(function, &mut types)
-        .expect("should compile");
-
-    assert!(matches!(&soup.nodes[stop], Node::Stop));
-    let ret = soup.nodes.unique_input(stop).expect("has one ret");
-    assert!(matches!(&soup.nodes[ret], Node::Return));
+    assert!(matches!(&parser.nodes[stop], Node::Stop));
+    let ret = parser.nodes.unique_input(stop).expect("has one ret");
+    assert!(matches!(&parser.nodes[ret], Node::Return));
 
     assert!(matches!(
-        soup.nodes[soup.nodes.inputs[ret][0].unwrap()],
+        parser.nodes[parser.nodes.inputs[ret][0].unwrap()],
         Node::Proj(_)
     ));
     assert!(matches!(
-        soup.nodes[soup.nodes.inputs[ret][1].unwrap()],
+        parser.nodes[parser.nodes.inputs[ret][1].unwrap()],
         Node::Proj(_)
     ));
 }
 
 #[test]
 fn test_constant_arg() {
-    let parser = Parser::new(
-        "fun main(arg: Int) -> Int { return arg; #show_graph; }",
-        Path::new("dummy.ro"),
-    );
-    let ast = parser.parse().expect("should parse");
     let mut arena = Arena::new();
     let mut types = Types::new(&mut arena);
-    let mut soup = Soup::new();
+    let arg = types.get_int(2);
+    let mut parser = Parser::new_with_arg("return arg; #showGraph;", &mut types, arg);
+    let _stop = parser.parse().unwrap();
 
-    soup.set_arg(types.get_int(2));
-
-    let Item::Function(function) = &ast.items[0] else {
-        unreachable!("expect function")
-    };
-    let stop = soup
-        .compile_function(function, &mut types)
-        .expect("should compile");
-
-    assert_eq!("return 2;", soup.nodes.print(Some(stop)).to_string());
+    assert_eq!("return 2;", parser.print_stop());
 }
 
 #[test]
 fn test_comp_eq() {
-    let parser = Parser::new(
-        "fun main() -> Int { return 3 == 3; #show_graph; }",
-        Path::new("dummy.ro"),
-    );
-    let ast = parser.parse().expect("should parse");
     let mut arena = Arena::new();
     let mut types = Types::new(&mut arena);
-    let mut soup = Soup::new();
+    let mut parser = Parser::new("return 3==3; #showGraph;", &mut types);
+    let _stop = parser.parse().unwrap();
 
-    let Item::Function(function) = &ast.items[0] else {
-        unreachable!("expect function")
-    };
-    let stop = soup
-        .compile_function(function, &mut types)
-        .expect("should compile");
-
-    assert_eq!("return 1;", soup.nodes.print(Some(stop)).to_string());
+    assert_eq!("return 1;", parser.print_stop());
 }
 
 #[test]
 fn test_comp_eq_2() {
-    let parser = Parser::new(
-        "fun main() -> Int { return 3 == 4; #show_graph; }",
-        Path::new("dummy.ro"),
-    );
-    let ast = parser.parse().expect("should parse");
     let mut arena = Arena::new();
     let mut types = Types::new(&mut arena);
-    let mut soup = Soup::new();
+    let mut parser = Parser::new("return 3==4; #showGraph;", &mut types);
+    let _stop = parser.parse().unwrap();
 
-    let Item::Function(function) = &ast.items[0] else {
-        unreachable!("expect function")
-    };
-    let stop = soup
-        .compile_function(function, &mut types)
-        .expect("should compile");
-
-    assert_eq!("return 0;", soup.nodes.print(Some(stop)).to_string());
+    assert_eq!("return 0;", parser.print_stop());
 }
 #[test]
 fn test_comp_neq() {
-    let parser = Parser::new(
-        "fun main() -> Int { return 3 != 3; #show_graph; }",
-        Path::new("dummy.ro"),
-    );
-    let ast = parser.parse().expect("should parse");
     let mut arena = Arena::new();
     let mut types = Types::new(&mut arena);
-    let mut soup = Soup::new();
+    let mut parser = Parser::new("return 3!=3; #showGraph;", &mut types);
+    let _stop = parser.parse().unwrap();
 
-    let Item::Function(function) = &ast.items[0] else {
-        unreachable!("expect function")
-    };
-    let stop = soup
-        .compile_function(function, &mut types)
-        .expect("should compile");
-
-    assert_eq!("return 0;", soup.nodes.print(Some(stop)).to_string());
+    assert_eq!("return 0;", parser.print_stop());
 }
 
 #[test]
 fn test_comp_neq_2() {
-    let parser = Parser::new(
-        "fun main() -> Int { return 3 != 4; #show_graph; }",
-        Path::new("dummy.ro"),
-    );
-    let ast = parser.parse().expect("should parse");
     let mut arena = Arena::new();
     let mut types = Types::new(&mut arena);
-    let mut soup = Soup::new();
+    let mut parser = Parser::new("return 3!=4; #showGraph;", &mut types);
+    let _stop = parser.parse().unwrap();
 
-    let Item::Function(function) = &ast.items[0] else {
-        unreachable!("expect function")
-    };
-    let stop = soup
-        .compile_function(function, &mut types)
-        .expect("should compile");
-
-    assert_eq!("return 1;", soup.nodes.print(Some(stop)).to_string());
+    assert_eq!("return 1;", parser.print_stop());
 }
 
 #[test]
 fn test_bug_1() {
-    let parser = Parser::new(
-        "fun main(arg: Int) -> Int { var a: Int = arg + 1; var b = a; b=1; return a+2; #show_graph; }",
-        Path::new("dummy.ro"),
-    );
-    let ast = parser.parse().expect("should parse");
     let mut arena = Arena::new();
     let mut types = Types::new(&mut arena);
-    let mut soup = Soup::new();
+    let mut parser = Parser::new(
+        "int a=arg+1; int b=a; b=1; return a+2; #showGraph;",
+        &mut types,
+    );
+    let _stop = parser.parse().unwrap();
 
-    let Item::Function(function) = &ast.items[0] else {
-        unreachable!("expect function")
-    };
-    let stop = soup
-        .compile_function(function, &mut types)
-        .expect("should compile");
-
-    assert_eq!("return (arg+3);", soup.nodes.print(Some(stop)).to_string());
+    assert_eq!("return (arg+3);", parser.print_stop());
 }
 
 #[test]
 fn test_bug_2() {
-    let parser = Parser::new(
-        "fun main(arg: Int) -> Int { var a: Int = arg + 1; a = a; return a; #show_graph; }",
-        Path::new("dummy.ro"),
-    );
-    let ast = parser.parse().expect("should parse");
     let mut arena = Arena::new();
     let mut types = Types::new(&mut arena);
-    let mut soup = Soup::new();
+    let mut parser = Parser::new("int a=arg+1; a=a; return a; #showGraph;", &mut types);
+    let _stop = parser.parse().unwrap();
 
-    let Item::Function(function) = &ast.items[0] else {
-        unreachable!("expect function")
-    };
-    let stop = soup
-        .compile_function(function, &mut types)
-        .expect("should compile");
-
-    assert_eq!("return (arg+1);", soup.nodes.print(Some(stop)).to_string());
+    assert_eq!("return (arg+1);", parser.print_stop());
 }
 
 #[test]
 fn test_bug_3() {
-    let parser = Parser::new(
-        "fun main() -> Int { vara = 1; return a; }",
-        Path::new("dummy.ro"),
-    );
-    let ast = parser.parse().expect("should parse");
     let mut arena = Arena::new();
     let mut types = Types::new(&mut arena);
-    let mut soup = Soup::new();
-
-    let Item::Function(function) = &ast.items[0] else {
-        unreachable!("expect function")
-    };
-    let errors = soup
-        .compile_function(function, &mut types)
-        .expect_err("should not compile");
-
-    assert_eq!(errors.len(), 2);
-    assert!(errors[0].contains("not in scope"));
-    assert!(errors[0].contains("not in scope"));
+    let mut parser = Parser::new("inta=1; return a;", &mut types);
+    assert_eq!(Err("Undefined name 'inta'".to_string()), parser.parse());
 }
 
 #[test]
 fn test_bug_4() {
-    let parser = Parser::new(
-        "fun main(arg: Int) -> Int { return -arg; }",
-        Path::new("dummy.ro"),
-    );
-    let ast = parser.parse().expect("should parse");
     let mut arena = Arena::new();
     let mut types = Types::new(&mut arena);
-    let mut soup = Soup::new();
+    let mut parser = Parser::new("return -arg;", &mut types);
+    let _stop = parser.parse().unwrap();
 
-    let Item::Function(function) = &ast.items[0] else {
-        unreachable!("expect function")
-    };
-    let stop = soup
-        .compile_function(function, &mut types)
-        .expect("should compile");
-
-    assert_eq!("return (-arg);", soup.nodes.print(Some(stop)).to_string());
+    assert_eq!("return (-arg);", parser.print_stop());
 }

@@ -3,24 +3,28 @@ use std::collections::HashSet;
 use std::fmt;
 
 use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
-use crate::sea_of_nodes::soup::Soup;
+use crate::sea_of_nodes::parser::Parser;
 
-pub fn generate_dot_output(soup: &Soup) -> Result<String, fmt::Error> {
-    let all = find_all(soup);
+pub fn generate_dot_output(parser: &Parser) -> Result<String, fmt::Error> {
+    let all = find_all(parser);
 
     let mut sb = String::new();
     writeln!(sb, "digraph chapter05 {{")?;
+    writeln!(sb, "/*")?;
+    writeln!(sb, "{}", parser.src())?;
+    writeln!(sb, "*/")?;
+    
     // TODO write /* file.ro */
     writeln!(sb, "\trankdir=BT;")?;
     writeln!(sb, "\tordering=\"in\";")?;
     writeln!(sb, "\tconcentrate=\"true\";")?;
-    nodes(&mut sb, &soup.nodes, &all)?;
-    for scope in &soup.x_scopes {
-        scopes(&mut sb, &soup.nodes, *scope)?;
+    nodes(&mut sb, &parser.nodes, &all)?;
+    for scope in &parser.x_scopes {
+        scopes(&mut sb, &parser.nodes, *scope)?;
     }
-    node_edges(&mut sb, &soup.nodes, &all)?;
-    for scope in &soup.x_scopes {
-        scope_edges(&mut sb, &soup.nodes, *scope)?;
+    node_edges(&mut sb, &parser.nodes, &all)?;
+    for scope in &parser.x_scopes {
+        scope_edges(&mut sb, &parser.nodes, *scope)?;
     }
     writeln!(sb, "}}")?;
     Ok(sb)
@@ -203,20 +207,20 @@ fn def_name(nodes: &Nodes, def: NodeId) -> String {
     }
 }
 
-fn find_all(soup: &Soup) -> HashSet<NodeId> {
-    let start = soup.nodes.start;
+fn find_all(parser: &Parser) -> HashSet<NodeId> {
+    let start = parser.nodes.start;
     let mut all = HashSet::new();
-    for output in &soup.nodes.outputs[start] {
-        walk(&soup.nodes, &mut all, *output);
+    for output in &parser.nodes.outputs[start] {
+        walk(&parser.nodes, &mut all, *output);
     }
 
-    let Node::Scope(scope) = &soup.nodes[soup.scope] else {
+    let Node::Scope(scope) = &parser.nodes[parser.scope] else {
         unreachable!();
     };
     for s in &scope.scopes {
         for index in s.values() {
-            if let Some(input) = soup.nodes.inputs[soup.scope][*index] {
-                walk(&soup.nodes, &mut all, input)
+            if let Some(input) = parser.nodes.inputs[parser.scope][*index] {
+                walk(&parser.nodes, &mut all, input)
             }
         }
     }
