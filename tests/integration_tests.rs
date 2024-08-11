@@ -25,18 +25,6 @@ macro_rules! relative_path {
 }
 
 // mod test_0001_return_0;
-// mod test_0002_return_42;
-// mod test_0003_return_addition;
-// mod test_0004_function_call;
-// mod test_0005_two_statements;
-// mod test_0006_params_and_args;
-// mod test_0007_call_putchar;
-// mod test_0008_puts_string;
-// mod test_0009_if;
-// mod test_0010_conditional_return;
-// mod test_0011_variable;
-// mod test_0012_pointer;
-// mod test_0013_enums;
 
 struct Test<'a> {
     directory: PathBuf,

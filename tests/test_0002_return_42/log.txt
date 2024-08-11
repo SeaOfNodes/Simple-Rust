@@ -1,7 +1,0 @@
-directory: tests/test_0002_return_42
-
-command: ro "main.ro"
-status: 0
-
-command: main
-status: 42

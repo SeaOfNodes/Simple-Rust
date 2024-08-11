@@ -1,7 +1,0 @@
-fun puts(s: NullTerminatedString) -> I32;
-
-fun main() -> I32 {
-    puts("Hello, World!");
-    puts("Another string to check if the null byte was added after the first one.");
-    return 12;
-}

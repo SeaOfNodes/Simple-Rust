@@ -1,3 +1,0 @@
-fun main() -> I32 {
-    return 42;
-}
