@@ -218,7 +218,10 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
 
     /// Dumps out the node graph
     pub fn show_graph(&mut self) {
-        println!("{}", graph_visualizer::generate_dot_output(self).unwrap());
+        let dot = graph_visualizer::generate_dot_output(self).unwrap();
+        println!("{dot}");
+        // uncomment to open in browser:
+        // graph_visualizer::run_graphviz_and_chromium(dot);
     }
 
     pub fn print_stop(&mut self) -> String {

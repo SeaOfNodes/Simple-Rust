@@ -1,9 +1,54 @@
 use fmt::Write;
 use std::collections::HashSet;
 use std::fmt;
+use std::process::{Command, Stdio};
+use std::sync::Mutex;
+use std::time::Duration;
 
 use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
 use crate::sea_of_nodes::parser::Parser;
+
+pub fn run_graphviz_and_chromium(input: String) {
+    let child = Command::new(&"bash")
+        .args(["-c", "dot -Tsvg | base64"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+
+    use std::io::Write;
+    child
+        .stdin
+        .as_ref()
+        .unwrap()
+        .write_all(input.as_ref())
+        .unwrap();
+
+    let output = child.wait_with_output().unwrap();
+
+    assert_eq!(String::from_utf8(output.stderr).unwrap(), "");
+    assert_eq!(output.status.code(), Some(0));
+
+    let url = format!(
+        "data:image/svg+xml;base64,{}",
+        std::str::from_utf8(&output.stdout).unwrap()
+    );
+
+    static LOCK: Mutex<()> = Mutex::new(());
+    let _guard = LOCK.lock().unwrap();
+
+    // using chromium becasue firefox only displays it after manually selecting the address hitting enter
+    Command::new(&"chromium")
+        .arg(url)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+
+    std::thread::sleep(Duration::from_millis(1000)); // give it some time...
+}
 
 pub fn generate_dot_output(parser: &Parser) -> Result<String, fmt::Error> {
     let all = find_all(parser);
@@ -13,7 +58,7 @@ pub fn generate_dot_output(parser: &Parser) -> Result<String, fmt::Error> {
     writeln!(sb, "/*")?;
     writeln!(sb, "{}", parser.src())?;
     writeln!(sb, "*/")?;
-    
+
     // TODO write /* file.ro */
     writeln!(sb, "\trankdir=BT;")?;
     writeln!(sb, "\tordering=\"in\";")?;
