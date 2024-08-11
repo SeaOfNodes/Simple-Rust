@@ -1,11 +1,12 @@
 use crate::datastructures::arena::Arena;
 use crate::sea_of_nodes::parser::Parser;
+use crate::sea_of_nodes::tests::test_error;
 use crate::sea_of_nodes::types::Types;
 
 #[test]
 fn test_if_stmt() {
-    let mut arena = Arena::new();
-    let mut types = Types::new(&mut arena);
+    let arena = Arena::new();
+    let mut types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
 int a = 1;
@@ -26,8 +27,8 @@ return a;",
 
 #[test]
 fn test_test() {
-    let mut arena = Arena::new();
-    let mut types = Types::new(&mut arena);
+    let arena = Arena::new();
+    let mut types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
 int c = 3;
@@ -45,8 +46,8 @@ return c;",
 }
 #[test]
 fn test_return2() {
-    let mut arena = Arena::new();
-    let mut types = Types::new(&mut arena);
+    let arena = Arena::new();
+    let mut types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
 if( arg==1 )
@@ -62,8 +63,8 @@ else
 }
 #[test]
 fn test_if_merge_b() {
-    let mut arena = Arena::new();
-    let mut types = Types::new(&mut arena);
+    let arena = Arena::new();
+    let mut types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
 int a=arg+1;
@@ -81,8 +82,8 @@ return a+b;",
 }
 #[test]
 fn test_if_merge2() {
-    let mut arena = Arena::new();
-    let mut types = Types::new(&mut arena);
+    let arena = Arena::new();
+    let mut types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
 int a=arg+1;
@@ -103,8 +104,8 @@ return a+b;",
 }
 #[test]
 fn test_merge3() {
-    let mut arena = Arena::new();
-    let mut types = Types::new(&mut arena);
+    let arena = Arena::new();
+    let mut types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
 int a=1;
@@ -130,8 +131,8 @@ return a;
 }
 #[test]
 fn test_merge4() {
-    let mut arena = Arena::new();
-    let mut types = Types::new(&mut arena);
+    let arena = Arena::new();
+    let mut types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
 int a=0;
@@ -153,8 +154,8 @@ return arg+a+b;
 }
 #[test]
 fn test_merge5() {
-    let mut arena = Arena::new();
-    let mut types = Types::new(&mut arena);
+    let arena = Arena::new();
+    let mut types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
 int a=arg==2;
@@ -171,8 +172,8 @@ return a;",
 }
 #[test]
 fn test_true() {
-    let mut arena = Arena::new();
-    let mut types = Types::new(&mut arena);
+    let arena = Arena::new();
+    let mut types = Types::new(&arena);
     let mut parser = Parser::new("return true;", &mut types);
     let _stop = parser.parse().unwrap();
 
@@ -180,75 +181,51 @@ fn test_true() {
 }
 #[test]
 fn test_half_def() {
-    let mut arena = Arena::new();
-    let mut types = Types::new(&mut arena);
-    let mut parser = Parser::new("if( arg==1 ) int b=2; return b;", &mut types);
-    assert_eq!(
-        Err("Cannot define a new name on one arm of an if".to_string()),
-        parser.parse()
+    test_error(
+        "if( arg==1 ) int b=2; return b;",
+        "Cannot define a new name on one arm of an if",
     );
 }
 #[test]
 fn test_half_def2() {
-    let mut arena = Arena::new();
-    let mut types = Types::new(&mut arena);
-    let mut parser = Parser::new(
+    test_error(
         "if( arg==1 ) { int b=2; } else { int b=3; } return b;",
-        &mut types,
+        "Undefined name 'b'",
     );
-    assert_eq!(Err("Undefined name 'b'".to_string()), parser.parse());
 }
 #[test]
 fn test_regress1() {
-    let mut arena = Arena::new();
-    let mut types = Types::new(&mut arena);
-    let mut parser = Parser::new("if(arg==2) int a=1; else int b=2; return a;", &mut types);
-    assert_eq!(
-        Err("Cannot define a new name on one arm of an if".to_string()),
-        parser.parse()
+    test_error(
+        "if(arg==2) int a=1; else int b=2; return a;",
+        "Cannot define a new name on one arm of an if",
     );
 }
 #[test]
 fn test_bad_num() {
-    let mut arena = Arena::new();
-    let mut types = Types::new(&mut arena);
-    let mut parser = Parser::new("return 1-;", &mut types);
-    assert_eq!(
-        Err("Syntax error, expected an identifier or expression: ;".to_string()),
-        parser.parse()
+    test_error(
+        "return 1-;",
+        "Syntax error, expected an identifier or expression: ;",
     );
 }
 #[test]
 fn test_keyword1() {
-    let mut arena = Arena::new();
-    let mut types = Types::new(&mut arena);
-    let mut parser = Parser::new("int true=0; return true;", &mut types);
-    assert_eq!(
-        Err("Expected an identifier, found 'true'".to_string()),
-        parser.parse()
+    test_error(
+        "int true=0; return true;",
+        "Expected an identifier, found 'true'",
     );
 }
 
 #[test]
 fn test_keyword2() {
-    let mut arena = Arena::new();
-    let mut types = Types::new(&mut arena);
-    let mut parser = Parser::new(
+    test_error(
         "int else=arg; if(else) else=2; else else=1; return else;",
-        &mut types,
-    );
-    assert_eq!(
-        Err("Expected an identifier, found 'else'".to_string()),
-        parser.parse()
+        "Expected an identifier, found 'else'",
     );
 }
 #[test]
 fn test_keyword3() {
-    let mut arena = Arena::new();
-    let mut types = Types::new(&mut arena);
-    let mut parser = Parser::new("int a=1; ififif(arg)inta=2;return a;", &mut types);
-    assert_eq!(
-        Err("Syntax error, expected =: (".to_string()),
-        parser.parse()
+    test_error(
+        "int a=1; ififif(arg)inta=2;return a;",
+        "Syntax error, expected =: (",
     );
 }

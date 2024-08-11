@@ -1,12 +1,13 @@
 use crate::datastructures::arena::Arena;
 use crate::sea_of_nodes::nodes::Node;
 use crate::sea_of_nodes::parser::Parser;
+use crate::sea_of_nodes::tests::test_error;
 use crate::sea_of_nodes::types::Types;
 
 #[test]
 fn test_simple_program() {
-    let mut arena = Arena::new();
-    let mut types = Types::new(&mut arena);
+    let arena = Arena::new();
+    let mut types = Types::new(&arena);
     let mut parser = Parser::new("return 1;", &mut types);
     let stop = parser.parse().unwrap();
 
@@ -28,8 +29,8 @@ fn test_simple_program() {
 
 #[test]
 fn test_zero() {
-    let mut arena = Arena::new();
-    let mut types = Types::new(&mut arena);
+    let arena = Arena::new();
+    let mut types = Types::new(&arena);
     let mut parser = Parser::new("return 0;", &mut types);
     let _stop = parser.parse().unwrap();
 
@@ -46,30 +47,21 @@ fn test_zero() {
 
 #[test]
 fn test_bad1() {
-    let mut arena = Arena::new();
-    let mut types = Types::new(&mut arena);
-
-    assert_eq!(
-        Err("Syntax error, expected =: ".to_string()),
-        Parser::new("ret", &mut types).parse()
-    );
+    test_error("ret", "Syntax error, expected =: ");
 }
 
 #[test]
 fn test_bad2() {
-    let mut arena = Arena::new();
-    let mut types = Types::new(&mut arena);
-
-    assert_eq!(
-        Err("Syntax error: integer values cannot start with '0'".to_string()),
-        Parser::new("return 0123;", &mut types).parse()
+    test_error(
+        "return 0123;",
+        "Syntax error: integer values cannot start with '0'",
     );
 }
 
 #[test]
 fn test_not_bad3() {
-    let mut arena = Arena::new();
-    let mut types = Types::new(&mut arena);
+    let arena = Arena::new();
+    let mut types = Types::new(&arena);
     let mut parser = Parser::new("return --12;", &mut types);
     let _stop = parser.parse().unwrap();
 
@@ -79,19 +71,13 @@ fn test_not_bad3() {
 
 #[test]
 fn test_bad4() {
-    let mut arena = Arena::new();
-    let mut types = Types::new(&mut arena);
-
-    assert_eq!(
-        Err("Syntax error, expected ;: ".to_string()),
-        Parser::new("return 100", &mut types).parse()
-    );
+    test_error("return 100", "Syntax error, expected ;: ")
 }
 
 #[test]
 fn test_not_bad5() {
-    let mut arena = Arena::new();
-    let mut types = Types::new(&mut arena);
+    let arena = Arena::new();
+    let mut types = Types::new(&arena);
     let mut parser = Parser::new("return -100;", &mut types);
     let _stop = parser.parse().unwrap();
 
@@ -101,22 +87,10 @@ fn test_not_bad5() {
 
 #[test]
 fn test_bad6() {
-    let mut arena = Arena::new();
-    let mut types = Types::new(&mut arena);
-
-    assert_eq!(
-        Err("Syntax error, expected =: ".to_string()),
-        Parser::new("return100", &mut types).parse()
-    );
+    test_error("return100", "Syntax error, expected =: ");
 }
 
 #[test]
 fn test_bad7() {
-    let mut arena = Arena::new();
-    let mut types = Types::new(&mut arena);
-
-    assert_eq!(
-        Err("Syntax error, unexpected }".to_string()),
-        Parser::new("return 1;}", &mut types).parse()
-    );
+    test_error("return 1;}", "Syntax error, unexpected }");
 }
