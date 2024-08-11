@@ -206,7 +206,7 @@ impl<'t> Nodes<'t> {
             
             for i in 1..n_in.len() {
                 lhss[i] = self.inputs[n_in[i].unwrap()][1];
-                lhss[i] = self.inputs[n_in[i].unwrap()][2];
+                rhss[i] = self.inputs[n_in[i].unwrap()][2];
             }
             
             let label = self[node].phi_label().unwrap();
@@ -216,7 +216,7 @@ impl<'t> Nodes<'t> {
             let phi_lhs = self.create_peepholed(types, phi_lhs);
             let phi_rhs = self.create_peepholed(types, phi_rhs);
             
-            return Some(self.create((self[node].clone(), vec![Some(phi_lhs), Some(phi_rhs)])));
+            return Some(self.create((self[op].clone(), vec![None, Some(phi_lhs), Some(phi_rhs)])));
         }
         None
     }
