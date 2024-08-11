@@ -1,3 +1,5 @@
+#![allow(unused)] // TODO remove once integration tests are needed again
+
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};

@@ -43,9 +43,8 @@ fn test_var_scope_no_peephole() {
         "int a=1; int b=2; int c=0; { int b=3; c=a+b; #showGraph; } return c; #showGraph;",
         &mut types,
     );
-    let _stop = parser.parse().unwrap();
-
     parser.nodes.disable_peephole = true;
+    let _stop = parser.parse().unwrap();
 
     assert_eq!("return (1+3);", parser.print_stop());
 }

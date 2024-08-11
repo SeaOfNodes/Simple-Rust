@@ -70,8 +70,8 @@ fn test_bad2() {
 fn test_not_bad3() {
     let mut arena = Arena::new();
     let mut types = Types::new(&mut arena);
-    let mut parser = Parser::new("return 0123;", &mut types);
-    let _stop = parser.parse();
+    let mut parser = Parser::new("return --12;", &mut types);
+    let _stop = parser.parse().unwrap();
 
     // this test used to fail in chapter 1
     assert_eq!("return 12;", parser.print_stop());
@@ -93,7 +93,7 @@ fn test_not_bad5() {
     let mut arena = Arena::new();
     let mut types = Types::new(&mut arena);
     let mut parser = Parser::new("return -100;", &mut types);
-    let _stop = parser.parse();
+    let _stop = parser.parse().unwrap();
 
     // this test used to fail in chapter 1
     assert_eq!("return -100;", parser.print_stop());

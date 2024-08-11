@@ -1,3 +1,4 @@
+use crate::sea_of_nodes::graph_visualizer;
 use crate::sea_of_nodes::nodes::{BoolOp, Node, NodeCreation, NodeId, Nodes, ScopeNode};
 use crate::sea_of_nodes::types::{Ty, Types};
 
@@ -44,6 +45,7 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
         let args = types.get_tuple(vec![types.ty_ctrl, arg]);
         let start = nodes.create(Node::make_start(args));
         nodes.ty[start] = Some(args);
+        nodes.start = start;
 
         let stop = nodes.create(Node::make_stop());
         nodes.ty[stop] = Some(types.ty_bot); // differs from java; ensures that it isn't dead
@@ -65,13 +67,11 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
         self.lexer.source
     }
 
-    fn take_ctrl(&mut self) -> NodeId {
-        let ctrl = self.nodes.inputs[self.scope][0].expect("has ctrl");
-        self.nodes.set_def(self.scope, 0, None);
-        ctrl
+    fn ctrl(&mut self) -> NodeId {
+        self.nodes.inputs[self.scope][0].expect("has ctrl")
     }
-    fn set_ctrl(&mut self, node: NodeId) {
-        self.nodes.set_def(self.scope, 0, Some(node));
+    fn set_ctrl(&mut self, node: Option<NodeId>) {
+        self.nodes.set_def(self.scope, 0, node);
     }
 
     fn peephole(&mut self, c: NodeCreation<'t>) -> NodeId {
@@ -161,12 +161,13 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
         self.require(")")?;
 
         // IfNode takes current control and predicate
-        let if_ctrl = self.take_ctrl();
+        let if_ctrl = self.ctrl();
         let if_node = self.peephole(Node::make_if(if_ctrl, pred));
         self.nodes.keep(if_node);
 
         // Setup projection nodes
         let if_true = self.peephole(Node::make_proj(if_node, 0, "True".to_string()));
+        self.nodes.unkeep(if_node);
         let if_false = self.peephole(Node::make_proj(if_node, 1, "False".to_string()));
 
         // In if true branch, the ifT proj node becomes the ctrl
@@ -176,13 +177,13 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
         self.x_scopes.push(false_scope);
 
         // Parse the true side
-        self.set_ctrl(if_true);
+        self.set_ctrl(Some(if_true));
         self.parse_statement()?;
         let true_scope = self.scope;
 
         // Parse the false side
         self.scope = false_scope;
-        self.set_ctrl(if_false);
+        self.set_ctrl(Some(if_false));
         if self.matchx("else") {
             self.parse_statement()?;
             false_scope = self.scope;
@@ -199,7 +200,7 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
         self.x_scopes.pop();
 
         let region = self.nodes.scope_merge(true_scope, false_scope, self.types);
-        self.set_ctrl(region);
+        self.set_ctrl(Some(region));
         Ok(())
     }
 
@@ -212,17 +213,18 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
     fn parse_return(&mut self) -> PResult<()> {
         let expr = self.parse_expression()?;
         self.require(";")?;
-        let ctrl = self.take_ctrl();
+        let ctrl = self.ctrl();
         let ret = self.peephole(Node::make_return(ctrl, expr));
         self.nodes.add_def(self.stop, Some(ret));
+        self.set_ctrl(None);
         Ok(())
     }
 
     /// Dumps out the node graph
     fn show_graph(&mut self) {
-        todo!("print dot ouput");
+        println!("{}", graph_visualizer::generate_dot_output(self).unwrap());
     }
-    
+
     pub fn print_stop(&mut self) -> String {
         self.nodes.print(Some(self.stop)).to_string()
     }
