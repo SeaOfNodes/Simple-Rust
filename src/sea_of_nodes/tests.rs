@@ -17,3 +17,12 @@ fn test_error(source: &str, error: &str) {
         Err(error.to_string()),
     );
 }
+
+fn test_print_stop(source: &str, expected: &str) {
+    let arena = Arena::new();
+    let mut types = Types::new(&arena);
+    let mut parser = Parser::new(source, &mut types);
+    let _stop = parser.parse().unwrap();
+
+    assert_eq!(parser.print_stop(), expected);
+}

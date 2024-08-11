@@ -1,6 +1,6 @@
 use crate::datastructures::arena::Arena;
 use crate::sea_of_nodes::parser::Parser;
-use crate::sea_of_nodes::tests::test_error;
+use crate::sea_of_nodes::tests::{test_error, test_print_stop};
 use crate::sea_of_nodes::types::Types;
 
 #[test]
@@ -46,20 +46,15 @@ return c;",
 }
 #[test]
 fn test_return2() {
-    let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new(
+    test_print_stop(
         "\
 if( arg==1 )
     return 3;
 else
     return 4;
 #showGraph;",
-        &mut types,
+        "Stop[ return 3; return 4; ]",
     );
-    let _stop = parser.parse().unwrap();
-
-    assert_eq!("Stop[ return 3; return 4; ]", parser.print_stop());
 }
 #[test]
 fn test_if_merge_b() {
@@ -104,9 +99,7 @@ return a+b;",
 }
 #[test]
 fn test_merge3() {
-    let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new(
+    test_print_stop(
         "\
 int a=1;
 if( arg==1 )
@@ -120,20 +113,12 @@ else
     a=5;
 return a;
 #showGraph;",
-        &mut types,
-    );
-    let _stop = parser.parse().unwrap();
-
-    assert_eq!(
         "return Phi(Region33,Phi(Region21,2,3),Phi(Region31,4,5));",
-        parser.print_stop()
     );
 }
 #[test]
 fn test_merge4() {
-    let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new(
+    test_print_stop(
         "\
 int a=0;
 int b=0;
@@ -143,13 +128,7 @@ if( arg==0 )
     b=2;
 return arg+a+b;
 #showGraph;",
-        &mut types,
-    );
-    let _stop = parser.parse().unwrap();
-
-    assert_eq!(
         "return ((arg+Phi(Region13,1,0))+Phi(Region22,2,0));",
-        parser.print_stop()
     );
 }
 #[test]
@@ -172,12 +151,7 @@ return a;",
 }
 #[test]
 fn test_true() {
-    let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new("return true;", &mut types);
-    let _stop = parser.parse().unwrap();
-
-    assert_eq!("return 1;", parser.print_stop());
+    test_print_stop("return true;", "return 1;");
 }
 #[test]
 fn test_half_def() {

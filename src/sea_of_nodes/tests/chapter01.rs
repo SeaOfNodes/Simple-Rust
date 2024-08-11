@@ -1,7 +1,7 @@
 use crate::datastructures::arena::Arena;
 use crate::sea_of_nodes::nodes::Node;
 use crate::sea_of_nodes::parser::Parser;
-use crate::sea_of_nodes::tests::test_error;
+use crate::sea_of_nodes::tests::{test_error, test_print_stop};
 use crate::sea_of_nodes::types::Types;
 
 #[test]
@@ -60,13 +60,7 @@ fn test_bad2() {
 
 #[test]
 fn test_not_bad3() {
-    let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new("return --12;", &mut types);
-    let _stop = parser.parse().unwrap();
-
-    // this test used to fail in chapter 1
-    assert_eq!("return 12;", parser.print_stop());
+    test_print_stop("return --12;", "return 12;");
 }
 
 #[test]
@@ -76,13 +70,7 @@ fn test_bad4() {
 
 #[test]
 fn test_not_bad5() {
-    let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new("return -100;", &mut types);
-    let _stop = parser.parse().unwrap();
-
-    // this test used to fail in chapter 1
-    assert_eq!("return -100;", parser.print_stop());
+    test_print_stop("return -100;", "return -100;");
 }
 
 #[test]

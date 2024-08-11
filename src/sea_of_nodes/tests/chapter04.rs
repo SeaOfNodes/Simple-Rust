@@ -1,67 +1,37 @@
 use crate::datastructures::arena::Arena;
 use crate::sea_of_nodes::nodes::Node;
 use crate::sea_of_nodes::parser::Parser;
-use crate::sea_of_nodes::tests::test_error;
+use crate::sea_of_nodes::tests::{test_error, test_print_stop};
 use crate::sea_of_nodes::types::Types;
 
 #[test]
 fn test_peephole() {
-    let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new("return 1+arg+2; #showGraph;", &mut types);
-    let _stop = parser.parse().unwrap();
-
-    assert_eq!("return (arg+3);", parser.print_stop());
+    test_print_stop("return 1+arg+2; #showGraph;", "return (arg+3);");
 }
 
 #[test]
 fn test_peephole_2() {
-    let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new("return (1+arg)+2;", &mut types);
-    let _stop = parser.parse().unwrap();
-
-    assert_eq!("return (arg+3);", parser.print_stop());
+    test_print_stop("return (1+arg)+2;", "return (arg+3);");
 }
 
 #[test]
 fn test_add_0() {
-    let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new("return 0+arg;", &mut types);
-    let _stop = parser.parse().unwrap();
-
-    assert_eq!("return arg;", parser.print_stop());
+    test_print_stop("return 0+arg;", "return arg;");
 }
 
 #[test]
 fn test_add_add_mul() {
-    let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new("return arg+0+arg;", &mut types);
-    let _stop = parser.parse().unwrap();
-
-    assert_eq!("return (arg*2);", parser.print_stop());
+    test_print_stop("return arg+0+arg;", "return (arg*2);");
 }
 
 #[test]
 fn test_peephole_3() {
-    let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new("return 1+arg+2+arg+3; #showGraph;", &mut types);
-    let _stop = parser.parse().unwrap();
-
-    assert_eq!("return ((arg*2)+6);", parser.print_stop());
+    test_print_stop("return 1+arg+2+arg+3; #showGraph;", "return ((arg*2)+6);");
 }
 
 #[test]
 fn test_mul_1() {
-    let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new("return 1*arg;", &mut types);
-    let _stop = parser.parse().unwrap();
-
-    assert_eq!("return arg;", parser.print_stop());
+    test_print_stop("return 1*arg;", "return arg;");
 }
 
 #[test]
@@ -99,64 +69,34 @@ fn test_constant_arg() {
 
 #[test]
 fn test_comp_eq() {
-    let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new("return 3==3; #showGraph;", &mut types);
-    let _stop = parser.parse().unwrap();
-
-    assert_eq!("return 1;", parser.print_stop());
+    test_print_stop("return 3==3; #showGraph;", "return 1;");
 }
 
 #[test]
 fn test_comp_eq_2() {
-    let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new("return 3==4; #showGraph;", &mut types);
-    let _stop = parser.parse().unwrap();
-
-    assert_eq!("return 0;", parser.print_stop());
+    test_print_stop("return 3==4; #showGraph;", "return 0;");
 }
 #[test]
 fn test_comp_neq() {
-    let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new("return 3!=3; #showGraph;", &mut types);
-    let _stop = parser.parse().unwrap();
-
-    assert_eq!("return 0;", parser.print_stop());
+    test_print_stop("return 3!=3; #showGraph;", "return 0;");
 }
 
 #[test]
 fn test_comp_neq_2() {
-    let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new("return 3!=4; #showGraph;", &mut types);
-    let _stop = parser.parse().unwrap();
-
-    assert_eq!("return 1;", parser.print_stop());
+    test_print_stop("return 3!=4; #showGraph;", "return 1;");
 }
 
 #[test]
 fn test_bug_1() {
-    let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new(
+    test_print_stop(
         "int a=arg+1; int b=a; b=1; return a+2; #showGraph;",
-        &mut types,
+        "return (arg+3);",
     );
-    let _stop = parser.parse().unwrap();
-
-    assert_eq!("return (arg+3);", parser.print_stop());
 }
 
 #[test]
 fn test_bug_2() {
-    let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new("int a=arg+1; a=a; return a; #showGraph;", &mut types);
-    let _stop = parser.parse().unwrap();
-
-    assert_eq!("return (arg+1);", parser.print_stop());
+    test_print_stop("int a=arg+1; a=a; return a; #showGraph;", "return (arg+1);");
 }
 
 #[test]
@@ -166,10 +106,5 @@ fn test_bug_3() {
 
 #[test]
 fn test_bug_4() {
-    let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new("return -arg;", &mut types);
-    let _stop = parser.parse().unwrap();
-
-    assert_eq!("return (-arg);", parser.print_stop());
+    test_print_stop("return -arg;", "return (-arg);");
 }

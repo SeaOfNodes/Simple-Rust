@@ -1,39 +1,24 @@
 use crate::datastructures::arena::Arena;
 use crate::sea_of_nodes::parser::Parser;
-use crate::sea_of_nodes::tests::test_error;
+use crate::sea_of_nodes::tests::{test_error, test_print_stop};
 use crate::sea_of_nodes::types::Types;
 
 #[test]
 fn test_var_decl() {
-    let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new("int a=1; return a;", &mut types);
-    let _stop = parser.parse().unwrap();
-
-    assert_eq!("return 1;", parser.print_stop());
+    test_print_stop("int a=1; return a;", "return 1;");
 }
 
 #[test]
 fn test_var_add() {
-    let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new("int a=1; int b=2; return a+b;", &mut types);
-    let _stop = parser.parse().unwrap();
-
-    assert_eq!("return 3;", parser.print_stop());
+    test_print_stop("int a=1; int b=2; return a+b;", "return 3;");
 }
 
 #[test]
 fn test_var_scope() {
-    let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new(
+    test_print_stop(
         "int a=1; int b=2; int c=0; { int b=3; c=a+b; } return c;",
-        &mut types,
+        "return 4;",
     );
-    let _stop = parser.parse().unwrap();
-
-    assert_eq!("return 4;", parser.print_stop());
 }
 
 #[test]
@@ -52,15 +37,7 @@ fn test_var_scope_no_peephole() {
 
 #[test]
 fn test_var_dist() {
-    let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new(
-        "int x0=1; int y0=2; int x1=3; int y1=4; return (x0-x1)*(x0-x1) + (y0-y1)*(y0-y1); #showGraph;",
-        &mut types,
-    );
-    let _stop = parser.parse().unwrap();
-
-    assert_eq!("return 8;", parser.print_stop());
+    test_print_stop("int x0=1; int y0=2; int x1=3; int y1=4; return (x0-x1)*(x0-x1) + (y0-y1)*(y0-y1); #showGraph;", "return 8;");
 }
 
 #[test]
