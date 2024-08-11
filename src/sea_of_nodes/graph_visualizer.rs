@@ -54,10 +54,7 @@ pub fn generate_dot_output(parser: &Parser) -> Result<String, fmt::Error> {
     let all = find_all(parser);
 
     let mut sb = String::new();
-    writeln!(sb, "digraph chapter05 {{")?;
-    writeln!(sb, "/*")?;
-    writeln!(sb, "{}", parser.src())?;
-    writeln!(sb, "*/")?;
+    writeln!(sb, "digraph \"{}\" {{", parser.src().replace("\"", "\\\""))?;
 
     // TODO write /* file.ro */
     writeln!(sb, "\trankdir=BT;")?;
