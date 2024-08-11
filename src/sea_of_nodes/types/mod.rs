@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use crate::datastructures::arena::Arena;
 use crate::modules::ParsedModule;
-pub use crate::soup::types::r#type::*;
-pub use crate::soup::types::ty::Ty;
+pub use crate::sea_of_nodes::types::r#type::*;
+pub use crate::sea_of_nodes::types::ty::Ty;
 
 mod ty;
 mod r#type;

@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
-use crate::soup::nodes::{NodeCreation, NodeId, ScopeNode};
-use crate::soup::types::{Ty, Type};
+use crate::sea_of_nodes::nodes::{NodeCreation, NodeId, ScopeNode};
+use crate::sea_of_nodes::types::{Ty, Type};
 
 #[derive(Clone, Debug)]
 pub enum Node<'t> {

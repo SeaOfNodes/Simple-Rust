@@ -1,8 +1,8 @@
 use std::mem;
 
-use crate::soup::graph_visualizer;
-use crate::soup::nodes::{BoolOp, Node, NodeCreation, NodeId, Nodes, ScopeNode};
-use crate::soup::types::{Ty, Types};
+use crate::sea_of_nodes::graph_visualizer;
+use crate::sea_of_nodes::nodes::{BoolOp, Node, NodeCreation, NodeId, Nodes, ScopeNode};
+use crate::sea_of_nodes::types::{Ty, Types};
 use crate::syntax::ast::{
     BinaryOperator, Block, Expression, Function, If, PrefixOperator, Statement,
 };

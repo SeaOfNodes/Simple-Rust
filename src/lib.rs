@@ -13,14 +13,14 @@ use codegen::elf;
 use datastructures::arena::Arena;
 
 use crate::modules::{Modules, ParsedModule};
-use crate::soup::soup::Soup;
-use crate::soup::types::{Ty, Types};
+use crate::sea_of_nodes::soup::Soup;
+use crate::sea_of_nodes::types::{Ty, Types};
 use crate::syntax::ast::Item;
 
 pub mod codegen;
 pub mod datastructures;
 mod modules;
-pub mod soup;
+pub mod sea_of_nodes;
 pub mod syntax;
 
 #[derive(Debug, Eq, PartialEq)]

@@ -2,8 +2,8 @@ use fmt::Write;
 use std::collections::HashSet;
 use std::fmt;
 
-use crate::soup::nodes::{Node, NodeId, Nodes};
-use crate::soup::soup::Soup;
+use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
+use crate::sea_of_nodes::soup::Soup;
 
 pub fn generate_dot_output(soup: &Soup) -> Result<String, fmt::Error> {
     let all = find_all(soup);

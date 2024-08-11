@@ -1,7 +1,7 @@
 use std::num::NonZeroU32;
 use std::ops::Index;
 
-use crate::soup::types::Ty;
+use crate::sea_of_nodes::types::Ty;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct StackSlotIndex(NonZeroU32);

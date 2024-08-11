@@ -1,9 +1,9 @@
 use std::path::Path;
 
 use crate::datastructures::arena::Arena;
-use crate::soup::nodes::Node;
-use crate::soup::soup::Soup;
-use crate::soup::types::Types;
+use crate::sea_of_nodes::nodes::Node;
+use crate::sea_of_nodes::soup::Soup;
+use crate::sea_of_nodes::types::Types;
 use crate::syntax::ast::Item;
 use crate::syntax::parser::Parser;
 

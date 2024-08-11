@@ -7,7 +7,7 @@ pub use scope::ScopeNode;
 
 use crate::datastructures::id::Id;
 use crate::datastructures::id_vec::IdVec;
-use crate::soup::types::{Ty, Types};
+use crate::sea_of_nodes::types::{Ty, Types};
 
 mod id;
 mod idealize;

@@ -4,7 +4,7 @@ use std::hash::Hash;
 use std::sync::Arc;
 
 use crate::modules::ParsedModule;
-use crate::soup::types::Ty;
+use crate::sea_of_nodes::types::Ty;
 
 #[derive(Eq, PartialEq, Clone, Hash, Debug)]
 pub enum Type<'a> {

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use crate::soup::nodes::{Node, NodeId, Nodes};
-use crate::soup::types::Types;
+use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
+use crate::sea_of_nodes::types::Types;
 
 #[derive(Clone, Debug)]
 pub struct ScopeNode {

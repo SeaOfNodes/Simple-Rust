@@ -1,5 +1,5 @@
-use crate::soup::nodes::{Node, NodeId, Nodes};
-use crate::soup::types::{Int, Ty, Type, Types};
+use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
+use crate::sea_of_nodes::types::{Int, Ty, Type, Types};
 
 impl<'t> Nodes<'t> {
     pub fn peephole(&mut self, node: NodeId, types: &mut Types<'t>) -> NodeId {

@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 
-use crate::soup::types::{Ty, Type};
+use crate::sea_of_nodes::types::{Ty, Type};
 use crate::syntax::ast;
 
 #[derive(Eq, PartialEq, Copy, Clone, Hash, Debug)]

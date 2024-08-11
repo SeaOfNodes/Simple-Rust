@@ -4,7 +4,7 @@ use std::mem;
 use crate::codegen::asm::MachineCode;
 use crate::codegen::asm::reg::Reg;
 use crate::codegen::lir::stack_slots::StackSlots;
-use crate::soup::location::Location;
+use crate::sea_of_nodes::location::Location;
 
 mod stack_slots;
 

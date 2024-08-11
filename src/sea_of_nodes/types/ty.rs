@@ -3,7 +3,7 @@ use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 
-use crate::soup::types::Type;
+use crate::sea_of_nodes::types::Type;
 
 /// A reference to an interned type.
 /// Equality and hashing is based on the value of the pointer.

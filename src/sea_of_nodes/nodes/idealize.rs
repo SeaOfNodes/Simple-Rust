@@ -1,6 +1,6 @@
 use crate::datastructures::id::Id;
-use crate::soup::nodes::{BoolOp, Node, NodeId, Nodes};
-use crate::soup::types::{Int, Type, Types};
+use crate::sea_of_nodes::nodes::{BoolOp, Node, NodeId, Nodes};
+use crate::sea_of_nodes::types::{Int, Type, Types};
 
 impl<'t> Nodes<'t> {
     /// do not peephole directly returned values!
