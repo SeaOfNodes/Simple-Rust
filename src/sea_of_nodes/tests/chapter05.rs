@@ -1,13 +1,8 @@
-use crate::datastructures::arena::Arena;
-use crate::sea_of_nodes::parser::Parser;
-use crate::sea_of_nodes::tests::{test_error, test_print_stop};
-use crate::sea_of_nodes::types::Types;
+use crate::sea_of_nodes::tests::{test_error, test_print_stop, test_print_stop_and_show};
 
 #[test]
 fn test_if_stmt() {
-    let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new(
+    test_print_stop_and_show(
         "\
 int a = 1;
 if (arg == 1)
@@ -18,18 +13,13 @@ else {
 }
 #showGraph;
 return a;",
-        &mut types,
+        "return Phi(Region17,(arg+2),(arg-3));",
     );
-    let _stop = parser.parse_and_show().unwrap();
-
-    assert_eq!("return Phi(Region17,(arg+2),(arg-3));", parser.print_stop());
 }
 
 #[test]
 fn test_test() {
-    let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new(
+    test_print_stop_and_show(
         "\
 int c = 3;
 int b = 2;
@@ -38,11 +28,8 @@ if (arg == 1) {
     c = 4;
 }
 return c;",
-        &mut types,
+        "return Phi(Region16,4,3);",
     );
-    let _stop = parser.parse_and_show().unwrap();
-
-    assert_eq!("return Phi(Region16,4,3);", parser.print_stop());
 }
 #[test]
 fn test_return2() {
@@ -58,9 +45,7 @@ else
 }
 #[test]
 fn test_if_merge_b() {
-    let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new(
+    test_print_stop_and_show(
         "\
 int a=arg+1;
 int b=0;
@@ -69,17 +54,12 @@ if( arg==1 )
 else
     b=a+1;
 return a+b;",
-        &mut types,
+        "return ((arg*2)+Phi(Region20,2,3));",
     );
-    let _stop = parser.parse_and_show().unwrap();
-
-    assert_eq!("return ((arg*2)+Phi(Region20,2,3));", parser.print_stop());
 }
 #[test]
 fn test_if_merge2() {
-    let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new(
+    test_print_stop_and_show(
         "\
 int a=arg+1;
 int b=arg+2;
@@ -88,13 +68,7 @@ if( arg==1 )
 else
     a=b+1;
 return a+b;",
-        &mut types,
-    );
-    let _stop = parser.parse_and_show().unwrap();
-
-    assert_eq!(
         "return ((Phi(Region31,(arg*2),arg)+arg)+Phi(Region31,4,5));",
-        parser.print_stop()
     );
 }
 #[test]
@@ -133,9 +107,7 @@ return arg+a+b;
 }
 #[test]
 fn test_merge5() {
-    let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new(
+    test_print_stop_and_show(
         "\
 int a=arg==2;
 if( arg==1 )
@@ -143,11 +115,8 @@ if( arg==1 )
     a=arg==3;
 }
 return a;",
-        &mut types,
+        "return (arg==Phi(Region16,3,2));",
     );
-    let _stop = parser.parse_and_show().unwrap();
-
-    assert_eq!("return (arg==Phi(Region16,3,2));", parser.print_stop());
 }
 #[test]
 fn test_true() {

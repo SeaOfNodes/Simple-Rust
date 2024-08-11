@@ -111,10 +111,6 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
         }
     }
 
-    pub fn parse_and_show(&mut self) -> PResult<NodeId> {
-        self.parse().inspect(|_| self.show_graph())
-    }
-
     /// <pre>
     ///     '{' statements '}'
     /// </pre>
@@ -221,7 +217,7 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
     }
 
     /// Dumps out the node graph
-    fn show_graph(&mut self) {
+    pub fn show_graph(&mut self) {
         println!("{}", graph_visualizer::generate_dot_output(self).unwrap());
     }
 

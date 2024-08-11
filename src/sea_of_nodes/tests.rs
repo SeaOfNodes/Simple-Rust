@@ -26,3 +26,14 @@ fn test_print_stop(source: &str, expected: &str) {
 
     assert_eq!(parser.print_stop(), expected);
 }
+
+fn test_print_stop_and_show(source: &str, expected: &str) {
+    let arena = Arena::new();
+    let mut types = Types::new(&arena);
+    let mut parser = Parser::new(source, &mut types);
+    let _stop = parser.parse().unwrap();
+    
+    parser.show_graph();
+
+    assert_eq!(parser.print_stop(), expected);
+}
