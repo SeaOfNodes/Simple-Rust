@@ -9,6 +9,7 @@ pub enum Type<'a> {
     Bot,  // all
     Top,  // any
     Ctrl, // control flow bottom
+    XCtrl, //  ctrl flow top (mini-lattice: any-xctrl-ctrl-all)
     Int(Int),
     Tuple { types: Vec<Ty<'a>> },
 }
@@ -26,6 +27,7 @@ impl<'t> Type<'t> {
             Type::Bot => false,
             Type::Top => true,
             Type::Ctrl => false,
+            Type::XCtrl => true,
             Type::Int(i) => matches!(i, Int::Constant(_)),
             Type::Tuple { .. } => false,
         }
@@ -45,6 +47,7 @@ impl<'t> Display for Type<'t> {
             Type::Bot => "Bot",
             Type::Top => "Top",
             Type::Ctrl => "Ctrl",
+            Type::XCtrl => "~Ctrl",
             Type::Int(Int::Bot) => "IntBot",
             Type::Int(Int::Top) => "IntTop",
             Type::Int(Int::Constant(c)) => return write!(f, "{c}"),

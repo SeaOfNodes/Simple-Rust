@@ -90,24 +90,30 @@ impl<'a> Types<'a> {
     pub fn meet(&mut self, a: Ty<'a>, b: Ty<'a>) -> Ty<'a> {
         match (&*a, &*b) {
             (_, _) if a == b => a,
-            (Type::Int(ia), Type::Int(ib)) => {
-                match (ia, ib) {
-                    // Bot wins
-                    (Int::Bot, _) => a,
-                    (_, Int::Bot) => b,
-                    // Top looses
-                    (Int::Top, _) => b,
-                    (_, Int::Top) => a,
-                    (Int::Constant(ca), Int::Constant(cb)) => {
-                        if ca == cb {
-                            a
-                        } else {
-                            self.ty_int_bot
-                        }
-                    }
-                }
+
+            // Bot wins, Top looses
+            (Type::Bot, _) | (_, Type::Top) => a,
+            (Type::Top, _) | (_, Type::Bot) => b,
+
+            // Ctrl sub-lattice: Ctrl meets ~Ctrl is Ctrl
+            (Type::Ctrl, Type::XCtrl) => a,
+            (Type::XCtrl, Type::Ctrl) => b,
+
+            // Int sub-lattice
+            (Type::Int(ia), Type::Int(ib)) => match (ia, ib) {
+                (Int::Bot, _) | (_, Int::Top) => a,
+                (_, Int::Bot) | (Int::Top, _) => b,
+                (Int::Constant(ca), Int::Constant(cb)) if ca == cb => a,
+                _ => self.ty_int_bot,
+            },
+
+            // Tuple sub-lattice
+            (Type::Tuple { .. }, Type::Tuple { .. }) => {
+                todo!("meet on tuples is not implemented yet {a} {b}")
             }
-            _ => todo!("meet {a} {b}"),
+
+            // different sub-lattices meet at bottom
+            _ => self.ty_bot,
         }
     }
 }
