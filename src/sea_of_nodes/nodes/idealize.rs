@@ -159,9 +159,9 @@ impl<'t> Nodes<'t> {
     }
 
     fn idealize_phi(&mut self, node: NodeId, types: &mut Types<'t>) -> Option<NodeId> {
-        // Remove a "junk" Phi: Phi(x,x) is just x
-        if self.same_inputs(node) {
-            return self.inputs[node][1];
+        // If we have only a single unique input, become it.
+        if let live @ Some(_) = self.single_unique_input(node, types) {
+            return live;
         }
 
         // Pull "down" a common data op.  One less op in the world.  One more

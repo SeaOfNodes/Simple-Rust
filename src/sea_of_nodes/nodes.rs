@@ -245,13 +245,22 @@ impl<'t> Nodes<'t> {
         }
         true
     }
-    fn same_inputs(&self, node: NodeId) -> bool {
-        for i in 2..self.inputs[node].len() {
-            if self.inputs[node][1] != self.inputs[node][i] {
-                return false;
+    fn single_unique_input(&self, phi: NodeId, types: &mut Types<'t>) -> Option<NodeId> {
+        let region = self.inputs[phi][0].unwrap();
+
+        let mut live = None;
+        for i in 1..self.inputs[phi].len() {
+            if self.ty[self.inputs[region][i].unwrap()] != Some(types.ty_xctrl)
+                && self.inputs[phi][i] != Some(phi)
+            {
+                if live.is_none() || live == self.inputs[phi][i] {
+                    live = self.inputs[phi][i];
+                } else {
+                    return None;
+                }
             }
         }
-        true
+        live
     }
 
     /// Return the immediate dominator of this Node and compute dom tree depth.
