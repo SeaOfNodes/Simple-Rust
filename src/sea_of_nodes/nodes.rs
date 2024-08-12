@@ -159,6 +159,20 @@ impl<'t> Nodes<'t> {
         }
     }
 
+    /// Remove the numbered input, compressing the inputs in-place.  This
+    /// shuffles the order deterministically - which is suitable for Region and
+    /// Phi, but not for every Node.
+    fn del_def(&mut self, node: NodeId, index: usize) {
+        let old_def = self.inputs[node][index];
+        if let Some(old_def) = old_def {
+            self.del_use(old_def, node);
+            if self.is_unused(old_def) {
+                self.kill(old_def);
+            }
+        }
+        self.inputs[node].swap_remove(index);
+    }
+
     pub fn add_use(&mut self, node: NodeId, use_: NodeId) {
         self.outputs[node].push(use_)
     }
