@@ -2,6 +2,7 @@ use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
 use crate::sea_of_nodes::types::{Int, Ty, Type, Types};
 
 impl<'t> Nodes<'t> {
+    #[must_use]
     pub fn peephole(&mut self, node: NodeId, types: &mut Types<'t>) -> NodeId {
         let ty = self.compute(node, types);
 

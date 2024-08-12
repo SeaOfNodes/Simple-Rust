@@ -106,7 +106,8 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
                 self.lexer.get_any_next_token()
             ))
         } else {
-            self.nodes.peephole(self.stop, self.types);
+            let p = self.nodes.peephole(self.stop, self.types);
+            assert_eq!(self.stop, p);
             Ok(self.stop)
         }
     }

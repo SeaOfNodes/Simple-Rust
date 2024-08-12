@@ -127,7 +127,6 @@ impl<'t> Nodes<'t> {
         self.kill(that);
 
         self.unkeep(region);
-        self.peephole(region, types);
-        region
+        self.peephole(region, types)
     }
 }
