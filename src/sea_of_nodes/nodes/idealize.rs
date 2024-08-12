@@ -12,8 +12,8 @@ impl<'t> Nodes<'t> {
             Node::Bool(op) => self.idealize_bool(*op, node, types),
             Node::Phi(_) => self.idealize_phi(node, types),
             Node::Stop => self.idealize_stop(node, types),
+            Node::Return => self.idealize_return(node, types),
             Node::Constant(_)
-            | Node::Return
             | Node::Start { .. }
             | Node::Div
             | Node::Minus
@@ -237,6 +237,10 @@ impl<'t> Nodes<'t> {
             }
         }
         result
+    }
+
+    fn idealize_return(&mut self, node: NodeId, types: &mut Types<'t>) -> Option<NodeId> {
+        self.inputs[node][0].filter(|ctrl| self.ty[*ctrl] == Some(types.ty_xctrl))
     }
 
     // Compare two off-spline nodes and decide what order they should be in.
