@@ -11,6 +11,7 @@ impl<'t> Nodes<'t> {
             Node::Mul => self.idealize_mul(node, types),
             Node::Bool(op) => self.idealize_bool(*op, node, types),
             Node::Phi(_) => self.idealize_phi(node, types),
+            Node::Stop => self.idealize_stop(node, types),
             Node::Constant(_)
             | Node::Return
             | Node::Start { .. }
@@ -20,8 +21,7 @@ impl<'t> Nodes<'t> {
             | Node::Not
             | Node::Proj(_)
             | Node::If
-            | Node::Region { .. }
-            | Node::Stop => None,
+            | Node::Region { .. } => None,
         }
     }
 
@@ -223,6 +223,20 @@ impl<'t> Nodes<'t> {
             return Some(self.create((self[op].clone(), vec![None, Some(phi_lhs), Some(phi_rhs)])));
         }
         None
+    }
+
+    fn idealize_stop(&mut self, node: NodeId, types: &mut Types<'t>) -> Option<NodeId> {
+        let mut result = None;
+        let mut i = 0;
+        while i < self.inputs[node].len() {
+            if self.ty[self.inputs[node][i].unwrap()] == Some(types.ty_xctrl) {
+                self.del_def(node, i);
+                result = Some(node);
+            } else {
+                i += 1;
+            }
+        }
+        result
     }
 
     // Compare two off-spline nodes and decide what order they should be in.
