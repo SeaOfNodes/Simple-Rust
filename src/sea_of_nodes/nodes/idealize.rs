@@ -1,6 +1,5 @@
 use crate::datastructures::id::Id;
 use crate::sea_of_nodes::nodes::{BoolOp, Node, NodeId, Nodes};
-use crate::sea_of_nodes::nodes::node::ProjNode;
 use crate::sea_of_nodes::types::{Int, Type, Types};
 
 impl<'t> Nodes<'t> {
@@ -14,15 +13,15 @@ impl<'t> Nodes<'t> {
             Node::Phi(_) => self.idealize_phi(node, types),
             Node::Stop => self.idealize_stop(node, types),
             Node::Return => self.idealize_return(node, types),
-            Node::Proj(_) => self.idealize_proj(node, types),
+            Node::Proj(p) => self.idealize_proj(node, p.index, types),
+            Node::Region { .. } => self.idealize_region(node, types),
             Node::Constant(_)
             | Node::Start { .. }
             | Node::Div
             | Node::Minus
             | Node::Scope(_)
             | Node::Not
-            | Node::If
-            | Node::Region { .. } => None,
+            | Node::If => None,
         }
     }
 
@@ -218,12 +217,14 @@ impl<'t> Nodes<'t> {
         self.inputs[node][0].filter(|ctrl| self.ty[*ctrl] == Some(types.ty_xctrl))
     }
 
-    fn idealize_proj(&mut self, node: NodeId, types: &mut Types<'t>) -> Option<NodeId> {
-        let Node::Proj(ProjNode { index, .. }) = &self[node] else {
-            unreachable!();
-        };
+    fn idealize_proj(
+        &mut self,
+        node: NodeId,
+        index: usize,
+        types: &mut Types<'t>,
+    ) -> Option<NodeId> {
         if let Some(Type::Tuple { types: ts }) = self.ty[self.inputs[node][0]?].as_deref() {
-            if ts[*index] == types.ty_xctrl {
+            if ts[index] == types.ty_xctrl {
                 return Some(
                     self.create_peepholed(types, Node::make_constant(self.start, types.ty_xctrl)),
                 ); // We are dead
@@ -234,6 +235,36 @@ impl<'t> Nodes<'t> {
             }
         }
         None
+    }
+
+    fn idealize_region(&mut self, node: NodeId, types: &mut Types<'t>) -> Option<NodeId> {
+        let path = self.find_dead_input(node, types)?;
+
+        for i in 0..self.outputs[node].len() {
+            let phi = self.outputs[node][i];
+            if matches!(&self[phi], Node::Phi(_)) {
+                self.del_def(phi, path);
+            }
+        }
+        self.del_def(node, path);
+
+        // If down to a single input, become that input - but also make all
+        // Phis an identity on *their* single input.
+        if self.inputs[node].len() == 2 {
+            for i in 0..self.outputs[node].len() {
+                let phi = self.outputs[node][i];
+                if matches!(&self[phi], Node::Phi(_)) {
+                    todo!("Currently does not happen, because no loops");
+                }
+            }
+            return self.inputs[node][1];
+        }
+        Some(node)
+    }
+
+    fn find_dead_input(&self, node: NodeId, types: &Types<'t>) -> Option<usize> {
+        (1..self.inputs[node].len())
+            .find(|&i| self.ty[self.inputs[node][i].unwrap()].unwrap() == types.ty_xctrl)
     }
 
     // Compare two off-spline nodes and decide what order they should be in.
