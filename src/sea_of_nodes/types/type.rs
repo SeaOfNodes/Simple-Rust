@@ -6,9 +6,9 @@ use crate::sea_of_nodes::types::Ty;
 
 #[derive(Eq, PartialEq, Clone, Hash, Debug)]
 pub enum Type<'a> {
-    Bot,  // all
-    Top,  // any
-    Ctrl, // control flow bottom
+    Bot,   // all
+    Top,   // any
+    Ctrl,  // control flow bottom
     XCtrl, //  ctrl flow top (mini-lattice: any-xctrl-ctrl-all)
     Int(Int),
     Tuple { types: Vec<Ty<'a>> },

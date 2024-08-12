@@ -20,7 +20,7 @@ impl<'t> Nodes<'t> {
             | Node::Not
             | Node::Proj(_)
             | Node::If
-            | Node::Region
+            | Node::Region { .. }
             | Node::Stop => None,
         }
     }
@@ -194,28 +194,32 @@ impl<'t> Nodes<'t> {
         //   Phi(op(A,B),op(Q,R),op(X,Y)) becomes
         //     op(Phi(A,Q,X), Phi(B,R,Y)).
         let op = self.inputs[node][1].expect("not same_inputs");
-        if self.inputs[op].len() == 3 && self.inputs[op][0].is_none() && !self.is_cfg(op) && self.same_op(node) {
+        if self.inputs[op].len() == 3
+            && self.inputs[op][0].is_none()
+            && !self.is_cfg(op)
+            && self.same_op(node)
+        {
             let n_in = &self.inputs[node];
-            
+
             let mut lhss = vec![None; n_in.len()];
             let mut rhss = vec![None; n_in.len()];
-            
+
             // Set Region
             lhss[0] = n_in[0];
             rhss[0] = n_in[0];
-            
+
             for i in 1..n_in.len() {
                 lhss[i] = self.inputs[n_in[i].unwrap()][1];
                 rhss[i] = self.inputs[n_in[i].unwrap()][2];
             }
-            
+
             let label = self[node].phi_label().unwrap();
             let phi_lhs = Node::make_phi(label.to_string(), lhss);
             let phi_rhs = Node::make_phi(label.to_string(), rhss);
-            
+
             let phi_lhs = self.create_peepholed(types, phi_lhs);
             let phi_rhs = self.create_peepholed(types, phi_rhs);
-            
+
             return Some(self.create((self[op].clone(), vec![None, Some(phi_lhs), Some(phi_rhs)])));
         }
         None

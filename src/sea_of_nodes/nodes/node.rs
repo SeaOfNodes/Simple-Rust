@@ -19,7 +19,7 @@ pub enum Node<'t> {
     Proj(ProjNode),
     If,
     Phi(PhiNode),
-    Region,
+    Region { cached_idom: Option<NodeId> },
     Stop,
 }
 
@@ -80,7 +80,7 @@ impl<'t> Node<'t> {
             Node::Proj(p) => return Cow::Owned(p.label.clone()), // clone to keep static lifetime for others
             Node::If => "If",
             Node::Phi(p) => return Cow::Owned(format!("Phi_{}", p.label)),
-            Node::Region => "Region",
+            Node::Region { .. } => "Region",
             Node::Stop => "Stop",
         })
     }
@@ -102,7 +102,7 @@ impl<'t> Node<'t> {
             Node::Proj(_) => self.label(),
             Node::If => self.label(),
             Node::Phi(p) => Cow::Owned(format!("&phi;_{}", p.label)),
-            Node::Region => self.label(),
+            Node::Region { .. } => self.label(),
             Node::Stop => self.label(),
         }
     }
@@ -122,7 +122,7 @@ impl<'t> Node<'t> {
             | Node::Not
             | Node::Proj(_)
             | Node::Phi(_)
-            | Node::Region
+            | Node::Region { .. }
             | Node::Stop => false,
         }
     }
@@ -153,7 +153,7 @@ impl<'t> Node<'t> {
             Node::Proj(_) => 13,
             Node::If => 14,
             Node::Phi(_) => 15,
-            Node::Region => 16,
+            Node::Region { .. } => 16,
             Node::Stop => 17,
         }
     }
@@ -212,7 +212,7 @@ impl<'t> Node<'t> {
     }
 
     pub fn make_region(inputs: Vec<Option<NodeId>>) -> NodeCreation<'t> {
-        (Node::Region, inputs)
+        (Node::Region { cached_idom: None }, inputs)
     }
 
     pub fn make_stop() -> NodeCreation<'t> {

@@ -16,11 +16,15 @@ pub struct Types<'a> {
     pub ty_bot: Ty<'a>,
     pub ty_top: Ty<'a>,
     pub ty_ctrl: Ty<'a>,
+    pub ty_xctrl: Ty<'a>,
     pub ty_zero: Ty<'a>,
     pub ty_one: Ty<'a>,
     pub ty_two: Ty<'a>,
     pub ty_int_bot: Ty<'a>,
-    pub ty_if: Ty<'a>,
+    pub ty_if_both: Ty<'a>,
+    pub ty_if_neither: Ty<'a>,
+    pub ty_if_true: Ty<'a>,
+    pub ty_if_false: Ty<'a>,
 }
 
 struct Interner<'a> {
@@ -53,12 +57,23 @@ impl<'a> Types<'a> {
         let ty_bot = interner.intern(Type::Bot);
         let ty_top = interner.intern(Type::Top);
         let ty_ctrl = interner.intern(Type::Ctrl);
+        let ty_xctrl = interner.intern(Type::XCtrl);
         let ty_zero = interner.intern(Type::Int(Int::Constant(0)));
         let ty_one = interner.intern(Type::Int(Int::Constant(1)));
         let ty_two = interner.intern(Type::Int(Int::Constant(2)));
         let ty_int_bot = interner.intern(Type::Int(Int::Bot));
-        let ty_if = interner.intern(Type::Tuple {
+
+        let ty_if_both = interner.intern(Type::Tuple {
             types: vec![ty_ctrl, ty_ctrl],
+        });
+        let ty_if_neither = interner.intern(Type::Tuple {
+            types: vec![ty_xctrl, ty_xctrl],
+        });
+        let ty_if_true = interner.intern(Type::Tuple {
+            types: vec![ty_ctrl, ty_xctrl],
+        });
+        let ty_if_false = interner.intern(Type::Tuple {
+            types: vec![ty_xctrl, ty_ctrl],
         });
 
         Self {
@@ -66,11 +81,15 @@ impl<'a> Types<'a> {
             ty_bot,
             ty_top,
             ty_ctrl,
+            ty_xctrl,
             ty_zero,
             ty_one,
             ty_two,
             ty_int_bot,
-            ty_if,
+            ty_if_both,
+            ty_if_neither,
+            ty_if_true,
+            ty_if_false,
         }
     }
 

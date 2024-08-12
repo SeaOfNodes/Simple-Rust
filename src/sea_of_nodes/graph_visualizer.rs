@@ -128,7 +128,7 @@ fn nodes(sb: &mut String, nodes: &Nodes, all: &HashSet<NodeId>) -> fmt::Result {
     }
 
     for &n in all {
-        if let Node::Region = &nodes[n] {
+        if let Node::Region { .. } = &nodes[n] {
             write!(sb, "\t\t{{ rank=same; {};", nodes.print(Some(n)))?;
             for &phi in &nodes.outputs[n] {
                 if let Node::Phi(_) = &nodes[phi] {
@@ -194,7 +194,7 @@ fn node_edges(sb: &mut String, nodes: &Nodes, all: &HashSet<NodeId>) -> fmt::Res
         for (i, def) in nodes.inputs[n].iter().enumerate() {
             let Some(def) = *def else { continue };
 
-            if let (Node::Phi(_), Node::Region) = (&nodes[n], &nodes[def]) {
+            if let (Node::Phi(_), Node::Region { .. }) = (&nodes[n], &nodes[def]) {
                 writeln!(
                     sb,
                     "\t{} -> {} [style=dotted taillabel={i}];",

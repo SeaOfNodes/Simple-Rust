@@ -34,7 +34,7 @@ impl<'t> Nodes<'t> {
         new
     }
 
-    fn compute(&self, node: NodeId, types: &mut Types<'t>) -> Ty<'t> {
+    fn compute(&mut self, node: NodeId, types: &mut Types<'t>) -> Ty<'t> {
         match &self[node] {
             Node::Constant(ty) => *ty,
             Node::Return => {
@@ -88,9 +88,52 @@ impl<'t> Nodes<'t> {
                     _ => unreachable!("proj node ctrl must always be tuple, if present"),
                 }
             }
-            Node::If => types.ty_if,
+            Node::If => {
+                // If the If node is not reachable then neither is any following Proj
+                if self.ty[self.inputs[node][0].unwrap()] != Some(types.ty_ctrl) {
+                    return types.ty_if_neither;
+                }
+
+                let pred = self.inputs[node][1].unwrap();
+
+                // If constant is 0 then false branch is reachable
+                // Else true branch is reachable
+                if let Some(Type::Int(Int::Constant(c))) = self.ty[pred].as_deref() {
+                    return if *c == 0 {
+                        types.ty_if_false
+                    } else {
+                        types.ty_if_true
+                    };
+                }
+
+                // Hunt up the immediate dominator tree.  If we find an identical if
+                // test on either the true or false branch, then this test matches.
+
+                let mut dom = self.idom(node);
+                let mut prior = node;
+                while let Some(d) = dom {
+                    if matches!(&self[d], Node::If) && self.inputs[d][1].unwrap() == pred {
+                        return if let Node::Proj(proj) = &self[prior] {
+                            // Repeated test, dominated on one side.  Test result is the same.
+                            if proj.index == 0 {
+                                types.ty_if_true
+                            } else {
+                                types.ty_if_false
+                            }
+                        } else {
+                            // Repeated test not dominated on one side
+                            self.ty[d].unwrap()
+                        };
+                    }
+
+                    prior = d;
+                    dom = self.idom(d);
+                }
+
+                types.ty_if_both
+            }
             Node::Phi(_) => types.ty_bot,
-            Node::Region => types.ty_ctrl,
+            Node::Region { .. } => types.ty_ctrl,
             Node::Stop => types.ty_bot,
         }
     }

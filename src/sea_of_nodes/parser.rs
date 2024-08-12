@@ -70,8 +70,8 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
     fn ctrl(&mut self) -> NodeId {
         self.nodes.inputs[self.scope][0].expect("has ctrl")
     }
-    fn set_ctrl(&mut self, node: Option<NodeId>) {
-        self.nodes.set_def(self.scope, 0, node);
+    fn set_ctrl(&mut self, node: NodeId) {
+        self.nodes.set_def(self.scope, 0, Some(node));
     }
 
     fn peephole(&mut self, c: NodeCreation<'t>) -> NodeId {
@@ -173,13 +173,13 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
         self.x_scopes.push(false_scope);
 
         // Parse the true side
-        self.set_ctrl(Some(if_true));
+        self.set_ctrl(if_true);
         self.parse_statement()?;
         let true_scope = self.scope;
 
         // Parse the false side
         self.scope = false_scope;
-        self.set_ctrl(Some(if_false));
+        self.set_ctrl(if_false);
         if self.matchx("else") {
             self.parse_statement()?;
             false_scope = self.scope;
@@ -196,7 +196,7 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
         self.x_scopes.pop();
 
         let region = self.nodes.scope_merge(true_scope, false_scope, self.types);
-        self.set_ctrl(Some(region));
+        self.set_ctrl(region);
         Ok(())
     }
 
@@ -212,7 +212,8 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
         let ctrl = self.ctrl();
         let ret = self.peephole(Node::make_return(ctrl, expr));
         self.nodes.add_def(self.stop, Some(ret));
-        self.set_ctrl(None);
+        let ctrl = self.peephole(Node::make_constant(self.nodes.start, self.types.ty_xctrl));
+        self.set_ctrl(ctrl);
         Ok(())
     }
 

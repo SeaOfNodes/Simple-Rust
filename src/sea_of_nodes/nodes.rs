@@ -45,6 +45,11 @@ pub struct Nodes<'t> {
     /// meaning
     pub outputs: IdVec<NodeId, Vec<NodeId>>,
 
+    /// Immediate dominator tree depth, used to approximate a real IDOM during
+    ///  parsing where we do not have the whole program, and also peepholes
+    ///  change the CFG incrementally.
+    pub idepth: IdVec<NodeId, u32>,
+
     /// If this is true peephole only computes the type.
     pub disable_peephole: bool,
 
@@ -62,6 +67,7 @@ impl<'t> Nodes<'t> {
             inputs: IdVec::new(vec![vec![]]),
             outputs: IdVec::new(vec![vec![]]),
             ty: IdVec::new(vec![None]),
+            idepth: IdVec::new(vec![0]),
             disable_peephole: false,
             start: NodeId::DUMMY,
         }
@@ -79,6 +85,7 @@ impl<'t> Nodes<'t> {
         self.inputs.push(inputs);
         self.outputs.push(vec![]);
         self.ty.push(None);
+        self.idepth.push(0);
         for i in 0..self.inputs[id].len() {
             if let Some(input) = self.inputs[id][i] {
                 self.add_use(input, id);
@@ -181,7 +188,7 @@ impl<'t> Nodes<'t> {
     pub fn is_cfg(&self, node: NodeId) -> bool {
         match &self[node] {
             Node::Start { .. } | Node::Return | Node::Stop => true,
-            Node::If | Node::Region => true,
+            Node::If | Node::Region { .. } => true,
             Node::Proj(p) => {
                 p.index == 0 || self.inputs[node][0].is_some_and(|n| matches!(&self[n], Node::If))
             }
@@ -231,6 +238,52 @@ impl<'t> Nodes<'t> {
             }
         }
         true
+    }
+
+    /// Return the immediate dominator of this Node and compute dom tree depth.
+    fn idom(&mut self, node: NodeId) -> Option<NodeId> {
+        match &self[node] {
+            Node::Start { .. } => None,
+            Node::Region { cached_idom: None } => {
+                if let &[_, Some(i1), Some(i2)] = self.inputs[node].as_slice() {
+                    // Walk the LHS & RHS idom trees in parallel until they match, or either fails
+                    let mut lhs = self.idom(i1)?;
+                    let mut rhs = self.idom(i2)?;
+
+                    while lhs != rhs {
+                        let comp = self.idepth[lhs] as i32 - self.idepth[rhs] as i32;
+                        if comp >= 0 {
+                            lhs = self.idom(lhs)?
+                        }
+                        if comp <= 0 {
+                            rhs = self.idom(rhs)?
+                        }
+                    }
+                    self.idepth[node] = self.idepth[lhs] + 1;
+                    self[node] = Node::Region {
+                        cached_idom: Some(lhs),
+                    };
+                    Some(lhs)
+                } else {
+                    // Fails for anything other than 2-inputs
+                    None
+                }
+            }
+            Node::Region { cached_idom } => *cached_idom,
+            _ => {
+                let idom = self.inputs[node][0].expect("don't ask");
+
+                if self.idepth[idom] == 0 {
+                    self.idom(idom); // Recursively set idepth
+                }
+
+                if self.idepth[node] == 0 {
+                    self.idepth[node] = self.idepth[idom] + 1;
+                }
+
+                Some(idom)
+            }
+        }
     }
 }
 
