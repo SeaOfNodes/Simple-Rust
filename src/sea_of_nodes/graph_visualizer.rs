@@ -250,38 +250,32 @@ fn def_name(nodes: &Nodes, def: NodeId) -> String {
 }
 
 fn find_all(parser: &Parser) -> HashSet<NodeId> {
-    let start = parser.nodes.start;
     let mut all = HashSet::new();
-    for output in &parser.nodes.outputs[start] {
-        walk(&parser.nodes, &mut all, *output);
+    for output in &parser.nodes.outputs[parser.nodes.start] {
+        walk(&parser.nodes, &mut all, Some(*output));
     }
-
-    let Node::Scope(scope) = &parser.nodes[parser.scope] else {
-        unreachable!();
-    };
-    for s in &scope.scopes {
-        for index in s.values() {
-            if let Some(input) = parser.nodes.inputs[parser.scope][*index] {
-                walk(&parser.nodes, &mut all, input)
-            }
-        }
+    for node in &parser.nodes.inputs[parser.scope] {
+        walk(&parser.nodes, &mut all, *node);
     }
-
     all
 }
 
-fn walk(nodes: &Nodes, all: &mut HashSet<NodeId>, node: NodeId) {
+fn walk(nodes: &Nodes, all: &mut HashSet<NodeId>, node: Option<NodeId>) {
+    let Some(node) = node else {
+        return;
+    };
+
     if all.contains(&node) {
         return;
     }
 
     all.insert(node);
 
-    for n in nodes.inputs[node].iter().flatten() {
+    for n in &nodes.inputs[node] {
         walk(nodes, all, *n);
     }
 
     for n in &nodes.outputs[node] {
-        walk(nodes, all, *n);
+        walk(nodes, all, Some(*n));
     }
 }
