@@ -68,11 +68,11 @@ impl<'t> Nodes<'t> {
 
         // Now we might see (add add non) or (add non non) but never (add non add) nor (add add add)
         if !matches!(self[lhs], Node::Add) {
-            if self.spline_cmp(lhs, rhs) {
-                return Some(self.swap_12(node));
+            return if self.spline_cmp(lhs, rhs) {
+                Some(self.swap_12(node))
             } else {
-                return None;
-            }
+                self.phi_con(node, true, types)
+            };
         }
 
         // Now we only see (add add non)
@@ -88,45 +88,12 @@ impl<'t> Nodes<'t> {
             return Some(self.create(Node::make_add([x, new_rhs])));
         }
 
-        {
-            let phi = self.inputs[lhs][2]?;
-            if matches!(self[phi], Node::Phi(_)) && self.all_cons(phi) &&
-            // Do we have ((x + (phi cons)) + con) ?
-            // Do we have ((x + (phi cons)) + (phi cons)) ?
-            // Push constant up through the phi: x + (phi con0+con0 con1+con1...)
-
-            // Note that this is the exact reverse of Phi pulling a common op
-            // down to reduce total op-count.  We don't get in an endless push-
-            // up push-down peephole cycle because the constants all fold first.
-                (t2.is_constant() || (matches!(&self[rhs], Node::Phi(_)) && self.inputs[phi][0] == self.inputs[rhs][0] && self.all_cons(rhs) ))
-            {
-                let mut ns = vec![None; self.inputs[phi].len()];
-                ns[0] = self.inputs[phi][0];
-
-                // Push constant up through the phi: x + (phi con0+con0 con1+con1...)
-                for i in 1..ns.len() {
-                    //                 ns[i] = new AddNode(phi.in(i),t2.isConstant() ? rhs : rhs.in(i)).peephole();
-                    ns[i] = Some(self.create_peepholed(
-                        types,
-                        Node::make_add([
-                            self.inputs[phi][i]?,
-                            if t2.is_constant() {
-                                rhs
-                            } else {
-                                self.inputs[rhs][i]?
-                            },
-                        ]),
-                    ));
-                }
-
-                let label = format!(
-                    "{}{}",
-                    self[phi].phi_label().unwrap(),
-                    self[rhs].phi_label().unwrap_or("")
-                );
-                let new_phi = self.create_peepholed(types, Node::make_phi(label, ns));
-                return Some(self.create(Node::make_add([self.inputs[lhs][1]?, new_phi])));
-            }
+        // Do we have ((x + (phi cons)) + con) ?
+        // Do we have ((x + (phi cons)) + (phi cons)) ?
+        // Push constant up through the phi: x + (phi con0+con0 con1+con1...)
+        let phicon = self.phi_con(node, true, types);
+        if phicon.is_some() {
+            return phicon;
         }
 
         // Now we sort along the spline via rotates, to gather similar things together.
@@ -154,7 +121,7 @@ impl<'t> Nodes<'t> {
         }
     }
 
-    fn idealize_mul(&mut self, node: NodeId, _types: &mut Types<'t>) -> Option<NodeId> {
+    fn idealize_mul(&mut self, node: NodeId, types: &mut Types<'t>) -> Option<NodeId> {
         let left = self.inputs[node][1]?;
         let right = self.inputs[node][2]?;
         let left_ty = self.ty[left]?;
@@ -166,7 +133,10 @@ impl<'t> Nodes<'t> {
             self.swap_12(node);
             Some(node)
         } else {
-            None
+            // Do we have ((x * (phi cons)) * con) ?
+            // Do we have ((x * (phi cons)) * (phi cons)) ?
+            // Push constant up through the phi: x * (phi con0*con0 con1*con1...)
+            self.phi_con(node, true, types)
         }
     }
 
@@ -177,10 +147,14 @@ impl<'t> Nodes<'t> {
             } else {
                 types.ty_zero
             };
-            Some(self.create(Node::make_constant(self.start, value)))
-        } else {
-            None
+            return Some(self.create(Node::make_constant(self.start, value)));
         }
+
+        // Do we have ((x * (phi cons)) * con) ?
+        // Do we have ((x * (phi cons)) * (phi cons)) ?
+        // Push constant up through the phi: x * (phi con0*con0 con1*con1...)
+        let phicon = self.phi_con(node, false, types);
+        phicon
     }
 
     fn idealize_phi(&mut self, node: NodeId, types: &mut Types<'t>) -> Option<NodeId> {
@@ -271,5 +245,81 @@ impl<'t> Nodes<'t> {
         }
 
         lo.index() > hi.index()
+    }
+
+    //     // Rotation is only valid for associative ops, e.g. Add, Mul, And, Or.
+    //     // Do we have ((phi cons)|(x + (phi cons)) + con|(phi cons)) ?
+    //     // Push constant up through the phi: x + (phi con0+con0 con1+con1...)
+    fn phi_con(&mut self, op: NodeId, rotate: bool, types: &mut Types<'t>) -> Option<NodeId> {
+        let lhs = self.inputs[op][1]?;
+        let rhs = self.inputs[op][2]?;
+
+        // LHS is either a Phi of constants, or another op with Phi of constants
+        let mut lphi = self.pcon(Some(lhs));
+        if rotate && lphi.is_none() && self.inputs[lhs].len() > 2 {
+            // Only valid to rotate constants if both are same associative ops
+            if self[lhs].operation() != self[op].operation() {
+                return None;
+            }
+            lphi = self.pcon(self.inputs[lhs][2]); // Will rotate with the Phi push
+        }
+
+        let lphi = lphi?;
+
+        // RHS is a constant or a Phi of constants
+        if !matches!(&self[rhs], Node::Constant(_)) && self.pcon(Some(rhs)).is_none() {
+            return None;
+        }
+
+        // If both are Phis, must be same Region
+        if matches!(&self[rhs], Node::Phi(_)) && self.inputs[lphi][0] != self.inputs[rhs][0] {
+            return None;
+        }
+
+        // Note that this is the exact reverse of Phi pulling a common op down
+        // to reduce total op-count.  We don't get in an endless push-up
+        // push-down peephole cycle because the constants all fold first.
+
+        let mut ns = vec![None; self.inputs[lphi].len()];
+        ns[0] = self.inputs[lphi][0];
+
+        // Push constant up through the phi: x + (phi con0+con0 con1+con1...)
+        for i in 1..ns.len() {
+            ns[i] = Some(self.create_peepholed(
+                types,
+                (
+                    self[op].clone(),
+                    vec![
+                        None,
+                        self.inputs[lphi][i],
+                        if matches!(&self[rhs], Node::Phi(_)) {
+                            self.inputs[rhs][i]
+                        } else {
+                            Some(rhs)
+                        },
+                    ],
+                ),
+            ));
+        }
+
+        let label = format!(
+            "{}{}",
+            self[lphi].phi_label().unwrap(),
+            self[rhs].phi_label().unwrap_or("")
+        );
+        let phi = self.create_peepholed(types, Node::make_phi(label, ns));
+
+        // Rotate needs another op, otherwise just the phi
+        Some(if lhs == lphi {
+            phi
+        } else {
+            self.create((
+                self[lhs].clone(),
+                vec![None, self.inputs[lhs][1], Some(phi)],
+            ))
+        })
+    }
+    fn pcon(&self, op: Option<NodeId>) -> Option<NodeId> {
+        op.filter(|op| matches!(&self[*op], Node::Phi(_)) && self.all_cons(*op))
     }
 }
