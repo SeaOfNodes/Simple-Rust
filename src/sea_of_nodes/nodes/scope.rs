@@ -99,7 +99,8 @@ impl<'t> Nodes<'t> {
     pub fn scope_merge(&mut self, this: NodeId, that: NodeId, types: &mut Types<'t>) -> NodeId {
         let c1 = self.inputs[this][0];
         let c2 = self.inputs[that][0];
-        let region = self.create_peepholed(types, Node::make_region(vec![None, c1, c2]));
+        let region = self.create(Node::make_region(vec![None, c1, c2]));
+        self.keep(region);
 
         let mut names = vec![None; self.inputs[this].len()];
         let this_scope = self.scope_mut(this);
@@ -124,6 +125,9 @@ impl<'t> Nodes<'t> {
         }
 
         self.kill(that);
+
+        self.unkeep(region);
+        self.peephole(region, types);
         region
     }
 }
