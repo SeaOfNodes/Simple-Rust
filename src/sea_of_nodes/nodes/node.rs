@@ -218,4 +218,8 @@ impl<'t> Node<'t> {
     pub fn make_stop() -> NodeCreation<'t> {
         (Node::Stop, vec![])
     }
+    
+    pub fn make_loop(ctrl: NodeId) -> NodeCreation<'t> {
+        todo!()
+    }
 }

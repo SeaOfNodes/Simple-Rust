@@ -28,7 +28,10 @@ type ParseErr = String;
 type PResult<T> = Result<T, ParseErr>;
 
 fn is_keyword(s: &str) -> bool {
-    matches!(s, "else" | "false" | "if" | "int" | "return" | "true")
+    matches!(
+        s,
+        "else" | "false" | "if" | "int" | "return" | "true" | "while"
+    )
 }
 
 impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
@@ -139,12 +142,91 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
             self.require("}")
         } else if self.matchx("if") {
             self.parse_if()
+        } else if self.matchx("while") {
+            self.parse_while()
         } else if self.matchx("#showGraph") {
             self.show_graph();
             self.require(";")
         } else {
             self.parse_expression_statement()
         }
+    }
+
+    /// <pre>
+    ///     while ( expression ) statement
+    /// </pre>
+    fn parse_while(&mut self) -> PResult<()> {
+        self.require("(")?;
+
+        // Loop region has two control inputs, the first is the entry
+        // point, and second is back edge that is set after loop is parsed
+        // (see end_loop() call below).  Note that the absence of back edge is
+        // used as an indicator to switch off peepholes of the region and
+        // associated phis; see {@code inProgress()}.
+
+        let ctrl = self.ctrl();
+        let ctrl = self.peephole(Node::make_loop(ctrl)); // Note we set back edge to null here
+        self.set_ctrl(ctrl);
+
+        // At loop head, we clone the current Scope (this includes all
+        // names in every nesting level within the Scope).
+        // We create phis eagerly for all the names we find, see dup().
+
+        // Save the current scope as the loop head
+        let head = self.scope;
+        self.nodes.keep(head);
+
+        // Clone the head Scope to create a new Scope for the body.
+        // Create phis eagerly as part of cloning
+        self.scope = self.nodes.scope_dup(self.scope, true); // The true argument triggers creating phis
+        self.x_scopes.push(self.scope);
+
+        // Parse predicate
+        let pred = self.parse_expression()?;
+        self.require(")")?;
+
+        // IfNode takes current control and predicate
+        let if_node = self.nodes.create(Node::make_if(ctrl, pred));
+        self.nodes.keep(if_node);
+        let if_node = self.nodes.peephole(if_node, self.types);
+
+        // Setup projection nodes
+        let if_true = self.peephole(Node::make_proj(if_node, 0, "True".to_string()));
+        self.nodes.unkeep(if_node);
+        let if_false = self.peephole(Node::make_proj(if_node, 1, "False".to_string()));
+
+        // Clone the body Scope to create the exit Scope
+        // which accounts for any side effects in the predicate
+        // The exit Scope will be the final scope after the loop,
+        // And its control input is the False branch of the loop predicate
+        // Note that body Scope is still our current scope
+        let exit = self.nodes.scope_dup(self.scope, false);
+        self.x_scopes.push(exit);
+        self.nodes.set_def(exit, 0, Some(if_false)); // exit.ctrl(ifF);
+
+        // Parse the true side, which corresponds to loop body
+        // Our current scope is the body Scope
+        self.set_ctrl(if_true);
+        self.parse_statement()?; // Parse loop body
+
+        // The true branch loops back, so whatever is current control (_scope.ctrl) gets
+        // added to head loop as input. endLoop() updates the head scope,
+        // and goes through all the phis that were created earlier. For each
+        // phi, it sets the second input to the corresponding input from the back edge.
+        // If the phi is redundant, it is replaced by its sole input.
+        self.nodes.scope_end_loop(head, self.scope, exit);
+        self.nodes.unkeep(head);
+        self.nodes.kill(head);
+
+        // Cleanup
+        self.x_scopes.pop();
+        self.x_scopes.pop();
+
+        // At exit the false control is the current control, and
+        // the scope is the exit scope after the exit test.
+        self.scope = exit;
+
+        Ok(())
     }
 
     /// <pre>
@@ -159,8 +241,9 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
 
         // IfNode takes current control and predicate
         let if_ctrl = self.ctrl();
-        let if_node = self.peephole(Node::make_if(if_ctrl, pred));
+        let if_node = self.nodes.create(Node::make_if(if_ctrl, pred));
         self.nodes.keep(if_node);
+        let if_node = self.nodes.peephole(if_node, self.types);
 
         // Setup projection nodes
         let if_true = self.peephole(Node::make_proj(if_node, 0, "True".to_string()));
@@ -170,7 +253,7 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
         // In if true branch, the ifT proj node becomes the ctrl
         // But first clone the scope and set it as current
         let n_defs = self.nodes.inputs[self.scope].len();
-        let mut false_scope = self.nodes.scope_dup(self.scope);
+        let mut false_scope = self.nodes.scope_dup(self.scope, false);
         self.x_scopes.push(false_scope);
 
         // Parse the true side

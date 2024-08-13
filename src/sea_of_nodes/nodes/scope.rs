@@ -86,7 +86,7 @@ impl<'t> Nodes<'t> {
         }
     }
 
-    pub fn scope_dup(&mut self, scope_node: NodeId) -> NodeId {
+    pub fn scope_dup(&mut self, scope_node: NodeId, at_loop: bool) -> NodeId {
         let clone = self.scope_mut(scope_node).clone();
         let result = self.create((Node::Scope(clone), vec![]));
         self.add_def(result, self.inputs[scope_node][0]); // ctrl
@@ -128,5 +128,8 @@ impl<'t> Nodes<'t> {
 
         self.unkeep(region);
         self.peephole(region, types)
+    }
+    pub fn scope_end_loop(&mut self, head: NodeId, back: NodeId, exit: NodeId) {
+        todo!();
     }
 }
