@@ -5,3 +5,4 @@ mod nodes;
 mod tests;
 pub mod types;
 pub mod parser;
+mod ir_printer;
