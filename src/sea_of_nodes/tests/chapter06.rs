@@ -19,7 +19,7 @@ return 1;
     );
     let stop = parser.parse().unwrap();
     parser.show_graph();
-    assert_eq!("return 2;", parser.print_stop());
+    assert_eq!("return 2;", parser.print(stop));
 
     let ret = parser.nodes.unique_input(stop).unwrap();
     assert!(matches!(parser.nodes[ret], Node::Return));
@@ -57,7 +57,7 @@ return a;
     );
     let stop = parser.parse().unwrap();
     parser.show_graph();
-    assert_eq!("return 2;", parser.print_stop());
+    assert_eq!("return 2;", parser.print(stop));
 
     let ret = parser.nodes.unique_input(stop).unwrap();
     assert!(matches!(parser.nodes[ret], Node::Return));

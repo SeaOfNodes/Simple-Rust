@@ -62,9 +62,9 @@ fn test_constant_arg() {
     let mut types = Types::new(&arena);
     let arg = types.get_int(2);
     let mut parser = Parser::new_with_arg("return arg; #showGraph;", &mut types, arg);
-    let _stop = parser.parse().unwrap();
+    let stop = parser.parse().unwrap();
 
-    assert_eq!("return 2;", parser.print_stop());
+    assert_eq!("return 2;", parser.print(stop));
 }
 
 #[test]

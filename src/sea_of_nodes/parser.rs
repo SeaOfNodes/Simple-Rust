@@ -229,9 +229,6 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
     pub fn print(&mut self, node: NodeId) -> String {
         self.nodes.print(Some(node)).to_string()
     }
-    pub fn print_stop(&mut self) -> String {
-        self.nodes.print(Some(self.stop)).to_string()
-    }
 
     /// <pre>
     ///      name '=' expression ';'

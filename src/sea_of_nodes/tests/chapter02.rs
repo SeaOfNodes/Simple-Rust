@@ -9,11 +9,11 @@ fn test_simple_program() {
     let mut types = Types::new(&arena);
     let mut parser = Parser::new("return 1+2*3+-5;", &mut types);
     parser.nodes.disable_peephole = true;
-    let _stop = parser.parse().unwrap();
+    let stop = parser.parse().unwrap();
 
     parser.show_graph();
 
-    assert_eq!("return (1+((2*3)+(-5)));", parser.print_stop());
+    assert_eq!("return (1+((2*3)+(-5)));", parser.print(stop));
 }
 
 #[test]

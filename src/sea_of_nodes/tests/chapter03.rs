@@ -30,9 +30,9 @@ fn test_var_scope_no_peephole() {
         &mut types,
     );
     parser.nodes.disable_peephole = true;
-    let _stop = parser.parse().unwrap();
+    let stop = parser.parse().unwrap();
 
-    assert_eq!("return (1+3);", parser.print_stop());
+    assert_eq!("return (1+3);", parser.print(stop));
 }
 
 #[test]
