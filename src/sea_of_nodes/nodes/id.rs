@@ -15,10 +15,10 @@ impl NodeId {
 
     /// attemt to make code read more like the op version:
     ///
-    ///     node.in(1).in(2)._type // java
-    ///     self[self.inputs[self.inputs[node][1]?][2]?]
-    ///     node.get(&self.inputs)[1]?.get(&self.inputs)[2]?.get(&self.ty)
-    ///     node.inputs(self)[1]?.inputs(self)[2]?.ty(self) // doesn't allow separate borrowing
+    /// node.in(1).in(2)._type // java
+    /// self[self.inputs[self.inputs[node][1]?][2]?]
+    /// node.get(&self.inputs)[1]?.get(&self.inputs)[2]?.get(&self.ty)
+    /// node.inputs(self)[1]?.inputs(self)[2]?.ty(self) // doesn't allow separate borrowing
     pub fn get<T>(self, vec: &IdVec<Self, T>) -> &T {
         &vec[self]
     }

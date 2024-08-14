@@ -15,6 +15,13 @@ impl<'t> Nodes<'t> {
             Node::Return => self.idealize_return(node, types),
             Node::Proj(p) => self.idealize_proj(node, p.index, types),
             Node::Region { .. } => self.idealize_region(node, types),
+            Node::Loop => {
+                if self.in_progress(node) {
+                    None
+                } else {
+                    self.idealize_region(node, types)
+                }
+            }
             Node::Constant(_)
             | Node::Start { .. }
             | Node::Div

@@ -20,6 +20,7 @@ pub enum Node<'t> {
     If,
     Phi(PhiNode),
     Region { cached_idom: Option<NodeId> },
+    Loop,
     Stop,
 }
 
@@ -81,6 +82,7 @@ impl<'t> Node<'t> {
             Node::If => "If",
             Node::Phi(p) => return Cow::Owned(format!("Phi_{}", p.label)),
             Node::Region { .. } => "Region",
+            Node::Loop => "Loop",
             Node::Stop => "Stop",
         })
     }
@@ -103,6 +105,7 @@ impl<'t> Node<'t> {
             Node::If => self.label(),
             Node::Phi(p) => Cow::Owned(format!("&phi;_{}", p.label)),
             Node::Region { .. } => self.label(),
+            Node::Loop => self.label(),
             Node::Stop => self.label(),
         }
     }
@@ -123,6 +126,7 @@ impl<'t> Node<'t> {
             | Node::Proj(_)
             | Node::Phi(_)
             | Node::Region { .. }
+            | Node::Loop
             | Node::Stop => false,
         }
     }
@@ -154,7 +158,8 @@ impl<'t> Node<'t> {
             Node::If => 14,
             Node::Phi(_) => 15,
             Node::Region { .. } => 16,
-            Node::Stop => 17,
+            Node::Loop => 17,
+            Node::Stop => 18,
         }
     }
 
@@ -218,8 +223,8 @@ impl<'t> Node<'t> {
     pub fn make_stop() -> NodeCreation<'t> {
         (Node::Stop, vec![])
     }
-    
-    pub fn make_loop(ctrl: NodeId) -> NodeCreation<'t> {
-        todo!()
+
+    pub fn make_loop(entry: NodeId) -> NodeCreation<'t> {
+        (Node::Loop, vec![None, Some(entry), None])
     }
 }

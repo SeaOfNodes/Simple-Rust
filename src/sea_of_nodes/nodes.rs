@@ -202,7 +202,7 @@ impl<'t> Nodes<'t> {
     pub fn is_cfg(&self, node: NodeId) -> bool {
         match &self[node] {
             Node::Start { .. } | Node::Return | Node::Stop => true,
-            Node::If | Node::Region { .. } => true,
+            Node::If | Node::Region { .. } | Node::Loop => true,
             Node::Proj(p) => {
                 p.index == 0 || self.inputs[node][0].is_some_and(|n| matches!(&self[n], Node::If))
             }
@@ -267,6 +267,7 @@ impl<'t> Nodes<'t> {
     fn idom(&mut self, node: NodeId) -> Option<NodeId> {
         match &self[node] {
             Node::Start { .. } => None,
+            Node::Loop => self.inputs[node][1],
             Node::Region { cached_idom: None } => {
                 if let &[_, Some(i1), Some(i2)] = self.inputs[node].as_slice() {
                     // Walk the LHS & RHS idom trees in parallel until they match, or either fails
@@ -307,6 +308,11 @@ impl<'t> Nodes<'t> {
                 Some(idom)
             }
         }
+    }
+
+    fn in_progress(&self, region: NodeId) -> bool {
+        debug_assert!(matches!(self[region], Node::Region { .. } | Node::Loop));
+        self.inputs[region].last().unwrap().is_none()
     }
 }
 

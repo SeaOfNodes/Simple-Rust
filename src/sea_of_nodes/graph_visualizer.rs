@@ -264,6 +264,9 @@ fn walk(nodes: &Nodes, all: &mut HashSet<NodeId>, node: Option<NodeId>) {
     let Some(node) = node else {
         return;
     };
+    if node == NodeId::DUMMY {
+        return;
+    }
 
     if all.contains(&node) {
         return;
