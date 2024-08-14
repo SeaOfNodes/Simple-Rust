@@ -80,7 +80,7 @@ return sum;
         parser.print(stop),
         "return Phi(Loop8,0,Phi(Loop21,Phi_sum,(Phi(Loop,0,(Phi_j+1))+Phi_sum)));"
     );
-    println!("{}", ir_printer::print(&parser, stop, 99));
+    println!("{}", ir_printer::pretty_print(&parser.nodes, stop, 99));
 }
 
 #[test]
@@ -108,7 +108,7 @@ return b;
     );
     assert_ret_ctrl_is_proj(&parser.nodes, stop);
 
-    println!("{}", ir_printer::print(&parser, stop, 99));
+    println!("{}", ir_printer::pretty_print(&parser.nodes, stop, 99));
 }
 
 #[test]
@@ -136,7 +136,7 @@ return b;
         "return Phi(Loop8,2,(Phi(Region27,Phi_b,4)+1));"
     );
     assert_ret_ctrl_is_proj(&parser.nodes, stop);
-    println!("{}", ir_printer::print(&parser, stop, 99));
+    println!("{}", ir_printer::pretty_print(&parser.nodes, stop, 99));
 }
 
 #[test]
@@ -200,7 +200,7 @@ return a;
     assert_eq!(parser.print(stop), "return Phi(Loop7,1,2);");
     assert_ret_ctrl_is_proj(&parser.nodes, stop);
 
-    println!("{}", ir_printer::print(&parser, stop, 99));
+    println!("{}", ir_printer::pretty_print(&parser.nodes, stop, 99));
 }
 
 #[test]
@@ -218,7 +218,7 @@ return a;
     let stop = parser.parse().unwrap();
     assert_eq!(parser.print(stop), "return Phi(Loop7,1,2);");
     assert_ret_ctrl_is_proj(&parser.nodes, stop);
-    println!("{}", ir_printer::print(&parser, stop, 99));
+    println!("{}", ir_printer::pretty_print(&parser.nodes, stop, 99));
 }
 
 #[test]
