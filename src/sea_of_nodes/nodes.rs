@@ -310,49 +310,6 @@ impl<'t> Nodes<'t> {
         }
     }
 
-    pub fn is_multi_head(&self, node: NodeId) -> bool {
-        match &self[node] {
-            Node::If | Node::Region { .. } | Node::Loop | Node::Start { .. } => true,
-            Node::Constant(_)
-            | Node::Return
-            | Node::Add
-            | Node::Sub
-            | Node::Mul
-            | Node::Div
-            | Node::Minus
-            | Node::Scope(_)
-            | Node::Bool(_)
-            | Node::Not
-            | Node::Proj(_)
-            | Node::Phi(_)
-            | Node::Stop => false,
-        }
-    }
-
-    pub fn is_multi_tail(&self, node: NodeId) -> bool {
-        match &self[node] {
-            Node::Constant(_) | Node::Phi(_) => true,
-            Node::Proj(_) => {
-                let ctrl = self.inputs[node][0].unwrap();
-                self.is_multi_head(ctrl)
-            }
-            Node::Return
-            | Node::Start { .. }
-            | Node::Add
-            | Node::Sub
-            | Node::Mul
-            | Node::Div
-            | Node::Minus
-            | Node::Scope(_)
-            | Node::Bool(_)
-            | Node::Not
-            | Node::If
-            | Node::Region { .. }
-            | Node::Loop
-            | Node::Stop => false,
-        }
-    }
-
     fn in_progress(&self, region: NodeId) -> bool {
         debug_assert!(matches!(self[region], Node::Region { .. } | Node::Loop));
         self.inputs[region].last().unwrap().is_none()
