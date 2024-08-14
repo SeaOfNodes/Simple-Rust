@@ -68,7 +68,7 @@ if( arg==1 )
 else
     a=b+1;
 return a+b;",
-        "return ((Phi(Region31,(arg*2),arg)+arg)+Phi(Region31,4,5));",
+        "return ((Phi(Region31,(arg*2),arg)+arg)+Phi(Region,4,5));",
     );
 }
 #[test]

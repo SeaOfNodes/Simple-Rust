@@ -52,10 +52,14 @@ impl Display for PrintNodes2<'_, '_, '_> {
         let Some(node) = self.node else {
             return write!(f, "<?>");
         };
-        self.visited.borrow_mut().add(node);
 
         let nodes = self.nodes;
         let inputs = &nodes.inputs[node];
+
+        if self.visited.borrow().get(node) {
+            return write!(f, "{}", nodes[node].label());
+        }
+        self.visited.borrow_mut().add(node);
 
         let print = |node| Self {
             node,

@@ -226,7 +226,7 @@ fn test_demo2_non_const() {
         Show::Yes,
         Arg::Bot,
         DEMO2,
-        "return (Phi(Region33,Phi(Region22,2,3),0)+Phi(Region33,3,1));",
+        "return (Phi(Region33,Phi(Region22,2,3),0)+Phi(Region,3,1));",
     );
 }
 
