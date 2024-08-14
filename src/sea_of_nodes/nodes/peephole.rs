@@ -91,7 +91,8 @@ impl<'t> Nodes<'t> {
             }
             Node::If => {
                 // If the If node is not reachable then neither is any following Proj
-                if self.ty[self.inputs[node][0].unwrap()] != Some(types.ty_ctrl) {
+                let ctrl_ty = self.ty[self.inputs[node][0].unwrap()];
+                if ctrl_ty != Some(types.ty_ctrl) && ctrl_ty != Some(types.ty_bot) {
                     return types.ty_if_neither;
                 }
 
