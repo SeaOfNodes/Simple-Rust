@@ -137,15 +137,16 @@ impl<'t> Nodes<'t> {
                 types.meet(t, self.ty[n.unwrap()].unwrap())
             }),
             Node::Region { .. } | Node::Loop => {
-                if matches!(&self[node], Node::Loop) && self.in_progress(node) {
-                    return types.ty_ctrl;
+                if self.in_progress(node) {
+                    types.ty_ctrl
+                } else {
+                    self.inputs[node]
+                        .iter()
+                        .skip(1)
+                        .fold(types.ty_xctrl, |t, n| {
+                            types.meet(t, self.ty[n.unwrap()].unwrap())
+                        })
                 }
-                self.inputs[node]
-                    .iter()
-                    .skip(1)
-                    .fold(types.ty_xctrl, |t, n| {
-                        types.meet(t, self.ty[n.unwrap()].unwrap())
-                    })
             }
             Node::Stop => types.ty_bot,
         }

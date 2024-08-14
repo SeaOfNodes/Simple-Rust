@@ -14,14 +14,7 @@ impl<'t> Nodes<'t> {
             Node::Stop => self.idealize_stop(node, types),
             Node::Return => self.idealize_return(node, types),
             Node::Proj(p) => self.idealize_proj(node, p.index, types),
-            Node::Region { .. } => self.idealize_region(node, types),
-            Node::Loop => {
-                if self.in_progress(node) {
-                    None
-                } else {
-                    self.idealize_region(node, types)
-                }
-            }
+            Node::Region { .. } | Node::Loop => self.idealize_region(node, types),
             Node::Constant(_)
             | Node::Start { .. }
             | Node::Div
@@ -245,6 +238,10 @@ impl<'t> Nodes<'t> {
     }
 
     fn idealize_region(&mut self, node: NodeId, types: &mut Types<'t>) -> Option<NodeId> {
+        if self.in_progress(node) {
+            return None;
+        }
+        
         let path = self.find_dead_input(node, types)?;
 
         for i in 0..self.outputs[node].len() {
