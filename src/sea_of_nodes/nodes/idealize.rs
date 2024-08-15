@@ -158,6 +158,10 @@ impl<'t> Nodes<'t> {
     }
 
     fn idealize_phi(&mut self, node: NodeId, types: &mut Types<'t>) -> Option<NodeId> {
+        if self.phi_no_or_in_progress_region(node) {
+            return None;
+        }
+
         // If we have only a single unique input, become it.
         if let live @ Some(_) = self.single_unique_input(node, types) {
             return live;
@@ -241,7 +245,7 @@ impl<'t> Nodes<'t> {
         if self.in_progress(node) {
             return None;
         }
-        
+
         let path = self.find_dead_input(node, types)?;
 
         for i in 0..self.outputs[node].len() {

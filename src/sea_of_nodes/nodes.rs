@@ -241,8 +241,18 @@ impl<'t> Nodes<'t> {
         }
     }
 
+    pub fn phi_no_or_in_progress_region(&self, phi: NodeId) -> bool {
+        let region = self.inputs[phi][0];
+        region.is_none()
+            || !matches!(&self[region.unwrap()], Node::Region { .. })
+            || self.in_progress(region.unwrap())
+    }
+
     /// ignores input 0
     pub fn all_cons(&self, node: NodeId) -> bool {
+        if matches!(&self[node], Node::Phi(_)) && self.phi_no_or_in_progress_region(node) {
+            return false;
+        }
         self.inputs[node]
             .iter()
             .skip(1)

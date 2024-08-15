@@ -134,9 +134,15 @@ impl<'t> Nodes<'t> {
 
                 types.ty_if_both
             }
-            Node::Phi(_) => self.inputs[node].iter().skip(1).fold(types.ty_top, |t, n| {
-                types.meet(t, self.ty[n.unwrap()].unwrap())
-            }),
+            Node::Phi(_) => {
+                if self.phi_no_or_in_progress_region(node) {
+                    types.ty_bot
+                } else {
+                    self.inputs[node].iter().skip(1).fold(types.ty_top, |t, n| {
+                        types.meet(t, self.ty[n.unwrap()].unwrap())
+                    })
+                }
+            }
             Node::Region { .. } | Node::Loop => {
                 if self.in_progress(node) {
                     types.ty_ctrl
