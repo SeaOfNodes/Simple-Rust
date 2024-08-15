@@ -81,18 +81,16 @@ impl Display for PrintNodes2<'_, '_, '_> {
             n @ Node::Start { .. } => write!(f, "{}", n.label()),
             Node::Minus => write!(f, "(-{})", input(1)),
             n @ Node::Scope(scope) => {
-                write!(f, "{}", n.label())?;
-                for s in &scope.scopes {
-                    write!(f, "[")?;
-                    for (i, (name, index)) in s.iter().enumerate() {
-                        if i > 0 {
-                            write!(f, ", ")?;
-                        }
-                        write!(f, "{name}:{}", input(*index))?;
+                write!(f, "Scope[ ")?;
+                let names = nodes.scope_reverse_names(node);
+
+                for (i, n) in names.iter().enumerate() {
+                    write!(f, "{}:{}", n.as_ref().unwrap(), input(i))?;
+                    if i != names.len() - 1 {
+                        write!(f, " ")?;
                     }
-                    write!(f, "]")?;
                 }
-                Ok(())
+                write!(f, "]")
             }
             Node::Not => write!(f, "(!{})", input(1)),
             Node::Proj(proj) => write!(f, "{}", proj.label),

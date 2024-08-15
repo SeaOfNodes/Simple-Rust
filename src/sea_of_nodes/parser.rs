@@ -178,7 +178,7 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
 
         // Clone the head Scope to create a new Scope for the body.
         // Create phis eagerly as part of cloning
-        self.scope = self.nodes.scope_dup(self.scope, true); // The true argument triggers creating phis
+        self.scope = self.nodes.scope_dup(self.scope, true, self.types); // The true argument triggers creating phis
         self.x_scopes.push(self.scope);
 
         // Parse predicate
@@ -200,7 +200,7 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
         // The exit Scope will be the final scope after the loop,
         // And its control input is the False branch of the loop predicate
         // Note that body Scope is still our current scope
-        let exit = self.nodes.scope_dup(self.scope, false);
+        let exit = self.nodes.scope_dup(self.scope, false, self.types);
         self.x_scopes.push(exit);
         self.nodes.set_def(exit, 0, Some(if_false)); // exit.ctrl(ifF);
 
@@ -253,7 +253,7 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
         // In if true branch, the ifT proj node becomes the ctrl
         // But first clone the scope and set it as current
         let n_defs = self.nodes.inputs[self.scope].len();
-        let mut false_scope = self.nodes.scope_dup(self.scope, false);
+        let mut false_scope = self.nodes.scope_dup(self.scope, false, self.types);
         self.x_scopes.push(false_scope);
 
         // Parse the true side

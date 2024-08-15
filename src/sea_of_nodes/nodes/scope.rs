@@ -86,14 +86,50 @@ impl<'t> Nodes<'t> {
         }
     }
 
-    pub fn scope_dup(&mut self, scope_node: NodeId, at_loop: bool) -> NodeId {
+    pub fn scope_dup(
+        &mut self,
+        scope_node: NodeId,
+        at_loop: bool,
+        types: &mut Types<'t>,
+    ) -> NodeId {
         let clone = self.scope_mut(scope_node).clone();
-        let result = self.create((Node::Scope(clone), vec![]));
-        self.add_def(result, self.inputs[scope_node][0]); // ctrl
+        let dup = self.create((Node::Scope(clone), vec![]));
+        self.add_def(dup, self.inputs[scope_node][0]); // ctrl
         for i in 1..self.inputs[scope_node].len() {
-            self.add_def(result, self.inputs[scope_node][i])
+            if !at_loop {
+                self.add_def(dup, self.inputs[scope_node][i])
+            } else {
+                let names = self.scope_reverse_names(scope_node);
+
+                let ctrl = self.inputs[scope_node][0];
+                let in_i = self.inputs[scope_node][i];
+                let phi = self.create_peepholed(
+                    types,
+                    Node::make_phi(
+                        names.into_iter().nth(i).unwrap().unwrap(),
+                        vec![ctrl, in_i, None],
+                    ),
+                );
+                self.add_def(dup, Some(phi));
+
+                self.set_def(scope_node, i, self.inputs[dup][i]);
+            }
         }
-        result
+        dup
+    }
+
+    pub fn scope_reverse_names(&self, scope: NodeId) -> Vec<Option<String>> {
+        let mut names = vec![None; self.inputs[scope].len()];
+        let Node::Scope(this_scope) = &self[scope] else {
+            panic!("expected scope");
+        };
+        for syms in &this_scope.scopes {
+            for (name, &index) in syms {
+                debug_assert!(names[index].is_none());
+                names[index] = Some(name.clone());
+            }
+        }
+        names
     }
 
     pub fn scope_merge(&mut self, this: NodeId, that: NodeId, types: &mut Types<'t>) -> NodeId {
@@ -102,14 +138,7 @@ impl<'t> Nodes<'t> {
         let region = self.create(Node::make_region(vec![None, c1, c2]));
         self.keep(region);
 
-        let mut names = vec![None; self.inputs[this].len()];
-        let this_scope = self.scope_mut(this);
-        for syms in &this_scope.scopes {
-            for (name, &index) in syms {
-                debug_assert!(names[index].is_none());
-                names[index] = Some(name.clone());
-            }
-        }
+        let names = self.scope_reverse_names(this);
 
         // Note that we skip i==0, which is bound to '$ctrl'
         for (i, name) in names.into_iter().enumerate().skip(1) {
