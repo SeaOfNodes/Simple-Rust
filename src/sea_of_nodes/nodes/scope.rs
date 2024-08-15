@@ -158,7 +158,34 @@ impl<'t> Nodes<'t> {
         self.unkeep(region);
         self.peephole(region, types)
     }
-    pub fn scope_end_loop(&mut self, head: NodeId, back: NodeId, exit: NodeId) {
-        todo!();
+
+    /// Merge the backedge scope into this loop head scope
+    /// We set the second input to the phi from the back edge (i.e. loop body)
+    pub fn scope_end_loop(
+        &mut self,
+        head: NodeId,
+        back: NodeId,
+        exit: NodeId,
+        types: &mut Types<'t>,
+    ) {
+        let ctrl = self.inputs[head][0].unwrap();
+        assert!(matches!(&self[ctrl], Node::Loop));
+        assert!(self.in_progress(ctrl));
+
+        self.set_def(ctrl, 2, self.inputs[back][0]);
+
+        for i in 1..self.inputs[head].len() {
+            let phi = self.inputs[head][i].unwrap();
+            assert_eq!(self.inputs[phi][0], Some(ctrl));
+            assert_eq!(self.inputs[phi][2], None);
+            self.set_def(phi, 2, self.inputs[back][i]);
+            // Do an eager useless-phi removal
+            let in_ = self.peephole(phi, types);
+            if in_ != phi {
+                self.subsume(phi, in_);
+            }
+        }
+
+        self.kill(back); // Loop backedge is dead
     }
 }
