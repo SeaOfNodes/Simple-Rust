@@ -132,6 +132,20 @@ impl<'t> Nodes<'t> {
         debug_assert!(self.is_dead(node));
     }
 
+    /// Replace 'this' with nnn in the graph, making 'this' go dead
+    pub fn subsume(&mut self, this: NodeId, that: NodeId) {
+        assert_ne!(this, that);
+        while let Some(n) = self.outputs[this].pop() {
+            let idx = self.inputs[n]
+                .iter()
+                .position(|&x| x == Some(this))
+                .unwrap();
+            self.inputs[n][idx] = Some(that);
+            self.add_use(that, n);
+        }
+        self.kill(this);
+    }
+
     pub fn set_def(&mut self, this: NodeId, index: usize, new_def: Option<NodeId>) {
         let old_def = self.inputs[this][index];
         if old_def == new_def {
