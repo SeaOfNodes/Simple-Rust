@@ -214,7 +214,8 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
         // and goes through all the phis that were created earlier. For each
         // phi, it sets the second input to the corresponding input from the back edge.
         // If the phi is redundant, it is replaced by its sole input.
-        self.nodes.scope_end_loop(head, self.scope, exit, self.types);
+        self.nodes
+            .scope_end_loop(head, self.scope, exit, self.types);
         self.nodes.unkeep(head);
         self.nodes.kill(head);
 

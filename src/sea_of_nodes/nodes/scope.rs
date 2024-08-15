@@ -165,7 +165,7 @@ impl<'t> Nodes<'t> {
         &mut self,
         head: NodeId,
         back: NodeId,
-        exit: NodeId,
+        _exit: NodeId,
         types: &mut Types<'t>,
     ) {
         let ctrl = self.inputs[head][0].unwrap();

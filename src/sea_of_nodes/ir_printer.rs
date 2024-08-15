@@ -5,7 +5,7 @@ use crate::datastructures::id_set::IdSet;
 use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
 
 /// Another bulk pretty-printer.  Makes more effort at basic-block grouping.
-pub(crate) fn pretty_print(nodes: &Nodes, node: NodeId, depth: usize) -> String {
+pub fn pretty_print(nodes: &Nodes, node: NodeId, depth: usize) -> String {
     // First, a Breadth First Search at a fixed depth.
     let bfs = BFS::run(nodes, node, depth);
 

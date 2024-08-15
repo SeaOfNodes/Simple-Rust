@@ -1,8 +1,8 @@
 pub mod graph_visualizer;
+pub mod ir_printer;
 pub mod location;
-mod nodes;
+pub mod nodes;
+pub mod parser;
 #[cfg(test)]
 mod tests;
 pub mod types;
-pub mod parser;
-mod ir_printer;
