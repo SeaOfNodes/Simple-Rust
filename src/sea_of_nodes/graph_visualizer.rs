@@ -50,7 +50,10 @@ pub fn run_graphviz_and_chromium(input: String) {
     std::thread::sleep(Duration::from_millis(1000)); // give it some time...
 }
 
-pub fn generate_dot_output(parser: &Parser) -> Result<String, fmt::Error> {
+pub fn generate_dot_output(
+    parser: &Parser,
+    separate_control_cluster: bool,
+) -> Result<String, fmt::Error> {
     let all = find_all(parser);
 
     let mut sb = String::new();
@@ -60,9 +63,9 @@ pub fn generate_dot_output(parser: &Parser) -> Result<String, fmt::Error> {
     writeln!(sb, "\trankdir=BT;")?;
     writeln!(sb, "\tordering=\"in\";")?;
     writeln!(sb, "\tconcentrate=\"true\";")?;
-    nodes(&mut sb, &parser.nodes, &all)?;
-    for scope in &parser.x_scopes {
-        scopes(&mut sb, &parser.nodes, *scope)?;
+    nodes(&mut sb, &parser.nodes, &all, separate_control_cluster)?;
+    for s in &parser.x_scopes {
+        scope(&mut sb, &parser.nodes, *s)?;
     }
     node_edges(&mut sb, &parser.nodes, &all)?;
     for scope in &parser.x_scopes {
@@ -72,12 +75,33 @@ pub fn generate_dot_output(parser: &Parser) -> Result<String, fmt::Error> {
     Ok(sb)
 }
 
-fn nodes(sb: &mut String, nodes: &Nodes, all: &HashSet<NodeId>) -> fmt::Result {
-    writeln!(sb, "\tsubgraph cluster_Nodes {{")?; // Magic "cluster_" in the subgraph name
+fn nodes_by_cluster(
+    sb: &mut String,
+    do_ctrl: bool,
+    nodes: &Nodes,
+    all: &HashSet<NodeId>,
+    separate_control_cluster: bool,
+) -> fmt::Result {
+    if !separate_control_cluster && do_ctrl {
+        return Ok(());
+    }
+    if do_ctrl {
+        writeln!(sb, "\tsubgraph cluster_Controls {{")?;
+    } else {
+        writeln!(sb, "\tsubgraph cluster_Nodes {{")?; // Magic "cluster_" in the subgraph name
+    }
+
     for &n in all.iter() {
         if matches!(&nodes[n], Node::Proj(_) | Node::Scope(_)) {
             continue;
         }
+        if separate_control_cluster && do_ctrl && !nodes.is_cfg(n) {
+            continue;
+        }
+        if separate_control_cluster && !do_ctrl && nodes.is_cfg(n) {
+            continue;
+        }
+
         write!(sb, "\t\t{} [ ", nodes.unique_name(n))?;
         let lab = nodes[n].glabel();
         if nodes[n].is_multi_node() {
@@ -118,8 +142,7 @@ fn nodes(sb: &mut String, nodes: &Nodes, all: &HashSet<NodeId>) -> fmt::Result {
         } else {
             if nodes.is_cfg(n) {
                 write!(sb, "shape=box style=filled fillcolor=yellow ")?;
-            }
-            if matches!(&nodes[n], Node::Phi(_)) {
+            } else if matches!(&nodes[n], Node::Phi(_)) {
                 write!(sb, "style=filled fillcolor=lightyellow ")?;
             }
             write!(sb, "label=\"{lab}\" ")?;
@@ -127,30 +150,43 @@ fn nodes(sb: &mut String, nodes: &Nodes, all: &HashSet<NodeId>) -> fmt::Result {
         writeln!(sb, "];")?;
     }
 
-    for &n in all {
-        if let Node::Region { .. } = &nodes[n] {
-            write!(sb, "\t\t{{ rank=same; {};", nodes.print(Some(n)))?;
-            for &phi in &nodes.outputs[n] {
-                if let Node::Phi(_) = &nodes[phi] {
-                    write!(sb, "{};", nodes.unique_name(phi))?;
+    if !separate_control_cluster {
+        // Force Region & Phis to line up
+        for &n in all {
+            if let Node::Region { .. } | Node::Loop = &nodes[n] {
+                write!(sb, "\t\t{{ rank=same; {};", nodes.print(Some(n)))?;
+                for &phi in &nodes.outputs[n] {
+                    if let Node::Phi(_) = &nodes[phi] {
+                        write!(sb, "{};", nodes.unique_name(phi))?;
+                    }
                 }
+                writeln!(sb, "}}")?;
             }
-            writeln!(sb, "}}")?;
         }
     }
 
     writeln!(sb, "\t}}")
 }
 
-fn scopes(sb: &mut String, nodes: &Nodes, scope_node: NodeId) -> fmt::Result {
+fn nodes(
+    sb: &mut String,
+    nodes: &Nodes,
+    all: &HashSet<NodeId>,
+    separate_control_cluster: bool,
+) -> fmt::Result {
+    nodes_by_cluster(sb, true, nodes, all, separate_control_cluster)?;
+    nodes_by_cluster(sb, false, nodes, all, separate_control_cluster)
+}
+
+fn scope(sb: &mut String, nodes: &Nodes, scope_node: NodeId) -> fmt::Result {
     let Node::Scope(scope) = &nodes[scope_node] else {
         unreachable!();
     };
 
     writeln!(sb, "\tnode [shape=plaintext];")?;
 
-    for (level, s) in scope.scopes.iter().enumerate() {
-        let scope_name = make_scope_name(nodes, scope_node, level);
+    for (level, s) in scope.scopes.iter().rev().enumerate() {
+        let scope_name = make_scope_name(nodes, scope_node, level + 1);
 
         writeln!(sb, "\tsubgraph cluster_{scope_name} {{")?;
         writeln!(sb, "\t\t{scope_name} [label=<")?;
@@ -158,7 +194,8 @@ fn scopes(sb: &mut String, nodes: &Nodes, scope_node: NodeId) -> fmt::Result {
             sb,
             "\t\t\t<TABLE BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\">"
         )?;
-        write!(sb, "\t\t\t<TR><TD BGCOLOR=\"cyan\">{level}</TD>")?;
+        let scope_level = scope.scopes.len() - level - 1;
+        write!(sb, "\t\t\t<TR><TD BGCOLOR=\"cyan\">{scope_level}</TD>")?;
         for name in s.keys() {
             let port_name = make_port_name(&scope_name, name);
             write!(sb, "<TD PORT=\"{port_name}\">{name}</TD>")?;
@@ -194,7 +231,7 @@ fn node_edges(sb: &mut String, nodes: &Nodes, all: &HashSet<NodeId>) -> fmt::Res
         for (i, def) in nodes.inputs[n].iter().enumerate() {
             let Some(def) = *def else { continue };
 
-            if let (Node::Phi(_), Node::Region { .. }) = (&nodes[n], &nodes[def]) {
+            if let (Node::Phi(_), Node::Region { .. } | Node::Loop) = (&nodes[n], &nodes[def]) {
                 writeln!(
                     sb,
                     "\t{} -> {} [style=dotted taillabel={i}];",
@@ -214,6 +251,10 @@ fn node_edges(sb: &mut String, nodes: &Nodes, all: &HashSet<NodeId>) -> fmt::Res
                 write!(sb, " color=red")?;
             }
 
+            if i == 2 && matches!(&nodes[n], Node::Phi(_) | Node::Loop) {
+                write!(sb, " constraint=false")?;
+            }
+
             writeln!(sb, "];")?;
         }
     }
@@ -225,8 +266,8 @@ fn scope_edges(sb: &mut String, nodes: &Nodes, scope_node: NodeId) -> fmt::Resul
     let Node::Scope(scope) = &nodes[scope_node] else {
         unreachable!();
     };
-    for (level, s) in scope.scopes.iter().enumerate() {
-        let scope_name = make_scope_name(nodes, scope_node, level);
+    for (level, s) in scope.scopes.iter().rev().enumerate() {
+        let scope_name = make_scope_name(nodes, scope_node, level + 1);
 
         for (name, index) in s {
             if let Some(def) = nodes.inputs[scope_node][*index] {
