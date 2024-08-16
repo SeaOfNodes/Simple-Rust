@@ -244,7 +244,7 @@ impl<'t> Nodes<'t> {
     pub fn phi_no_or_in_progress_region(&self, phi: NodeId) -> bool {
         let region = self.inputs[phi][0];
         region.is_none()
-            || !matches!(&self[region.unwrap()], Node::Region { .. })
+            || !matches!(&self[region.unwrap()], Node::Region { .. } | Node::Loop)
             || self.in_progress(region.unwrap())
     }
 
