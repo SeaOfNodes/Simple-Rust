@@ -1,15 +1,17 @@
-use std::{fmt, ptr};
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
+use std::{fmt, ptr};
 
 use crate::sea_of_nodes::types::Type;
 
 /// A reference to an interned type.
 /// Equality and hashing is based on the value of the pointer.
-/// Option<Ty> should still be 8 bytes because the reference is never null.
+/// `Option<Ty>` should still be 8 bytes because the reference is never null.
 #[derive(Copy, Clone, Eq)]
 pub struct Ty<'t>(&'t Type<'t>);
+
+const _: () = assert!(size_of::<Ty>() == size_of::<Option<Ty>>());
 
 impl<'t> Ty<'t> {
     pub fn new(t: &'t Type<'t>) -> Self {

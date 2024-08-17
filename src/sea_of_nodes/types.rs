@@ -1,15 +1,14 @@
-use std::collections::HashMap;
-
 use crate::datastructures::arena::Arena;
+use crate::sea_of_nodes::types::interner::Interner;
 pub use crate::sea_of_nodes::types::r#type::*;
 pub use crate::sea_of_nodes::types::ty::Ty;
 
+mod interner;
 mod ty;
 mod r#type;
 
 /// Every compilation unit has its own set of types.
 /// They are interned, so that equality checks and hashing are cheap.
-/// This requires every compilation unit to re-parse all imported types.
 pub struct Types<'a> {
     interner: Interner<'a>,
 
@@ -27,32 +26,9 @@ pub struct Types<'a> {
     pub ty_if_false: Ty<'a>,
 }
 
-struct Interner<'a> {
-    arena: &'a Arena<Type<'a>>,
-    type_to_ty: HashMap<&'a Type<'a>, Ty<'a>>,
-}
-
-impl<'t> Interner<'t> {
-    fn intern(&mut self, t: Type<'t>) -> Ty<'t> {
-        *self
-            .type_to_ty
-            .raw_entry_mut()
-            .from_key(&t)
-            .or_insert_with(|| {
-                let copy = &*self.arena.alloc(t);
-                let ty = Ty::new(copy);
-                (copy, ty)
-            })
-            .1
-    }
-}
-
 impl<'a> Types<'a> {
     pub fn new(arena: &'a Arena<Type<'a>>) -> Self {
-        let mut interner = Interner {
-            arena,
-            type_to_ty: Default::default(),
-        };
+        let mut interner = Interner::new(arena);
 
         let ty_bot = interner.intern(Type::Bot);
         let ty_top = interner.intern(Type::Top);
