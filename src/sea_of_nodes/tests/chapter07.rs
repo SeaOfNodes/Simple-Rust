@@ -7,14 +7,7 @@ use crate::sea_of_nodes::types::Types;
 
 /// assertTrue(stop.ret().ctrl() instanceof ProjNode);
 fn assert_ret_ctrl_is_proj(nodes: &Nodes, stop: NodeId) {
-    assert!(matches!(&nodes[stop], Node::Stop));
-
-    let ret = nodes.unique_input(stop).unwrap();
-    assert!(matches!(&nodes[ret], Node::Return));
-    assert!(matches!(
-        &nodes[nodes.inputs[ret][0].unwrap()],
-        Node::Proj(_)
-    ));
+    assert!(matches!(nodes.ret_ctrl(stop), Node::Proj(_)));
 }
 
 #[test]
@@ -50,7 +43,7 @@ if(arg){}else{
 }
 return a;
 ",
-        "return Phi(Region23,1,Phi(Loop11,1,(Phi_a+1)));",
+        "return Phi(Region22,1,Phi(Loop11,1,(Phi_a+1)));",
     )
 }
 
@@ -78,7 +71,7 @@ return sum;
     parser.show_graph();
     assert_eq!(
         parser.print(stop),
-        "return Phi(Loop8,0,Phi(Loop21,Phi_sum,(Phi(Loop,0,(Phi_j+1))+Phi_sum)));"
+        "return Phi(Loop8,0,Phi(Loop20,Phi_sum,(Phi_sum+Phi(Loop,0,(Phi_j+1)))));"
     );
     println!("{}", ir_printer::pretty_print(&parser.nodes, stop, 99));
 }
@@ -104,7 +97,7 @@ return b;
     parser.show_graph();
     assert_eq!(
         parser.print(stop),
-        "return Phi(Loop8,2,Phi(Region27,Phi_b,4));"
+        "return Phi(Loop8,2,Phi(Region26,Phi_b,4));"
     );
     assert_ret_ctrl_is_proj(&parser.nodes, stop);
 
@@ -133,7 +126,7 @@ return b;
     parser.show_graph();
     assert_eq!(
         parser.print(stop),
-        "return Phi(Loop8,2,(Phi(Region27,Phi_b,4)+1));"
+        "return Phi(Loop8,2,(Phi(Region26,Phi_b,4)+1));"
     );
     assert_ret_ctrl_is_proj(&parser.nodes, stop);
     println!("{}", ir_printer::pretty_print(&parser.nodes, stop, 99));

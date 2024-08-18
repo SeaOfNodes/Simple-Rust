@@ -1,4 +1,5 @@
 use crate::datastructures::arena::Arena;
+use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
 use crate::sea_of_nodes::parser::Parser;
 use crate::sea_of_nodes::types::Types;
 
@@ -9,6 +10,7 @@ mod chapter04;
 mod chapter05;
 mod chapter06;
 mod chapter07;
+mod chapter08;
 
 fn test_error(source: &str, error: &str) {
     let arena = Arena::new();
@@ -67,4 +69,14 @@ fn test_print_stop_(show: Show, arg: Arg, source: &str, expected: &str) {
     }
 
     assert_eq!(parser.print(stop), expected);
+}
+
+impl<'t> Nodes<'t> {
+    pub fn ret_ctrl(&self, stop: NodeId) -> &Node<'t> {
+        assert!(matches!(&self[stop], Node::Stop));
+
+        let ret = self.unique_input(stop).unwrap();
+        assert!(matches!(&self[ret], Node::Return));
+        &self[self.inputs[ret][0].unwrap()]
+    }
 }

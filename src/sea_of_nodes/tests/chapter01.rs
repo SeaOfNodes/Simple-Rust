@@ -2,7 +2,7 @@ use crate::datastructures::arena::Arena;
 use crate::sea_of_nodes::nodes::Node;
 use crate::sea_of_nodes::parser::Parser;
 use crate::sea_of_nodes::tests::{test_error, test_print_stop};
-use crate::sea_of_nodes::types::Types;
+use crate::sea_of_nodes::types::{Int, Type, Types};
 
 #[test]
 fn test_simple_program() {
@@ -40,7 +40,9 @@ fn test_zero() {
     ));
     for output in &parser.nodes.outputs[parser.nodes.start] {
         if let Node::Constant(c) = &parser.nodes[*output] {
-            assert_eq!(0, c.unwrap_int());
+            if let Type::Int(value) = c.inner() {
+                assert_eq!(Int::Constant(0), *value);
+            }
         }
     }
 }
