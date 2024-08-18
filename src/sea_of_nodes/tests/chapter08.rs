@@ -27,8 +27,8 @@ return arg;
     assert!(matches!(parser.nodes.ret_ctrl(stop), Node::Region {.. }));
 
     let nodes = parser.nodes;
-    assert_eq!(5, graph_evaluator::evaluate(&nodes, &mut types, stop, Some(1)));
-    assert_eq!(10, graph_evaluator::evaluate(&nodes, &mut types, stop, Some(6)));
+    assert_eq!(5, graph_evaluator::evaluate(&nodes, &mut types, stop, Some(1), None));
+    assert_eq!(10, graph_evaluator::evaluate(&nodes, &mut types, stop, Some(6), None));
 }
 
 

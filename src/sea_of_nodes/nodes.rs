@@ -2,7 +2,7 @@ use std::num::NonZeroU32;
 use std::ops::{Index, IndexMut};
 
 pub use id::NodeId;
-pub use node::{BoolOp, Node};
+pub use node::{BoolOp, Node, ProjNode};
 pub use scope::ScopeNode;
 
 use crate::datastructures::id::Id;
