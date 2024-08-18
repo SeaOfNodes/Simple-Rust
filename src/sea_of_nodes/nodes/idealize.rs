@@ -77,6 +77,12 @@ impl<'t> Nodes<'t> {
 
         // Now we only see (add add non)
 
+        // Dead data cycle; comes about from dead infinite loops.  Do nothing,
+        // the loop will peep as dead after a bit.
+        if self.inputs[lhs][1] == Some(lhs) {
+            return None;
+        }
+
         // Do we have (x + con1) + con2?
         // Replace with (x + (con1+con2) which then fold the constants
         if self.ty[self.inputs[lhs][2]?]?.is_constant() && t2.is_constant() {

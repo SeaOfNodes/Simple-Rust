@@ -143,7 +143,7 @@ impl<'t> Nodes<'t> {
                     })
                 }
             }
-            Node::Region { .. } | Node::Loop => {
+            Node::Region { .. } => {
                 if self.in_progress(node) {
                     types.ty_ctrl
                 } else {
@@ -153,6 +153,14 @@ impl<'t> Nodes<'t> {
                         .fold(types.ty_xctrl, |t, n| {
                             types.meet(t, self.ty[n.unwrap()].unwrap())
                         })
+                }
+            }
+            Node::Loop => {
+                if self.in_progress(node) {
+                    types.ty_ctrl
+                } else {
+                    let entry = self.inputs[node][1].unwrap();
+                    self.ty[entry].unwrap()
                 }
             }
             Node::Stop => types.ty_bot,
