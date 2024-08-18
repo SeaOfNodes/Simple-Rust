@@ -19,7 +19,7 @@ impl Display for PrintNodes<'_, '_> {
             nodes: self.nodes,
             visited: &self.visited,
         }
-        .fmt(f)
+            .fmt(f)
     }
 }
 
@@ -88,7 +88,13 @@ impl Display for PrintNodes2<'_, '_, '_> {
                     if i > 0 {
                         write!(f, " ")?;
                     }
-                    write!(f, "{}:{}", n.as_ref().unwrap(), input(i))?;
+                    write!(f, "{}:", n.as_ref().unwrap())?;
+                    let mut node = inputs[i];
+                    while node.is_some_and(|n| matches!(&nodes[n], Node::Scope(_))) {
+                        write!(f, "Lazy_")?;
+                        node = nodes.inputs[node.unwrap()][i];
+                    }
+                    write!(f, "{}", print(node))?;
                 }
                 write!(f, "]")
             }

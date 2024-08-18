@@ -190,7 +190,7 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
 
         // Clone the head Scope to create a new Scope for the body.
         // Create phis eagerly as part of cloning
-        self.scope = self.nodes.scope_dup(self.scope, true, self.types); // The true argument triggers creating phis
+        self.scope = self.nodes.scope_dup(self.scope, true); // The true argument triggers creating phis
         self.x_scopes.push(self.scope);
 
         // Parse predicate
@@ -212,7 +212,7 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
         // scope after the loop, and its control input is the False branch of
         // the loop predicate.  Note that body Scope is still our current scope.
         self.set_ctrl(if_false);
-        let break_scope = self.nodes.scope_dup(self.scope, false, self.types);
+        let break_scope = self.nodes.scope_dup(self.scope, false);
         self.break_scope = Some(break_scope);
         self.x_scopes.push(break_scope);
 
@@ -325,7 +325,7 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
         // In if true branch, the ifT proj node becomes the ctrl
         // But first clone the scope and set it as current
         let n_defs = self.nodes.inputs[self.scope].len();
-        let mut false_scope = self.nodes.scope_dup(self.scope, false, self.types);
+        let mut false_scope = self.nodes.scope_dup(self.scope, false);
         self.x_scopes.push(false_scope);
 
         // Parse the true side
@@ -394,7 +394,7 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
         let expr = self.parse_expression()?;
         self.require(";")?;
 
-        match self.nodes.scope_update(self.scope, name, expr) {
+        match self.nodes.scope_update(self.scope, name, expr, self.types) {
             Ok(_) => Ok(()),
             Err(()) => Err(format!("Undefined name '{name}'")),
         }
@@ -505,7 +505,7 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
             Ok(self.peephole(Node::make_constant(self.nodes.start, self.types.ty_zero)))
         } else if let Some(name) = self.lexer.match_id() {
             self.nodes
-                .scope_lookup(self.scope, name)
+                .scope_lookup(self.scope, name, self.types)
                 .map_err(|()| format!("Undefined name '{name}'"))
         } else {
             Err(self.error_syntax("an identifier or expression"))
