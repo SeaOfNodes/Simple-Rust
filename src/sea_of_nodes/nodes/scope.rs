@@ -153,6 +153,7 @@ impl<'t> Nodes<'t> {
         let c2 = self.inputs[that][0];
         let region = self.create(Node::make_region(vec![None, c1, c2]));
         self.keep(region);
+        self.set_def(this, 0, Some(region)); // set ctrl
 
         let names = self.scope_reverse_names(this);
 
