@@ -1,0 +1,21 @@
+[package]
+name = "simple-rust-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.simple-rust]
+path = ".."
+
+[[bin]]
+name = "basic"
+path = "fuzz_targets/basic.rs"
+test = false
+doc = false
+bench = false

@@ -25,6 +25,7 @@ pub struct Parser<'s, 'mt, 't> {
 
     continue_scope: Option<NodeId>,
     break_scope: Option<NodeId>,
+    pub disable_show_graph_println: bool,
 }
 
 type ParseErr = String;
@@ -68,6 +69,7 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
             x_scopes: vec![],
             continue_scope: None,
             break_scope: None,
+            disable_show_graph_println: false,
         }
     }
 
@@ -376,9 +378,11 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
     /// Dumps out the node graph
     pub fn show_graph(&mut self) {
         let dot = graph_visualizer::generate_dot_output(self, false).unwrap();
-        println!("{dot}");
-        // uncomment to open in browser:
-        // graph_visualizer::run_graphviz_and_chromium(dot);
+        if !self.disable_show_graph_println {
+            println!("{dot}");
+            // uncomment to open in browser:
+            // graph_visualizer::run_graphviz_and_chromium(dot);
+        }
     }
 
     pub fn print(&mut self, node: NodeId) -> String {
