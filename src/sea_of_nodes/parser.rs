@@ -22,6 +22,9 @@ pub struct Parser<'s, 'mt, 't> {
 
     /// stack of scopes for graph visualization
     pub(crate) x_scopes: Vec<NodeId>,
+
+    continue_scope: Option<NodeId>,
+    break_scope: Option<NodeId>,
 }
 
 type ParseErr = String;
@@ -30,7 +33,7 @@ type PResult<T> = Result<T, ParseErr>;
 fn is_keyword(s: &str) -> bool {
     matches!(
         s,
-        "else" | "false" | "if" | "int" | "return" | "true" | "while"
+        "break" | "continue" | "else" | "false" | "if" | "int" | "return" | "true" | "while"
     )
 }
 
@@ -63,6 +66,8 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
             stop,
             scope,
             x_scopes: vec![],
+            continue_scope: None,
+            break_scope: None,
         }
     }
 
@@ -144,6 +149,10 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
             self.parse_if()
         } else if self.matchx("while") {
             self.parse_while()
+        } else if self.matchx("break") {
+            self.parse_break()
+        } else if self.matchx("continue") {
+            self.parse_continue()
         } else if self.matchx("#showGraph") {
             self.show_graph();
             self.require(";")
@@ -156,6 +165,9 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
     ///     while ( expression ) statement
     /// </pre>
     fn parse_while(&mut self) -> PResult<()> {
+        let saved_continue_scope = self.continue_scope;
+        let saved_break_scope = self.break_scope;
+
         self.require("(")?;
 
         // Loop region has two control inputs, the first is the entry
@@ -195,27 +207,37 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
         self.nodes.unkeep(if_node);
         let if_false = self.peephole(Node::make_proj(if_node, 1, "False".to_string()));
 
-        // Clone the body Scope to create the exit Scope
-        // which accounts for any side effects in the predicate
-        // The exit Scope will be the final scope after the loop,
-        // And its control input is the False branch of the loop predicate
-        // Note that body Scope is still our current scope
-        let exit = self.nodes.scope_dup(self.scope, false, self.types);
-        self.x_scopes.push(exit);
-        self.nodes.set_def(exit, 0, Some(if_false)); // exit.ctrl(ifF);
+        // Clone the body Scope to create the break/exit Scope which accounts for any
+        // side effects in the predicate.  The break/exit Scope will be the final
+        // scope after the loop, and its control input is the False branch of
+        // the loop predicate.  Note that body Scope is still our current scope.
+        self.set_ctrl(if_false);
+        let break_scope = self.nodes.scope_dup(self.scope, false, self.types);
+        self.break_scope = Some(break_scope);
+        self.x_scopes.push(break_scope);
+
+        // No continues yet
+        self.continue_scope = None;
 
         // Parse the true side, which corresponds to loop body
         // Our current scope is the body Scope
         self.set_ctrl(if_true);
         self.parse_statement()?; // Parse loop body
 
-        // The true branch loops back, so whatever is current control (_scope.ctrl) gets
-        // added to head loop as input. endLoop() updates the head scope,
-        // and goes through all the phis that were created earlier. For each
-        // phi, it sets the second input to the corresponding input from the back edge.
-        // If the phi is redundant, it is replaced by its sole input.
-        self.nodes
-            .scope_end_loop(head, self.scope, exit, self.types);
+        // Merge the loop bottom into other continue statements
+        if self.continue_scope.is_some() {
+            self.continue_scope = Some(self.jump_to(self.continue_scope));
+            self.nodes.kill(self.scope);
+            self.scope = self.continue_scope.unwrap();
+        }
+
+        // The true branch loops back, so whatever is current _scope.ctrl gets
+        // added to head loop as input.  endLoop() updates the head scope, and
+        // goes through all the phis that were created earlier.  For each phi,
+        // it sets the second input to the corresponding input from the back
+        // edge.  If the phi is redundant, it is replaced by its sole input.
+        let exit = self.break_scope.unwrap();
+        self.nodes.scope_end_loop(head, self.scope, exit, self.types);
         self.nodes.unkeep(head);
         self.nodes.kill(head);
 
@@ -223,11 +245,60 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
         self.x_scopes.pop();
         self.x_scopes.pop();
 
+        self.continue_scope = saved_continue_scope;
+        self.break_scope = saved_break_scope;
+
         // At exit the false control is the current control, and
         // the scope is the exit scope after the exit test.
         self.scope = exit;
 
         Ok(())
+    }
+
+    fn jump_to(&mut self, to_scope: Option<NodeId>) -> NodeId {
+        let cur = self.nodes.scope_dup(self.scope, false);
+
+        let ctrl = self.peephole(Node::make_constant(self.nodes.start, self.types.ty_xctrl));
+        self.set_ctrl(ctrl); // Kill current scope
+
+        // Prune nested lexical scopes that have depth > than the loop head
+        // We use _breakScope as a proxy for the loop head scope to obtain the depth
+        let break_scopes_len = self.nodes.scope(self.break_scope.unwrap()).scopes.len();
+        while self.nodes.scope(cur).scopes.len() > break_scopes_len {
+            self.nodes.scope_pop(cur);
+        }
+
+        // If this is a continue then first time the target is null
+        // So we just use the pruned current scope as the base for the
+        // continue
+        let Some(to_scope) = to_scope else {
+            return cur;
+        };
+
+        // toScope is either the break scope, or a scope that was created here
+        debug_assert!(self.nodes.scope(to_scope).scopes.len() <= break_scopes_len);
+        self.nodes.scope_merge(to_scope, cur, self.types);
+        to_scope
+    }
+
+    fn check_loop_active(&self) -> PResult<()> {
+        if self.break_scope.is_none() {
+            Err("No active loop for a break or continue".to_string())
+        } else {
+            Ok(())
+        }
+    }
+
+    fn parse_break(&mut self) -> PResult<()> {
+        self.check_loop_active()?;
+        self.break_scope = Some(self.jump_to(self.break_scope));
+        self.require(";")
+    }
+
+    fn parse_continue(&mut self) -> PResult<()> {
+        self.check_loop_active()?;
+        self.continue_scope = Some(self.jump_to(self.continue_scope));
+        self.require(";")
     }
 
     /// <pre>

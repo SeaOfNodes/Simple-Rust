@@ -14,6 +14,12 @@ impl ScopeNode {
 }
 
 impl<'t> Nodes<'t> {
+    pub(crate) fn scope(&self, scope_node: NodeId) -> &ScopeNode {
+        let Node::Scope(scope) = &self[scope_node] else {
+            panic!("Must be called with a scope node id")
+        };
+        scope
+    }
     pub(crate) fn scope_mut(&mut self, scope_node: NodeId) -> &mut ScopeNode {
         let Node::Scope(scope) = &mut self[scope_node] else {
             panic!("Must be called with a scope node id")
