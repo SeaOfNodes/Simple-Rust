@@ -271,7 +271,11 @@ fn scope_edges(sb: &mut String, nodes: &Nodes, scope_node: NodeId) -> fmt::Resul
         let scope_name = make_scope_name(nodes, scope_node, level + 1);
 
         for (name, index) in s {
-            if let Some(def) = nodes.inputs[scope_node][*index] {
+            let mut def = nodes.inputs[scope_node][*index];
+            while def.is_some() && matches!(&nodes[def.unwrap()], Node::Scope(_)) {
+                def = nodes.inputs[def.unwrap()][*index]; // lazy
+            }
+            if let Some(def) = def {
                 let port_name = make_port_name(&scope_name, name);
                 let def_name = def_name(&nodes, def);
                 writeln!(sb, "\t{scope_name}:\"{port_name}\" -> {def_name};")?;
