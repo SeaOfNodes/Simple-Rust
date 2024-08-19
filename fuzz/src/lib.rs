@@ -1,13 +1,12 @@
-#![no_main]
+pub mod script_generator;
 
-use libfuzzer_sys::fuzz_target;
 use simple_rust::datastructures::arena::Arena;
 use simple_rust::sea_of_nodes::graph_evaluator;
 use simple_rust::sea_of_nodes::graph_evaluator::EResult;
 use simple_rust::sea_of_nodes::parser::Parser;
 use simple_rust::sea_of_nodes::types::Types;
 
-fuzz_target!(|source: &str| {
+pub fn run_and_compare_eval(source: &str, definitely_valid: bool) {
     let arena1 = Arena::new();
     let mut types1 = Types::new(&arena1);
     let mut parser1 = Parser::new(source, &mut types1);
@@ -24,7 +23,11 @@ fuzz_target!(|source: &str| {
 
     let (stop1, stop2) = match (result1, result2) {
         (Ok(stop1), Ok(stop2)) => (stop1, stop2),
-        (r1,r2) => return assert_eq!(r1, r2)
+        (r1, r2) => {
+            assert_eq!(r1, r2);
+            assert!(!definitely_valid);
+            return;
+        }
     };
 
     let timeout = 1000;
@@ -36,5 +39,4 @@ fuzz_target!(|source: &str| {
         }
         assert_eq!(er1, er2);
     }
-
-});
+}

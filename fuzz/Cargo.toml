@@ -9,6 +9,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
 
 [dependencies.simple-rust]
 path = ".."
@@ -21,8 +22,15 @@ doc = false
 bench = false
 
 [[bin]]
-name = "eval"
-path = "fuzz_targets/eval.rs"
+name = "eval_str"
+path = "fuzz_targets/eval_str.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "eval_gen"
+path = "fuzz_targets/eval_gen.rs"
 test = false
 doc = false
 bench = false

@@ -31,7 +31,7 @@ pub struct Parser<'s, 'mt, 't> {
 type ParseErr = String;
 type PResult<T> = Result<T, ParseErr>;
 
-fn is_keyword(s: &str) -> bool {
+pub fn is_keyword(s: &str) -> bool {
     matches!(
         s,
         "break" | "continue" | "else" | "false" | "if" | "int" | "return" | "true" | "while"
