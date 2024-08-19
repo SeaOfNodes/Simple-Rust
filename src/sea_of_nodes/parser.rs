@@ -122,6 +122,10 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
         }
     }
 
+    pub fn iterate(&self, stop: NodeId) -> NodeId {
+        todo!("self.nodes.iterate(stop, self.types) should this really be here or on a ParseResult?")
+    }
+
     /// <pre>
     ///     '{' statements '}'
     /// </pre>

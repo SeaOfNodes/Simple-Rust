@@ -12,6 +12,7 @@ mod chapter06;
 mod chapter07;
 mod chapter08;
 mod fuzzing;
+mod chapter09;
 
 fn test_error(source: &str, error: &str) {
     let arena = Arena::new();

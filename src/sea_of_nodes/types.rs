@@ -20,6 +20,7 @@ pub struct Types<'a> {
     pub ty_one: Ty<'a>,
     pub ty_two: Ty<'a>,
     pub ty_int_bot: Ty<'a>,
+    pub ty_int_top: Ty<'a>,
     pub ty_if_both: Ty<'a>,
     pub ty_if_neither: Ty<'a>,
     pub ty_if_true: Ty<'a>,
@@ -38,6 +39,7 @@ impl<'a> Types<'a> {
         let ty_one = interner.intern(Type::Int(Int::Constant(1)));
         let ty_two = interner.intern(Type::Int(Int::Constant(2)));
         let ty_int_bot = interner.intern(Type::Int(Int::Bot));
+        let ty_int_top = interner.intern(Type::Int(Int::Top));
 
         let ty_if_both = interner.intern(Type::Tuple {
             types: vec![ty_ctrl, ty_ctrl],
@@ -62,6 +64,7 @@ impl<'a> Types<'a> {
             ty_one,
             ty_two,
             ty_int_bot,
+            ty_int_top,
             ty_if_both,
             ty_if_neither,
             ty_if_true,
