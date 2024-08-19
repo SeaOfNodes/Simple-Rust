@@ -253,6 +253,7 @@ impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
         // At exit the false control is the current control, and
         // the scope is the exit scope after the exit test.
         self.scope = exit;
+        *self.x_scopes.last_mut().unwrap() = exit; // differs from java
 
         Ok(())
     }
