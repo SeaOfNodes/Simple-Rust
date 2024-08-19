@@ -114,7 +114,7 @@ impl<'a, 't> GraphEvaluator<'a, 't> {
             Node::Sub => self.binary(node, i64::wrapping_sub),
             Node::Mul => self.binary(node, i64::wrapping_mul),
             Node::Div => self.div(node),
-            Node::Minus => -self.get_value(self.nodes.inputs[node][1]),
+            Node::Minus => self.get_value(self.nodes.inputs[node][1]).wrapping_neg(),
             Node::Bool(op) => self.binary(node, |a, b| op.compute(a, b) as i64),
             Node::Not => if self.get_value(self.nodes.inputs[node][1]) == 0 { 1 } else { 0 },
             n => todo!("unexpected node type {}", n.label())
