@@ -19,3 +19,10 @@ path = "fuzz_targets/basic.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "eval"
+path = "fuzz_targets/eval.rs"
+test = false
+doc = false
+bench = false

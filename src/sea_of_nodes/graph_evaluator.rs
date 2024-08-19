@@ -1,19 +1,19 @@
 use crate::datastructures::id_set::IdSet;
 use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes, ProjNode};
-use crate::sea_of_nodes::types::Types;
 use std::collections::HashMap;
 
+#[derive(Debug, Eq, PartialEq)]
 pub enum EResult {
     Value(i64),
     Fallthrough,
     Timeout,
 }
 
-pub fn evaluate<'t>(nodes: &Nodes<'t>, types: &mut Types<'t>, graph: NodeId, parameter: Option<i64>, loops: Option<usize>) -> i64 {
+pub fn evaluate(nodes: &Nodes, graph: NodeId, parameter: Option<i64>, loops: Option<usize>) -> i64 {
     let parameter = parameter.unwrap_or(0);
     let loops = loops.unwrap_or(1000);
 
-    let res = evaluate_with_result(nodes, types, graph, parameter, loops);
+    let res = evaluate_with_result(nodes, graph, parameter, loops);
 
     match res {
         EResult::Value(v) => v,
@@ -22,12 +22,12 @@ pub fn evaluate<'t>(nodes: &Nodes<'t>, types: &mut Types<'t>, graph: NodeId, par
     }
 }
 
-pub fn evaluate_with_result<'t>(nodes: &Nodes<'t>, types: &mut Types<'t>, graph: NodeId, parameter: i64, loops: usize) -> EResult {
+pub fn evaluate_with_result(nodes: &Nodes, graph: NodeId, parameter: i64, loops: usize) -> EResult {
     let mut visited = IdSet::zeros(nodes.len());
     let Some(start) = nodes.find_start(&mut visited, Some(graph)) else {
         return EResult::Timeout;
     };
-    let mut evaluator = GraphEvaluator::new(nodes, types);
+    let mut evaluator = GraphEvaluator::new(nodes);
     evaluator.evaluate(start, parameter, loops)
 }
 
@@ -69,20 +69,19 @@ impl<'t> Nodes<'t> {
 }
 
 
-struct GraphEvaluator<'a, 'b, 't> {
+struct GraphEvaluator<'a, 't> {
     nodes: &'a Nodes<'t>,
-    types: &'b mut Types<'t>,
+
     /// Cache values for phi and parameter projection nodes.
     cache_values: HashMap<NodeId, i64>,
     /// Cache for loop phis as they can depend on itself or other loop phis
     loop_phi_cache: Vec<i64>,
 }
 
-impl<'a, 'b, 't> GraphEvaluator<'a, 'b, 't> {
-    pub fn new(nodes: &'a Nodes<'t>, types: &'b mut Types<'t>) -> Self {
+impl<'a, 't> GraphEvaluator<'a, 't> {
+    pub fn new(nodes: &'a Nodes<'t>) -> Self {
         Self {
             nodes,
-            types,
             cache_values: HashMap::new(),
             loop_phi_cache: Vec::with_capacity(16),
         }
