@@ -227,11 +227,7 @@ impl<'t> Nodes<'t> {
         self.inputs[node][0].filter(|ctrl| self.ty[*ctrl] == Some(self.types.ty_xctrl))
     }
 
-    fn idealize_proj(
-        &mut self,
-        node: NodeId,
-        index: usize,
-    ) -> Option<NodeId> {
+    fn idealize_proj(&mut self, node: NodeId, index: usize) -> Option<NodeId> {
         if let Some(Type::Tuple { types: ts }) = self.ty[self.inputs[node][0]?].as_deref() {
             if ts[index] == self.types.ty_xctrl {
                 return Some(
@@ -348,20 +344,18 @@ impl<'t> Nodes<'t> {
 
         // Push constant up through the phi: x + (phi con0+con0 con1+con1...)
         for i in 1..ns.len() {
-            ns[i] = Some(self.create_peepholed(
-                (
-                    self[op].clone(),
-                    vec![
-                        None,
-                        self.inputs[lphi][i],
-                        if matches!(&self[rhs], Node::Phi(_)) {
-                            self.inputs[rhs][i]
-                        } else {
-                            Some(rhs)
-                        },
-                    ],
-                ),
-            ));
+            ns[i] = Some(self.create_peepholed((
+                self[op].clone(),
+                vec![
+                    None,
+                    self.inputs[lphi][i],
+                    if matches!(&self[rhs], Node::Phi(_)) {
+                        self.inputs[rhs][i]
+                    } else {
+                        Some(rhs)
+                    },
+                ],
+            )));
         }
 
         let label = format!(

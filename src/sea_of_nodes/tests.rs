@@ -11,17 +11,14 @@ mod chapter05;
 mod chapter06;
 mod chapter07;
 mod chapter08;
-mod fuzzing;
 mod chapter09;
+mod fuzzing;
 
 fn test_error(source: &str, error: &str) {
     let arena = Arena::new();
     let types = Types::new(&arena);
 
-    assert_eq!(
-        Parser::new(source, &types).parse(),
-        Err(error.to_string()),
-    );
+    assert_eq!(Parser::new(source, &types).parse(), Err(error.to_string()),);
 }
 
 fn test_print_stop(source: &str, expected: &str) {

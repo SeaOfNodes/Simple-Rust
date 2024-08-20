@@ -57,17 +57,22 @@ impl<'t> Nodes<'t> {
 
     /// Find the control output from a control node
     fn find_control(&self, control: NodeId) -> Option<NodeId> {
-        self.outputs[control].iter().find(|&&use_| self.is_cfg(use_)).copied()
+        self.outputs[control]
+            .iter()
+            .find(|&&use_| self.is_cfg(use_))
+            .copied()
     }
 
     /// Find the projection for a node
     fn find_projection(&self, node: NodeId, idx: usize) -> Option<NodeId> {
-        self.outputs[node].iter().find(|&&use_|
-            matches!(&self[use_], Node::Proj(ProjNode {index, .. }) if *index == idx)
-        ).copied()
+        self.outputs[node]
+            .iter()
+            .find(
+                |&&use_| matches!(&self[use_], Node::Proj(ProjNode {index, .. }) if *index == idx),
+            )
+            .copied()
     }
 }
-
 
 struct GraphEvaluator<'a, 't> {
     nodes: &'a Nodes<'t>,
@@ -89,7 +94,9 @@ impl<'a, 't> GraphEvaluator<'a, 't> {
 
     fn div(&mut self, div: NodeId) -> i64 {
         let in2 = self.get_value(self.nodes.inputs[div][2]);
-        if in2 == 0 { 0 } else {
+        if in2 == 0 {
+            0
+        } else {
             self.get_value(self.nodes.inputs[div][1]) / in2
         }
     }
@@ -116,14 +123,23 @@ impl<'a, 't> GraphEvaluator<'a, 't> {
             Node::Div => self.div(node),
             Node::Minus => self.get_value(self.nodes.inputs[node][1]).wrapping_neg(),
             Node::Bool(op) => self.binary(node, |a, b| op.compute(a, b) as i64),
-            Node::Not => if self.get_value(self.nodes.inputs[node][1]) == 0 { 1 } else { 0 },
-            n => todo!("unexpected node type {}", n.label())
+            Node::Not => {
+                if self.get_value(self.nodes.inputs[node][1]) == 0 {
+                    1
+                } else {
+                    0
+                }
+            }
+            n => todo!("unexpected node type {}", n.label()),
         }
     }
 
     /// Special case of latchPhis when phis can depend on phis of the same region.
     fn latch_loop_phis(&mut self, region: NodeId, prev: NodeId) {
-        let idx = self.nodes.inputs[region].iter().position(|n| *n == Some(prev)).unwrap();
+        let idx = self.nodes.inputs[region]
+            .iter()
+            .position(|n| *n == Some(prev))
+            .unwrap();
         debug_assert!(idx > 0);
         self.loop_phi_cache.clear();
         for &use_ in &self.nodes.outputs[region] {
@@ -143,7 +159,10 @@ impl<'a, 't> GraphEvaluator<'a, 't> {
 
     /// Calculate the values of phis of the region and caches the values. The phis are not allowed to depend on other phis of the region.
     fn latch_phis(&mut self, region: NodeId, prev: NodeId) {
-        let idx = self.nodes.inputs[region].iter().position(|n| *n == Some(prev)).unwrap();
+        let idx = self.nodes.inputs[region]
+            .iter()
+            .position(|n| *n == Some(prev))
+            .unwrap();
         debug_assert!(idx > 0);
         for &use_ in &self.nodes.outputs[region] {
             if let Node::Phi(_) = &self.nodes[use_] {
@@ -155,7 +174,7 @@ impl<'a, 't> GraphEvaluator<'a, 't> {
 
     /// Run the graph until either a return is found or the number of loop iterations are done.
     fn evaluate(&mut self, start: NodeId, parameter: i64, mut loops: usize) -> EResult {
-        assert!(matches!(&self.nodes[start], Node::Start {..}));
+        assert!(matches!(&self.nodes[start], Node::Start { .. }));
 
         if let Some(parameter1) = self.nodes.find_projection(start, 1) {
             self.cache_values.insert(parameter1, parameter);
@@ -166,7 +185,8 @@ impl<'a, 't> GraphEvaluator<'a, 't> {
         while let Some(c) = control {
             let next = match &self.nodes[c] {
                 Node::Region { .. } | Node::Loop => {
-                    if matches!(&self.nodes[c], Node::Loop) && self.nodes.inputs[c][1] != Some(prev) {
+                    if matches!(&self.nodes[c], Node::Loop) && self.nodes.inputs[c][1] != Some(prev)
+                    {
                         if loops == 0 {
                             return EResult::Timeout;
                         }
@@ -177,10 +197,17 @@ impl<'a, 't> GraphEvaluator<'a, 't> {
                     }
                     self.nodes.find_control(c)
                 }
-                Node::If => self.nodes.find_projection(c, if self.get_value(self.nodes.inputs[c][1]) != 0 { 0 } else { 1 }),
+                Node::If => self.nodes.find_projection(
+                    c,
+                    if self.get_value(self.nodes.inputs[c][1]) != 0 {
+                        0
+                    } else {
+                        1
+                    },
+                ),
                 Node::Return => return EResult::Value(self.get_value(self.nodes.inputs[c][1])),
                 Node::Proj(_) => self.nodes.find_control(c),
-                n => todo!("unexpected control node {}", n.label())
+                n => todo!("unexpected control node {}", n.label()),
             };
             prev = c;
             control = next;

@@ -22,5 +22,8 @@ fn test_eval_negate_overflow() {
 
     let nodes = parser.nodes;
     assert_eq!(-1, graph_evaluator::evaluate(&nodes, stop, Some(1), None));
-    assert_eq!(i64::MIN, graph_evaluator::evaluate(&nodes, stop, Some(i64::MIN), None));
+    assert_eq!(
+        i64::MIN,
+        graph_evaluator::evaluate(&nodes, stop, Some(i64::MIN), None)
+    );
 }

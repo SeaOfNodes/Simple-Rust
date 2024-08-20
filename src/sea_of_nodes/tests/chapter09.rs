@@ -7,7 +7,8 @@ use crate::sea_of_nodes::types::Types;
 fn test_jig() {
     let arena = Arena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new("
+    let mut parser = Parser::new(
+        "
 int v0=0;
 arg=0;
 while(v0) {
@@ -16,7 +17,9 @@ while(v0) {
     arg=1;
 }
 return 0;
-                ", &types);
+                ",
+        &types,
+    );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
@@ -36,13 +39,24 @@ else {
     x = x + 1;
 }
 return x;
-                ", &types);
+                ",
+        &types,
+    );
     let stop = parser.parse().unwrap();
     parser.show_graph();
-    assert_eq!("Stop[ return (arg*2); return (Mul+1); ]", parser.print(stop));
+    assert_eq!(
+        "Stop[ return (arg*2); return (Mul+1); ]",
+        parser.print(stop)
+    );
 
-    assert_eq!(2, graph_evaluator::evaluate(&parser.nodes, stop, Some(1), None));
-    assert_eq!(23, graph_evaluator::evaluate(&parser.nodes, stop, Some(11), None));
+    assert_eq!(
+        2,
+        graph_evaluator::evaluate(&parser.nodes, stop, Some(1), None)
+    );
+    assert_eq!(
+        23,
+        graph_evaluator::evaluate(&parser.nodes, stop, Some(11), None)
+    );
 }
 
 #[test]
@@ -52,11 +66,16 @@ fn test_gvn2() {
     let mut parser = Parser::new(
         "
 return arg*arg-arg*arg;
-                ", &types);
+                ",
+        &types,
+    );
     let stop = parser.parse().unwrap();
     parser.show_graph();
     assert_eq!("return 0;", parser.print(stop));
-    assert_eq!(0, graph_evaluator::evaluate(&parser.nodes, stop, Some(1), None));
+    assert_eq!(
+        0,
+        graph_evaluator::evaluate(&parser.nodes, stop, Some(1), None)
+    );
 }
 
 #[test]
@@ -70,13 +89,18 @@ while (arg < 10) {
     arg = arg + step + 1;
 }
 return arg;
-                ", &types);
+                ",
+        &types,
+    );
     let stop = parser.parse().unwrap();
     parser.show_graph();
     parser.iterate(stop);
     parser.show_graph();
     assert_eq!("return Phi(Loop7,arg,(Phi_arg+2));", parser.print(stop));
-    assert_eq!(11, graph_evaluator::evaluate(&parser.nodes, stop, Some(1), None));
+    assert_eq!(
+        11,
+        graph_evaluator::evaluate(&parser.nodes, stop, Some(1), None)
+    );
 }
 
 #[test]
@@ -92,13 +116,18 @@ while (arg < 10) {
     arg = arg + one*3 + 1;
 }
 return arg;
-                ", &types);
+                ",
+        &types,
+    );
     let stop = parser.parse().unwrap();
     parser.show_graph();
     parser.iterate(stop);
     parser.show_graph();
     assert_eq!("return Phi(Loop8,arg,(Phi_arg+4));", parser.print(stop));
-    assert_eq!(13, graph_evaluator::evaluate(&parser.nodes, stop, Some(1), None));
+    assert_eq!(
+        13,
+        graph_evaluator::evaluate(&parser.nodes, stop, Some(1), None)
+    );
 }
 
 #[test]
@@ -126,7 +155,9 @@ while (arg) {
     arg = arg + v8 + 1;
 }
 return arg;
-                ", &types);
+                ",
+        &types,
+    );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
@@ -148,7 +179,9 @@ while(v1+arg) {
     v0=1;
     v1=v2;
 }
-                ", &types);
+                ",
+        &types,
+    );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
@@ -170,18 +203,20 @@ fn test_while0() {
 fn test_while1() {
     let arena = Arena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new("
+    let mut parser = Parser::new(
+        "
 if(0) while(0) {
     int arg=arg;
     while(0) {}
 }
-", &types);
+",
+        &types,
+    );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
     assert_eq!("Stop[ ]", parser.print(stop));
 }
-
 
 #[test]
 fn test_precedence() {
@@ -205,12 +240,12 @@ fn test_swap2() {
     assert_eq!("return 3;", parser.print(stop));
 }
 
-
 #[test]
 fn test_fuzz0() {
     let arena = Arena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new("
+    let mut parser = Parser::new(
+        "
 int one = 1;
 int a = 0;
 int zero = 0;
@@ -220,7 +255,9 @@ while(arg) {
     one = one + zero;
 }
 return a;
-", &types);
+",
+        &types,
+    );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
@@ -231,20 +268,22 @@ return a;
 fn test_fuzz1() {
     let arena = Arena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new("
+    let mut parser = Parser::new(
+        "
 while(1) {}
 while(arg) break;
 while(arg) arg=0;
 arg=0;
 int v0=0!=0<-0;
 return -0+0+0;
-", &types);
+",
+        &types,
+    );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
     assert_eq!("Stop[ ]", parser.print(stop));
 }
-
 
 #[test]
 fn test_fuzz2() {
@@ -272,12 +311,15 @@ fn test_fuzz3() {
 fn test_fuzz4() {
     let arena = Arena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new("
+    let mut parser = Parser::new(
+        "
 while(1) {
     arg=0<=0;
     if(1<0) while(arg==-0) arg=arg-arg;
 }
-", &types);
+",
+        &types,
+    );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
@@ -288,7 +330,8 @@ while(1) {
 fn test_fuzz5() {
     let arena = Arena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new("
+    let mut parser = Parser::new(
+        "
 {
     int v0=0;
     while(1)
@@ -303,7 +346,9 @@ fn test_fuzz5() {
                 break;
 }
 return 0!=0;
-", &types);
+",
+        &types,
+    );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
@@ -314,11 +359,14 @@ return 0!=0;
 fn test_fuzz6() {
     let arena = Arena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new("
+    let mut parser = Parser::new(
+        "
 int v0=0;
 while(0==1) while(v0)
         v0=1+v0;
-                                   ", &types);
+                                   ",
+        &types,
+    );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
@@ -329,7 +377,8 @@ while(0==1) while(v0)
 fn test_fuzz7() {
     let arena = Arena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new("
+    let mut parser = Parser::new(
+        "
 while(1) {}
 int v0=0;
 while(v0)
@@ -338,7 +387,9 @@ int v1=0;
 while(1)
         v1=1;
 return v1+v0;
-                                   ", &types);
+                                   ",
+        &types,
+    );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();

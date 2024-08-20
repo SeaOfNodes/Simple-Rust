@@ -19,7 +19,7 @@ impl Display for PrintNodes<'_, '_> {
             nodes: self.nodes,
             visited: &self.visited,
         }
-            .fmt(f)
+        .fmt(f)
     }
 }
 

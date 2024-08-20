@@ -7,7 +7,8 @@ use crate::sea_of_nodes::types::Types;
 fn test_if_stmt() {
     let arena = Arena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new("\
+    let mut parser = Parser::new(
+        "\
 int a = 1;
 if (arg == 1)
     a = arg+2;
@@ -16,7 +17,9 @@ else {
     #showGraph;
 }
 #showGraph;
-return a;", &types);
+return a;",
+        &types,
+    );
     let stop = parser.parse().unwrap();
 
     parser.show_graph();
@@ -28,14 +31,17 @@ return a;", &types);
 fn test_test() {
     let arena = Arena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new("\
+    let mut parser = Parser::new(
+        "\
 int c = 3;
 int b = 2;
 if (arg == 1) {
     b = 3;
     c = 4;
 }
-return c;", &types);
+return c;",
+        &types,
+    );
     let stop = parser.parse().unwrap();
 
     parser.show_graph();
@@ -58,14 +64,17 @@ else
 fn test_if_merge_b() {
     let arena = Arena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new("\
+    let mut parser = Parser::new(
+        "\
 int a=arg+1;
 int b=0;
 if( arg==1 )
     b=a;
 else
     b=a+1;
-return a+b;", &types);
+return a+b;",
+        &types,
+    );
     let stop = parser.parse().unwrap();
 
     parser.show_graph();
@@ -76,19 +85,25 @@ return a+b;", &types);
 fn test_if_merge2() {
     let arena = Arena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new("\
+    let mut parser = Parser::new(
+        "\
 int a=arg+1;
 int b=arg+2;
 if( arg==1 )
     b=b+a;
 else
     a=b+1;
-return a+b;", &types);
+return a+b;",
+        &types,
+    );
     let stop = parser.parse().unwrap();
 
     parser.show_graph();
 
-    assert_eq!(parser.print(stop), "return ((Phi(Region31,(arg*2),arg)+arg)+Phi(Region,4,5));");
+    assert_eq!(
+        parser.print(stop),
+        "return ((Phi(Region31,(arg*2),arg)+arg)+Phi(Region,4,5));"
+    );
 }
 #[test]
 fn test_merge3() {
@@ -128,13 +143,16 @@ return arg+a+b;
 fn test_merge5() {
     let arena = Arena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new("\
+    let mut parser = Parser::new(
+        "\
 int a=arg==2;
 if( arg==1 )
 {
     a=arg==3;
 }
-return a;", &types);
+return a;",
+        &types,
+    );
     let stop = parser.parse().unwrap();
 
     parser.show_graph();

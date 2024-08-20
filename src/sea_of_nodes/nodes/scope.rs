@@ -83,7 +83,10 @@ impl<'t> Nodes<'t> {
                 if matches!(self[loop_], Node::Scope(_)) {
                     // Lazy Phi!
                     let loop_phi = self.inputs[loop_][index];
-                    old = if loop_phi.is_some_and(|p| matches!(&self[p], Node::Phi(_)) && self.inputs[loop_][0] == self.inputs[p][0]) {
+                    old = if loop_phi.is_some_and(|p| {
+                        matches!(&self[p], Node::Phi(_))
+                            && self.inputs[loop_][0] == self.inputs[p][0]
+                    }) {
                         // Loop already has a real Phi, use it
                         loop_phi
                     } else {
@@ -92,7 +95,10 @@ impl<'t> Nodes<'t> {
                         // lookup, which might have insert a Phi in every loop nest.
 
                         let recursive = self.scope_lookup_update(loop_, name, None, nesting_level);
-                        let new_phi = self.create_peepholed(Node::make_phi(name.to_string(), vec![self.inputs[loop_][0], recursive, None]));
+                        let new_phi = self.create_peepholed(Node::make_phi(
+                            name.to_string(),
+                            vec![self.inputs[loop_][0], recursive, None],
+                        ));
 
                         self.set_def(loop_, index, Some(new_phi));
                         Some(new_phi)
@@ -115,18 +121,21 @@ impl<'t> Nodes<'t> {
         }
     }
 
-    pub fn scope_dup(
-        &mut self,
-        scope_node: NodeId,
-        lazy_loop_phis: bool,
-    ) -> NodeId {
+    pub fn scope_dup(&mut self, scope_node: NodeId, lazy_loop_phis: bool) -> NodeId {
         let clone = self.scope_mut(scope_node).clone();
         let dup = self.create((Node::Scope(clone), vec![]));
         self.add_def(dup, self.inputs[scope_node][0]); // ctrl
         for i in 1..self.inputs[scope_node].len() {
             // For lazy phis on loops we use a sentinel
             // that will trigger phi creation on update
-            self.add_def(dup, if lazy_loop_phis { Some(scope_node) } else { self.inputs[scope_node][i] });
+            self.add_def(
+                dup,
+                if lazy_loop_phis {
+                    Some(scope_node)
+                } else {
+                    self.inputs[scope_node][i]
+                },
+            );
         }
         dup
     }
@@ -165,9 +174,10 @@ impl<'t> Nodes<'t> {
                 let this_l = self.scope_lookup(this, &name).unwrap();
                 let that_l = self.scope_lookup(that, &name).unwrap();
 
-                let phi = self.create_peepholed(
-                    Node::make_phi(name, vec![Some(region), Some(this_l), Some(that_l)]),
-                );
+                let phi = self.create_peepholed(Node::make_phi(
+                    name,
+                    vec![Some(region), Some(this_l), Some(that_l)],
+                ));
                 self.set_def(this, i, Some(phi));
             }
         }
@@ -180,12 +190,7 @@ impl<'t> Nodes<'t> {
 
     /// Merge the backedge scope into this loop head scope
     /// We set the second input to the phi from the back edge (i.e. loop body)
-    pub fn scope_end_loop(
-        &mut self,
-        head: NodeId,
-        back: NodeId,
-        exit: NodeId,
-    ) {
+    pub fn scope_end_loop(&mut self, head: NodeId, back: NodeId, exit: NodeId) {
         let ctrl = self.inputs[head][0].unwrap();
         assert!(matches!(&self[ctrl], Node::Loop));
         assert!(self.in_progress(ctrl));

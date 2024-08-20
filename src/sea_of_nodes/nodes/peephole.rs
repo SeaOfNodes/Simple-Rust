@@ -52,7 +52,9 @@ impl<'t> Nodes<'t> {
             Node::Add => self.compute_binary_int(node, i64::wrapping_add),
             Node::Sub => self.compute_binary_int(node, i64::wrapping_sub),
             Node::Mul => self.compute_binary_int(node, i64::wrapping_mul),
-            Node::Div => self.compute_binary_int(node, |a, b| if b == 0 { 0 } else { a.wrapping_div(b) }),
+            Node::Div => {
+                self.compute_binary_int(node, |a, b| if b == 0 { 0 } else { a.wrapping_div(b) })
+            }
             Node::Minus => {
                 let Some(input) = self.inputs[node][1].and_then(|n| self.ty[n]) else {
                     return types.ty_bot;
@@ -162,12 +164,7 @@ impl<'t> Nodes<'t> {
         }
     }
 
-    fn compute_binary_int<F: FnOnce(i64, i64) -> i64>(
-        &self,
-        node: NodeId,
-
-        op: F,
-    ) -> Ty<'t> {
+    fn compute_binary_int<F: FnOnce(i64, i64) -> i64>(&self, node: NodeId, op: F) -> Ty<'t> {
         let types = self.types;
         let Some(first) = self.inputs[node][1].and_then(|n| self.ty[n]) else {
             return types.ty_bot;

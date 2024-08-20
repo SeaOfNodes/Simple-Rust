@@ -34,7 +34,8 @@ fn test_example() {
 fn test_regression() {
     let arena = Arena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new("
+    let mut parser = Parser::new(
+        "
 int a = 1;
 if(arg){}else{
     while(a < 10) {
@@ -42,12 +43,17 @@ if(arg){}else{
     }
 }
 return a;
-", &types);
+",
+        &types,
+    );
     let stop = parser.parse().unwrap();
 
     parser.show_graph();
 
-    assert_eq!(parser.print(stop), "return Phi(Region22,1,Phi(Loop11,1,(Phi_a+1)));");
+    assert_eq!(
+        parser.print(stop),
+        "return Phi(Region22,1,Phi(Loop11,1,(Phi_a+1)));"
+    );
 }
 
 #[test]

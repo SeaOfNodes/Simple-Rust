@@ -28,7 +28,10 @@ pub fn run_graphviz_and_chromium(input: String) {
     let output = child.wait_with_output().unwrap();
 
     // assert_eq!(String::from_utf8(output.stderr).unwrap(), "");
-    println!("GRAPHVIZ BEGIN:\n{}GRAPHVIZ END", std::str::from_utf8(&output.stderr).unwrap());
+    println!(
+        "GRAPHVIZ BEGIN:\n{}GRAPHVIZ END",
+        std::str::from_utf8(&output.stderr).unwrap()
+    );
     assert_eq!(output.status.code(), Some(0));
 
     let url = format!(

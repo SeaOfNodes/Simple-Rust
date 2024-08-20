@@ -279,7 +279,9 @@ impl<'t> Nodes<'t> {
 
         let mut live = None;
         for i in 1..self.inputs[phi].len() {
-            if matches!(&self[region], Node::Loop) && self.ty[self.inputs[region][1].unwrap()] == Some(self.types.ty_xctrl) {
+            if matches!(&self[region], Node::Loop)
+                && self.ty[self.inputs[region][1].unwrap()] == Some(self.types.ty_xctrl)
+            {
                 return None; // Dead entry loops just ignore and let the loop collapse
             }
             if self.ty[self.inputs[region][i].unwrap()] != Some(self.types.ty_xctrl)
