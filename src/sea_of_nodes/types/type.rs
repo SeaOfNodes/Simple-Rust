@@ -22,15 +22,20 @@ pub enum Int {
 }
 
 impl<'t> Type<'t> {
-    pub fn is_constant(&'t self) -> bool {
+    /// Is high or on the lattice centerline.
+    pub fn is_high_or_constant(&'t self) -> bool {
         match self {
             Type::Bot => false,
             Type::Top => true,
             Type::Ctrl => false,
             Type::XCtrl => true,
-            Type::Int(i) => matches!(i, Int::Constant(_)),
+            Type::Int(i) => !matches!(i, Int::Bot),
             Type::Tuple { .. } => false,
         }
+    }
+
+    pub fn is_constant(&'t self) -> bool {
+        matches!(self, Type::Int(Int::Constant(_)))
     }
 
     pub fn unwrap_int(&'t self) -> i64 {

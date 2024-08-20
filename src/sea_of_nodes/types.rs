@@ -128,12 +128,48 @@ impl<'a> Types<'a> {
             },
 
             // Tuple sub-lattice
-            (Type::Tuple { .. }, Type::Tuple { .. }) => {
-                todo!("meet on tuples is not implemented yet {a} {b}")
+            (Type::Tuple { types: t1 }, Type::Tuple { types: t2 }) => {
+                assert_eq!(t1.len(), t2.len(), "{a} meet {b} not implemented");
+                self.get_tuple(
+                    t1.iter()
+                        .zip(t2.iter())
+                        .map(|(x, y)| self.meet(*x, *y))
+                        .collect(),
+                )
             }
 
             // different sub-lattices meet at bottom
             _ => self.ty_bot,
+        }
+    }
+
+    /// True if this "isa" t; e.g. 17 isa TypeInteger.BOT
+    pub fn isa(&self, this: Ty<'a>, that: Ty<'a>) -> bool {
+        self.meet(this, that) == that
+    }
+
+    /// Our lattice is defined with a MEET and a DUAL.
+    /// JOIN is dual of meet of both duals.
+    pub fn join(&self, this: Ty<'a>, that: Ty<'a>) -> Ty<'a> {
+        if this == that {
+            this
+        } else {
+            self.dual(self.meet(self.dual(this), self.dual(that)))
+        }
+    }
+
+    pub fn dual(&self, ty: Ty<'a>) -> Ty<'a> {
+        match &*ty {
+            Type::Bot => self.ty_top,
+            Type::Top => self.ty_bot,
+            Type::Ctrl => self.ty_xctrl,
+            Type::XCtrl => self.ty_ctrl,
+            Type::Int(i) => match i {
+                Int::Bot => self.ty_int_top,
+                Int::Top => self.ty_int_bot,
+                Int::Constant(_) => ty, // self dual
+            },
+            Type::Tuple { types } => self.get_tuple(types.iter().map(|t| self.dual(*t)).collect()),
         }
     }
 }
