@@ -1,10 +1,10 @@
 use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
-use crate::sea_of_nodes::types::{Int, Ty, Type, Types};
+use crate::sea_of_nodes::types::{Int, Ty, Type};
 
 impl<'t> Nodes<'t> {
     #[must_use]
-    pub fn peephole(&mut self, node: NodeId, types: &Types<'t>) -> NodeId {
-        let ty = self.compute(node, types);
+    pub fn peephole(&mut self, node: NodeId) -> NodeId {
+        let ty = self.compute(node);
 
         self.ty[node] = Some(ty);
 
@@ -14,12 +14,12 @@ impl<'t> Nodes<'t> {
 
         if !matches!(self[node], Node::Constant(_)) && ty.is_constant() {
             let start = self.start;
-            let new_node = self.create_peepholed(types, Node::make_constant(start, ty));
+            let new_node = self.create_peepholed(Node::make_constant(start, ty));
             return self.dead_code_elimination(node, new_node);
         }
 
-        if let Some(idealized) = self.idealize(node, types) {
-            let new_node = self.peephole(idealized, types);
+        if let Some(idealized) = self.idealize(node) {
+            let new_node = self.peephole(idealized);
             return self.dead_code_elimination(node, new_node);
         }
 
@@ -35,7 +35,8 @@ impl<'t> Nodes<'t> {
         new
     }
 
-    fn compute(&mut self, node: NodeId, types: &Types<'t>) -> Ty<'t> {
+    fn compute(&mut self, node: NodeId) -> Ty<'t> {
+        let types = self.types;
         match &self[node] {
             Node::Constant(ty) => *ty,
             Node::Return => {
@@ -48,16 +49,10 @@ impl<'t> Nodes<'t> {
                 types.get_tuple(vec![ctrl, expr])
             }
             Node::Start { args } => *args,
-            Node::Add => self.compute_binary_int(node, types, i64::wrapping_add),
-            Node::Sub => self.compute_binary_int(node, types, i64::wrapping_sub),
-            Node::Mul => self.compute_binary_int(node, types, i64::wrapping_mul),
-            Node::Div => {
-                self.compute_binary_int(
-                    node,
-                    types,
-                    |a, b| if b == 0 { 0 } else { a.wrapping_div(b) },
-                )
-            }
+            Node::Add => self.compute_binary_int(node, i64::wrapping_add),
+            Node::Sub => self.compute_binary_int(node, i64::wrapping_sub),
+            Node::Mul => self.compute_binary_int(node, i64::wrapping_mul),
+            Node::Div => self.compute_binary_int(node, |a, b| if b == 0 { 0 } else { a.wrapping_div(b) }),
             Node::Minus => {
                 let Some(input) = self.inputs[node][1].and_then(|n| self.ty[n]) else {
                     return types.ty_bot;
@@ -68,7 +63,7 @@ impl<'t> Nodes<'t> {
                 }
             }
             Node::Scope(_) => types.ty_bot,
-            Node::Bool(op) => self.compute_binary_int(node, types, |x, y| op.compute(x, y) as i64),
+            Node::Bool(op) => self.compute_binary_int(node, |x, y| op.compute(x, y) as i64),
             Node::Not => {
                 let Some(input) = self.inputs[node][1].and_then(|n| self.ty[n]) else {
                     return types.ty_bot;
@@ -170,9 +165,10 @@ impl<'t> Nodes<'t> {
     fn compute_binary_int<F: FnOnce(i64, i64) -> i64>(
         &self,
         node: NodeId,
-        types: &Types<'t>,
+
         op: F,
     ) -> Ty<'t> {
+        let types = self.types;
         let Some(first) = self.inputs[node][1].and_then(|n| self.ty[n]) else {
             return types.ty_bot;
         };

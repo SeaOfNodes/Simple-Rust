@@ -1,20 +1,20 @@
 use crate::datastructures::id::Id;
 use crate::sea_of_nodes::nodes::{BoolOp, Node, NodeId, Nodes};
-use crate::sea_of_nodes::types::{Int, Type, Types};
+use crate::sea_of_nodes::types::{Int, Type};
 
 impl<'t> Nodes<'t> {
     /// do not peephole directly returned values!
-    pub(super) fn idealize(&mut self, node: NodeId, types: &Types<'t>) -> Option<NodeId> {
+    pub(super) fn idealize(&mut self, node: NodeId) -> Option<NodeId> {
         match &self[node] {
-            Node::Add => self.idealize_add(node, types),
-            Node::Sub => self.idealize_sub(node, types),
-            Node::Mul => self.idealize_mul(node, types),
-            Node::Bool(op) => self.idealize_bool(*op, node, types),
-            Node::Phi(_) => self.idealize_phi(node, types),
-            Node::Stop => self.idealize_stop(node, types),
-            Node::Return => self.idealize_return(node, types),
-            Node::Proj(p) => self.idealize_proj(node, p.index, types),
-            Node::Region { .. } | Node::Loop => self.idealize_region(node, types),
+            Node::Add => self.idealize_add(node),
+            Node::Sub => self.idealize_sub(node),
+            Node::Mul => self.idealize_mul(node),
+            Node::Bool(op) => self.idealize_bool(*op, node),
+            Node::Phi(_) => self.idealize_phi(node),
+            Node::Stop => self.idealize_stop(node),
+            Node::Return => self.idealize_return(node),
+            Node::Proj(p) => self.idealize_proj(node, p.index),
+            Node::Region { .. } | Node::Loop => self.idealize_region(node),
             Node::Constant(_)
             | Node::Start { .. }
             | Node::Div
@@ -25,7 +25,7 @@ impl<'t> Nodes<'t> {
         }
     }
 
-    fn idealize_add(&mut self, node: NodeId, types: &Types<'t>) -> Option<NodeId> {
+    fn idealize_add(&mut self, node: NodeId) -> Option<NodeId> {
         let lhs = self.inputs[node][1]?;
         let rhs = self.inputs[node][2]?;
         let t1 = self.ty[lhs]?; // TODO is it safe to ignore this being None?
@@ -36,13 +36,13 @@ impl<'t> Nodes<'t> {
 
         // Add of 0.  We do not check for (0+x) because this will already
         // canonicalize to (x+0)
-        if t2 == types.ty_zero {
+        if t2 == self.types.ty_zero {
             return Some(lhs);
         }
 
         // Add of same to a multiply by 2
         if lhs == rhs {
-            let two = self.create_peepholed(types, Node::make_constant(self.start, types.ty_two));
+            let two = self.create_peepholed(Node::make_constant(self.start, self.types.ty_two));
             return Some(self.create(Node::make_mul([lhs, two])));
         }
 
@@ -62,7 +62,7 @@ impl<'t> Nodes<'t> {
             let x = lhs;
             let y = self.inputs[rhs][1]?;
             let z = self.inputs[rhs][2]?;
-            let new_lhs = self.create_peepholed(types, Node::make_add([x, y]));
+            let new_lhs = self.create_peepholed(Node::make_add([x, y]));
             return Some(self.create(Node::make_add([new_lhs, z])));
         }
 
@@ -71,7 +71,7 @@ impl<'t> Nodes<'t> {
             return if self.spline_cmp(lhs, rhs) {
                 Some(self.swap_12(node))
             } else {
-                self.phi_con(node, true, types)
+                self.phi_con(node, true)
             };
         }
 
@@ -90,14 +90,14 @@ impl<'t> Nodes<'t> {
             let con1 = self.inputs[lhs][2]?;
             let con2 = rhs;
 
-            let new_rhs = self.create_peepholed(types, Node::make_add([con1, con2]));
+            let new_rhs = self.create_peepholed(Node::make_add([con1, con2]));
             return Some(self.create(Node::make_add([x, new_rhs])));
         }
 
         // Do we have ((x + (phi cons)) + con) ?
         // Do we have ((x + (phi cons)) + (phi cons)) ?
         // Push constant up through the phi: x + (phi con0+con0 con1+con1...)
-        let phicon = self.phi_con(node, true, types);
+        let phicon = self.phi_con(node, true);
         if phicon.is_some() {
             return phicon;
         }
@@ -112,22 +112,22 @@ impl<'t> Nodes<'t> {
             let y = self.inputs[lhs][2]?;
             let z = rhs;
 
-            let new_lhs = self.create_peepholed(types, Node::make_add([x, z]));
+            let new_lhs = self.create_peepholed(Node::make_add([x, z]));
             return Some(self.create(Node::make_add([new_lhs, y])));
         }
 
         None
     }
 
-    fn idealize_sub(&mut self, node: NodeId, types: &Types<'t>) -> Option<NodeId> {
+    fn idealize_sub(&mut self, node: NodeId) -> Option<NodeId> {
         if self.inputs[node][1]? == self.inputs[node][2]? {
-            Some(self.create(Node::make_constant(self.start, types.ty_zero)))
+            Some(self.create(Node::make_constant(self.start, self.types.ty_zero)))
         } else {
             None
         }
     }
 
-    fn idealize_mul(&mut self, node: NodeId, types: &Types<'t>) -> Option<NodeId> {
+    fn idealize_mul(&mut self, node: NodeId) -> Option<NodeId> {
         let left = self.inputs[node][1]?;
         let right = self.inputs[node][2]?;
         let left_ty = self.ty[left]?;
@@ -142,16 +142,16 @@ impl<'t> Nodes<'t> {
             // Do we have ((x * (phi cons)) * con) ?
             // Do we have ((x * (phi cons)) * (phi cons)) ?
             // Push constant up through the phi: x * (phi con0*con0 con1*con1...)
-            self.phi_con(node, true, types)
+            self.phi_con(node, true)
         }
     }
 
-    fn idealize_bool(&mut self, op: BoolOp, node: NodeId, types: &Types<'t>) -> Option<NodeId> {
+    fn idealize_bool(&mut self, op: BoolOp, node: NodeId) -> Option<NodeId> {
         if self.inputs[node][1]? == self.inputs[node][2]? {
             let value = if op.compute(3, 3) {
-                types.ty_one
+                self.types.ty_one
             } else {
-                types.ty_zero
+                self.types.ty_zero
             };
             return Some(self.create(Node::make_constant(self.start, value)));
         }
@@ -159,17 +159,17 @@ impl<'t> Nodes<'t> {
         // Do we have ((x * (phi cons)) * con) ?
         // Do we have ((x * (phi cons)) * (phi cons)) ?
         // Push constant up through the phi: x * (phi con0*con0 con1*con1...)
-        let phicon = self.phi_con(node, false, types);
+        let phicon = self.phi_con(node, false);
         phicon
     }
 
-    fn idealize_phi(&mut self, node: NodeId, types: &Types<'t>) -> Option<NodeId> {
+    fn idealize_phi(&mut self, node: NodeId) -> Option<NodeId> {
         if self.phi_no_or_in_progress_region(node) {
             return None;
         }
 
         // If we have only a single unique input, become it.
-        if let live @ Some(_) = self.single_unique_input(node, types) {
+        if let live @ Some(_) = self.single_unique_input(node) {
             return live;
         }
 
@@ -201,19 +201,19 @@ impl<'t> Nodes<'t> {
             let phi_lhs = Node::make_phi(label.to_string(), lhss);
             let phi_rhs = Node::make_phi(label.to_string(), rhss);
 
-            let phi_lhs = self.create_peepholed(types, phi_lhs);
-            let phi_rhs = self.create_peepholed(types, phi_rhs);
+            let phi_lhs = self.create_peepholed(phi_lhs);
+            let phi_rhs = self.create_peepholed(phi_rhs);
 
             return Some(self.create((self[op].clone(), vec![None, Some(phi_lhs), Some(phi_rhs)])));
         }
         None
     }
 
-    fn idealize_stop(&mut self, node: NodeId, types: &Types<'t>) -> Option<NodeId> {
+    fn idealize_stop(&mut self, node: NodeId) -> Option<NodeId> {
         let mut result = None;
         let mut i = 0;
         while i < self.inputs[node].len() {
-            if self.ty[self.inputs[node][i].unwrap()] == Some(types.ty_xctrl) {
+            if self.ty[self.inputs[node][i].unwrap()] == Some(self.types.ty_xctrl) {
                 self.del_def(node, i);
                 result = Some(node);
             } else {
@@ -223,36 +223,35 @@ impl<'t> Nodes<'t> {
         result
     }
 
-    fn idealize_return(&mut self, node: NodeId, types: &Types<'t>) -> Option<NodeId> {
-        self.inputs[node][0].filter(|ctrl| self.ty[*ctrl] == Some(types.ty_xctrl))
+    fn idealize_return(&mut self, node: NodeId) -> Option<NodeId> {
+        self.inputs[node][0].filter(|ctrl| self.ty[*ctrl] == Some(self.types.ty_xctrl))
     }
 
     fn idealize_proj(
         &mut self,
         node: NodeId,
         index: usize,
-        types: &Types<'t>,
     ) -> Option<NodeId> {
         if let Some(Type::Tuple { types: ts }) = self.ty[self.inputs[node][0]?].as_deref() {
-            if ts[index] == types.ty_xctrl {
+            if ts[index] == self.types.ty_xctrl {
                 return Some(
-                    self.create_peepholed(types, Node::make_constant(self.start, types.ty_xctrl)),
+                    self.create_peepholed(Node::make_constant(self.start, self.types.ty_xctrl)),
                 ); // We are dead
             }
             // Only true for IfNodes
-            if ts[1 - index] == types.ty_xctrl {
+            if ts[1 - index] == self.types.ty_xctrl {
                 return self.inputs[self.inputs[node][0].unwrap()][0]; // We become our input control
             }
         }
         None
     }
 
-    fn idealize_region(&mut self, node: NodeId, types: &Types<'t>) -> Option<NodeId> {
+    fn idealize_region(&mut self, node: NodeId) -> Option<NodeId> {
         if self.in_progress(node) {
             return None;
         }
 
-        let path = self.find_dead_input(node, types)?;
+        let path = self.find_dead_input(node)?;
 
         for i in 0..self.outputs[node].len() {
             let phi = self.outputs[node][i];
@@ -276,9 +275,9 @@ impl<'t> Nodes<'t> {
         Some(node)
     }
 
-    fn find_dead_input(&self, node: NodeId, types: &Types<'t>) -> Option<usize> {
+    fn find_dead_input(&self, node: NodeId) -> Option<usize> {
         (1..self.inputs[node].len())
-            .find(|&i| self.ty[self.inputs[node][i].unwrap()].unwrap() == types.ty_xctrl)
+            .find(|&i| self.ty[self.inputs[node][i].unwrap()].unwrap() == self.types.ty_xctrl)
     }
 
     // Compare two off-spline nodes and decide what order they should be in.
@@ -314,7 +313,7 @@ impl<'t> Nodes<'t> {
     //     // Rotation is only valid for associative ops, e.g. Add, Mul, And, Or.
     //     // Do we have ((phi cons)|(x + (phi cons)) + con|(phi cons)) ?
     //     // Push constant up through the phi: x + (phi con0+con0 con1+con1...)
-    fn phi_con(&mut self, op: NodeId, rotate: bool, types: &Types<'t>) -> Option<NodeId> {
+    fn phi_con(&mut self, op: NodeId, rotate: bool) -> Option<NodeId> {
         let lhs = self.inputs[op][1]?;
         let rhs = self.inputs[op][2]?;
 
@@ -350,7 +349,6 @@ impl<'t> Nodes<'t> {
         // Push constant up through the phi: x + (phi con0+con0 con1+con1...)
         for i in 1..ns.len() {
             ns[i] = Some(self.create_peepholed(
-                types,
                 (
                     self[op].clone(),
                     vec![
@@ -371,7 +369,7 @@ impl<'t> Nodes<'t> {
             self[lphi].phi_label().unwrap(),
             self[rhs].phi_label().unwrap_or("")
         );
-        let phi = self.create_peepholed(types, Node::make_phi(label, ns));
+        let phi = self.create_peepholed(Node::make_phi(label, ns));
 
         // Rotate needs another op, otherwise just the phi
         Some(if lhs == lphi {

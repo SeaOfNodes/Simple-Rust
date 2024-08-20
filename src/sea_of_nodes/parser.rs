@@ -85,7 +85,7 @@ impl<'s, 't> Parser<'s, 't> {
     }
 
     fn peephole(&mut self, c: NodeCreation<'t>) -> NodeId {
-        self.nodes.create_peepholed(self.types, c)
+        self.nodes.create_peepholed(c)
     }
 
     pub fn parse(&mut self) -> PResult<NodeId> {
@@ -116,14 +116,14 @@ impl<'s, 't> Parser<'s, 't> {
                 self.lexer.get_any_next_token()
             ))
         } else {
-            let p = self.nodes.peephole(self.stop, self.types);
+            let p = self.nodes.peephole(self.stop);
             assert_eq!(self.stop, p);
             Ok(self.stop)
         }
     }
 
-    pub fn iterate(&self, stop: NodeId) -> NodeId {
-        todo!("self.nodes.iterate(stop, self.types) should this really be here or on a ParseResult?")
+    pub fn iterate(&self, _stop: NodeId) -> NodeId {
+        todo!("self.nodes.iterate(stop) should this really be here or on a ParseResult?")
     }
 
     /// <pre>
@@ -206,7 +206,7 @@ impl<'s, 't> Parser<'s, 't> {
         // IfNode takes current control and predicate
         let if_node = self.nodes.create(Node::make_if(ctrl, pred));
         self.nodes.keep(if_node);
-        let if_node = self.nodes.peephole(if_node, self.types);
+        let if_node = self.nodes.peephole(if_node);
 
         // Setup projection nodes
         let if_true = self.peephole(Node::make_proj(if_node, 0, "True".to_string()));
@@ -243,7 +243,7 @@ impl<'s, 't> Parser<'s, 't> {
         // it sets the second input to the corresponding input from the back
         // edge.  If the phi is redundant, it is replaced by its sole input.
         let exit = self.break_scope.unwrap();
-        self.nodes.scope_end_loop(head, self.scope, exit, self.types);
+        self.nodes.scope_end_loop(head, self.scope, exit);
         self.nodes.unkeep(head);
         self.nodes.kill(head);
 
@@ -284,7 +284,7 @@ impl<'s, 't> Parser<'s, 't> {
 
         // toScope is either the break scope, or a scope that was created here
         debug_assert!(self.nodes.scope(to_scope).scopes.len() <= break_scopes_len);
-        self.nodes.scope_merge(to_scope, cur, self.types);
+        self.nodes.scope_merge(to_scope, cur);
         to_scope
     }
 
@@ -322,7 +322,7 @@ impl<'s, 't> Parser<'s, 't> {
         let if_ctrl = self.ctrl();
         let if_node = self.nodes.create(Node::make_if(if_ctrl, pred));
         self.nodes.keep(if_node);
-        let if_node = self.nodes.peephole(if_node, self.types);
+        let if_node = self.nodes.peephole(if_node);
 
         // Setup projection nodes
         let if_true = self.peephole(Node::make_proj(if_node, 0, "True".to_string()));
@@ -358,7 +358,7 @@ impl<'s, 't> Parser<'s, 't> {
         self.scope = true_scope;
         self.x_scopes.pop();
 
-        let region = self.nodes.scope_merge(true_scope, false_scope, self.types);
+        let region = self.nodes.scope_merge(true_scope, false_scope);
         self.set_ctrl(region);
         Ok(())
     }
@@ -403,7 +403,7 @@ impl<'s, 't> Parser<'s, 't> {
         let expr = self.parse_expression()?;
         self.require(";")?;
 
-        match self.nodes.scope_update(self.scope, name, expr, self.types) {
+        match self.nodes.scope_update(self.scope, name, expr) {
             Ok(_) => Ok(()),
             Err(()) => Err(format!("Undefined name '{name}'")),
         }
@@ -514,7 +514,7 @@ impl<'s, 't> Parser<'s, 't> {
             Ok(self.peephole(Node::make_constant(self.nodes.start, self.types.ty_zero)))
         } else if let Some(name) = self.lexer.match_id() {
             self.nodes
-                .scope_lookup(self.scope, name, self.types)
+                .scope_lookup(self.scope, name)
                 .map_err(|()| format!("Undefined name '{name}'"))
         } else {
             Err(self.error_syntax("an identifier or expression"))

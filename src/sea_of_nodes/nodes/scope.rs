@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
-use crate::sea_of_nodes::types::Types;
 
 #[derive(Clone, Debug)]
 pub struct ScopeNode {
@@ -51,9 +50,9 @@ impl<'t> Nodes<'t> {
         Ok(())
     }
 
-    pub fn scope_lookup(&mut self, scope_node: NodeId, name: &str, types: &Types<'t>) -> Result<NodeId, ()> {
+    pub fn scope_lookup(&mut self, scope_node: NodeId, name: &str) -> Result<NodeId, ()> {
         let nesting_level = self.scope_mut(scope_node).scopes.len() - 1;
-        self.scope_lookup_update(scope_node, name, None, nesting_level, types)
+        self.scope_lookup_update(scope_node, name, None, nesting_level)
             .ok_or(())
     }
 
@@ -62,10 +61,9 @@ impl<'t> Nodes<'t> {
         scope_node: NodeId,
         name: &str,
         value: NodeId,
-        types: &Types<'t>,
     ) -> Result<NodeId, ()> {
         let nesting_level = self.scope_mut(scope_node).scopes.len() - 1;
-        self.scope_lookup_update(scope_node, name, Some(value), nesting_level, types)
+        self.scope_lookup_update(scope_node, name, Some(value), nesting_level)
             .ok_or(())
     }
 
@@ -75,7 +73,6 @@ impl<'t> Nodes<'t> {
         name: &str,
         value: Option<NodeId>,
         nesting_level: usize,
-        types: &Types<'t>,
     ) -> Option<NodeId> {
         let scope = self.scope_mut(scope_node);
         let syms = &mut scope.scopes[nesting_level];
@@ -94,8 +91,8 @@ impl<'t> Nodes<'t> {
                         // The phi takes its one input (no backedge yet) from a recursive
                         // lookup, which might have insert a Phi in every loop nest.
 
-                        let recursive = self.scope_lookup_update(loop_, name, None, nesting_level, types);
-                        let new_phi = self.create_peepholed(types, Node::make_phi(name.to_string(), vec![self.inputs[loop_][0], recursive, None]));
+                        let recursive = self.scope_lookup_update(loop_, name, None, nesting_level);
+                        let new_phi = self.create_peepholed(Node::make_phi(name.to_string(), vec![self.inputs[loop_][0], recursive, None]));
 
                         self.set_def(loop_, index, Some(new_phi));
                         Some(new_phi)
@@ -112,7 +109,7 @@ impl<'t> Nodes<'t> {
                 old
             }
         } else if nesting_level > 0 {
-            self.scope_lookup_update(scope_node, name, value, nesting_level - 1, types)
+            self.scope_lookup_update(scope_node, name, value, nesting_level - 1)
         } else {
             None
         }
@@ -148,7 +145,7 @@ impl<'t> Nodes<'t> {
         names
     }
 
-    pub fn scope_merge(&mut self, this: NodeId, that: NodeId, types: &Types<'t>) -> NodeId {
+    pub fn scope_merge(&mut self, this: NodeId, that: NodeId) -> NodeId {
         let c1 = self.inputs[this][0];
         let c2 = self.inputs[that][0];
         let region = self.create(Node::make_region(vec![None, c1, c2]));
@@ -165,11 +162,10 @@ impl<'t> Nodes<'t> {
                 // If we are in lazy phi mode we need to a lookup
                 // by name as it will trigger a phi creation
                 let name = name.unwrap();
-                let this_l = self.scope_lookup(this, &name, types).unwrap();
-                let that_l = self.scope_lookup(that, &name, types).unwrap();
+                let this_l = self.scope_lookup(this, &name).unwrap();
+                let that_l = self.scope_lookup(that, &name).unwrap();
 
                 let phi = self.create_peepholed(
-                    types,
                     Node::make_phi(name, vec![Some(region), Some(this_l), Some(that_l)]),
                 );
                 self.set_def(this, i, Some(phi));
@@ -179,7 +175,7 @@ impl<'t> Nodes<'t> {
         self.kill(that);
 
         self.unkeep(region);
-        self.peephole(region, types)
+        self.peephole(region)
     }
 
     /// Merge the backedge scope into this loop head scope
@@ -189,7 +185,6 @@ impl<'t> Nodes<'t> {
         head: NodeId,
         back: NodeId,
         exit: NodeId,
-        types: &Types<'t>,
     ) {
         let ctrl = self.inputs[head][0].unwrap();
         assert!(matches!(&self[ctrl], Node::Loop));
@@ -217,7 +212,7 @@ impl<'t> Nodes<'t> {
             if let Some(phi) = self.inputs[head][i] {
                 if let Node::Phi(_) = &self[phi] {
                     // Do an eager useless-phi removal
-                    let in_ = self.peephole(phi, types);
+                    let in_ = self.peephole(phi);
                     if in_ != phi {
                         self.subsume(phi, in_);
                         self.set_def(head, i, Some(in_)); // Set the update back into Scope

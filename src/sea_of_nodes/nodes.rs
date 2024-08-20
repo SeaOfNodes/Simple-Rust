@@ -103,10 +103,10 @@ impl<'t> Nodes<'t> {
         id
     }
 
-    pub fn create_peepholed(&mut self, types: &Types<'t>, c: NodeCreation<'t>) -> NodeId {
+    pub fn create_peepholed(&mut self, c: NodeCreation<'t>) -> NodeId {
         let id = self.create(c);
-        let better = self.peephole(id, types);
-        debug_assert_eq!(better, self.peephole(better, types));
+        let better = self.peephole(id);
+        debug_assert_eq!(better, self.peephole(better));
         if better != id {
             // TODO: we could re-use the dead slots: self.nodes.trim_end()
         }
@@ -274,15 +274,15 @@ impl<'t> Nodes<'t> {
         }
         true
     }
-    fn single_unique_input(&self, phi: NodeId, types: &Types<'t>) -> Option<NodeId> {
+    fn single_unique_input(&self, phi: NodeId) -> Option<NodeId> {
         let region = self.inputs[phi][0].unwrap();
 
         let mut live = None;
         for i in 1..self.inputs[phi].len() {
-            if matches!(&self[region], Node::Loop) && self.ty[self.inputs[region][1].unwrap()] == Some(types.ty_xctrl) {
+            if matches!(&self[region], Node::Loop) && self.ty[self.inputs[region][1].unwrap()] == Some(self.types.ty_xctrl) {
                 return None; // Dead entry loops just ignore and let the loop collapse
             }
-            if self.ty[self.inputs[region][i].unwrap()] != Some(types.ty_xctrl)
+            if self.ty[self.inputs[region][i].unwrap()] != Some(self.types.ty_xctrl)
                 && self.inputs[phi][i] != Some(phi)
             {
                 if live.is_none() || live == self.inputs[phi][i] {
