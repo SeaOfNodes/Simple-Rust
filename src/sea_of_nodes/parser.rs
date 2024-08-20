@@ -3,12 +3,12 @@ use crate::sea_of_nodes::nodes::{BoolOp, Node, NodeCreation, NodeId, Nodes, Scop
 use crate::sea_of_nodes::types::{Ty, Types};
 
 /// Converts a Simple source program to the Sea of Nodes intermediate representation in one pass.
-pub struct Parser<'s, 'mt, 't> {
+pub struct Parser<'s, 't> {
     /// Tokenizes the source code
     lexer: Lexer<'s>,
 
     /// Manages interned types.
-    types: &'mt Types<'t>,
+    types: &'t Types<'t>,
 
     /// Manages all nodes and implements operations such as peephole.
     /// Keeps track of the current start for constant node creation.
@@ -38,13 +38,13 @@ pub fn is_keyword(s: &str) -> bool {
     )
 }
 
-impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
-    pub fn new(source: &'s str, types: &'mt Types<'t>) -> Self {
+impl<'s, 't> Parser<'s, 't> {
+    pub fn new(source: &'s str, types: &'t Types<'t>) -> Self {
         Self::new_with_arg(source, types, types.ty_bot)
     }
 
-    pub fn new_with_arg(source: &'s str, types: &'mt Types<'t>, arg: Ty<'t>) -> Self {
-        let mut nodes = Nodes::new();
+    pub fn new_with_arg(source: &'s str, types: &'t Types<'t>, arg: Ty<'t>) -> Self {
+        let mut nodes = Nodes::new(types);
 
         let scope = nodes.create(Node::make_scope());
         nodes.ty[scope] = Some(types.ty_bot); // in java this is done by the constructor

@@ -30,7 +30,7 @@ pub struct PrintNodes2<'a, 'b, 't> {
 }
 
 impl<'t> Nodes<'t> {
-    pub(crate) fn print(&self, node: Option<NodeId>) -> PrintNodes {
+    pub(crate) fn print(&self, node: Option<NodeId>) -> PrintNodes<'_, 't> {
         PrintNodes {
             node,
             nodes: self,

@@ -7,8 +7,30 @@ mod interner;
 mod ty;
 mod r#type;
 
-/// Every compilation unit has its own set of types.
-/// They are interned, so that equality checks and hashing are cheap.
+/// Types are interned, so that equality checks and hashing are cheap.
+///
+/// Interior mutability is used for interning, so there is no need to pass
+/// around mutable references.
+///
+/// For references, `&'t Types<'t>` should be preferred over `&'a Types<'t>`,
+/// because we don't want `Ty<'t>` references that outlive their `Types`:
+///
+/// ```compile_fail
+///     # use simple_rust::datastructures::arena::Arena;
+///     # use simple_rust::sea_of_nodes::types::{Ty, Types};
+///
+///     fn get_t<'t>(types: &'t Types<'t>) -> Ty<'t> {types.ty_bot};
+///
+///     let arena = Arena::new();
+///     let types = Types::new(&arena);
+///     let t1 = get_t(&types);
+///     drop(types);
+///     let types = Types::new(&arena);
+///     let t2 = get_t(&types);
+///     assert_ne!(t1, t2);
+/// ```
+/// Without `&'t` in the function parameter (or without `drop(types)`) this would
+/// successfully compile and run.
 pub struct Types<'a> {
     interner: Interner<'a>,
 

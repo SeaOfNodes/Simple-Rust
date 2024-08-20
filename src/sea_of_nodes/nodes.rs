@@ -55,12 +55,16 @@ pub struct Nodes<'t> {
 
     /// the start node to be used for creating constants.
     pub start: NodeId,
+
+    /// Creating nodes such as constants and computing peepholes requires
+    /// interning new types and operations such as meet and join.
+    pub types: &'t Types<'t>,
 }
 
 pub type NodeCreation<'t> = (Node<'t>, Vec<Option<NodeId>>);
 
 impl<'t> Nodes<'t> {
-    pub fn new() -> Self {
+    pub fn new(types: &'t Types<'t>) -> Self {
         let dummy = Node::Stop;
         Nodes {
             nodes: vec![dummy],
@@ -70,6 +74,7 @@ impl<'t> Nodes<'t> {
             idepth: IdVec::new(vec![0]),
             disable_peephole: false,
             start: NodeId::DUMMY,
+            types,
         }
     }
     pub fn len(&self) -> usize {
