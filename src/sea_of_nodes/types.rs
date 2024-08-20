@@ -29,7 +29,7 @@ pub struct Types<'a> {
 
 impl<'a> Types<'a> {
     pub fn new(arena: &'a Arena<Type<'a>>) -> Self {
-        let mut interner = Interner::new(arena);
+        let interner = Interner::new(arena);
 
         let ty_bot = interner.intern(Type::Bot);
         let ty_top = interner.intern(Type::Top);
@@ -72,7 +72,7 @@ impl<'a> Types<'a> {
         }
     }
 
-    pub fn get_int(&mut self, value: i64) -> Ty<'a> {
+    pub fn get_int(&self, value: i64) -> Ty<'a> {
         match value {
             0 => self.ty_zero,
             1 => self.ty_one,
@@ -81,11 +81,11 @@ impl<'a> Types<'a> {
         }
     }
 
-    pub fn get_tuple(&mut self, types: Vec<Ty<'a>>) -> Ty<'a> {
+    pub fn get_tuple(&self, types: Vec<Ty<'a>>) -> Ty<'a> {
         self.interner.intern(Type::Tuple { types })
     }
 
-    pub fn meet(&mut self, a: Ty<'a>, b: Ty<'a>) -> Ty<'a> {
+    pub fn meet(&self, a: Ty<'a>, b: Ty<'a>) -> Ty<'a> {
         match (&*a, &*b) {
             (_, _) if a == b => a,
 

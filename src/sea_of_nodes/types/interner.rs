@@ -1,10 +1,14 @@
 use crate::datastructures::arena::Arena;
 use crate::sea_of_nodes::types::{Ty, Type};
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 pub struct Interner<'a> {
     pub arena: &'a Arena<Type<'a>>,
-    pub type_to_ty: HashMap<&'a Type<'a>, Ty<'a>>,
+
+    // If we ever want multithreading this could be a sharded hashmap like in rustc.
+    // See InternedSet in rustc_middle/src/ty/context.rs
+    pub type_to_ty: RefCell<HashMap<&'a Type<'a>, Ty<'a>>>,
 }
 
 impl<'t> Interner<'t> {
@@ -15,9 +19,10 @@ impl<'t> Interner<'t> {
         }
     }
 
-    pub fn intern(&mut self, t: Type<'t>) -> Ty<'t> {
+    pub fn intern(&self, t: Type<'t>) -> Ty<'t> {
         *self
             .type_to_ty
+            .borrow_mut()
             .raw_entry_mut()
             .from_key(&t)
             .or_insert_with(|| {
@@ -39,7 +44,7 @@ mod tests {
     #[test]
     fn test_interner() {
         let arena = Arena::new();
-        let mut interner = Interner::new(&arena);
+        let interner = Interner::new(&arena);
 
         let ty_bot_1 = interner.intern(Type::Bot);
         let ty_bot_2 = interner.intern(Type::Bot);
