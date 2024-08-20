@@ -79,8 +79,8 @@ impl<'a, 'b> ScriptGenerator<'a, 'b> {
             sb: String::new(),
             loop_depth: 0,
             curr_scope_start: 0,
-            depth: 7,
-            expr_depth: 3,
+            depth: 20,
+            expr_depth: 30,
             variables: vec![],
             generate_valid,
             maybe_invalid: false,
@@ -112,7 +112,7 @@ impl<'a, 'b> ScriptGenerator<'a, 'b> {
 
     /// Generate a random name for variables. This might be invalid when it is a keyword.
     fn get_random_name(&mut self) -> arbitrary::Result<String> {
-        let len = self.random.int_in_range(1..=10)?;
+        let len = self.random.int_in_range(1..=30)?;
         let mut sb = String::with_capacity(len);
         sb.push(*self.random.choose(&VAR_CHARS[..VAR_CHARS.len() - 10])? as char);
         for _ in 1..len {
