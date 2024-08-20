@@ -33,17 +33,6 @@ fn test_print_stop(source: &str, expected: &str) {
     assert_eq!(parser.print(stop), expected);
 }
 
-fn test_print_stop_and_show(source: &str, expected: &str) {
-    let arena = Arena::new();
-    let types = Types::new(&arena);
-    let mut parser = Parser::new(source, &types);
-    let stop = parser.parse().unwrap();
-
-    parser.show_graph();
-
-    assert_eq!(parser.print(stop), expected);
-}
-
 enum Show {
     No,
     Yes,

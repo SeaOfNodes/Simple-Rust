@@ -1,7 +1,7 @@
 use crate::datastructures::arena::Arena;
 use crate::sea_of_nodes::nodes::Node;
 use crate::sea_of_nodes::parser::Parser;
-use crate::sea_of_nodes::tests::{test_error, test_print_stop_and_show};
+use crate::sea_of_nodes::tests::test_error;
 use crate::sea_of_nodes::types::Types;
 use crate::sea_of_nodes::{graph_evaluator, ir_printer};
 
@@ -166,10 +166,14 @@ return arg;
 
 #[test]
 fn test_regress2() {
-    test_print_stop_and_show(
-        "if(1) return 0;  else while(arg>--arg) arg=arg+1; return 0;",
-        "Stop[ return 0; return 0; ]",
-    );
+    let arena = Arena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new("if(1) return 0;  else while(arg>--arg) arg=arg+1; return 0;", &types);
+    let stop = parser.parse().unwrap();
+
+    parser.show_graph();
+
+    assert_eq!(parser.print(stop), "Stop[ return 0; return 0; ]");
 }
 
 #[test]
@@ -185,12 +189,19 @@ return arg;
 
 #[test]
 fn test_regress3() {
-    test_print_stop_and_show("
+    let arena = Arena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new("
 while(arg < 10) {
     break;
 }
 return arg;
-", "return arg;");
+", &types);
+    let stop = parser.parse().unwrap();
+
+    parser.show_graph();
+
+    assert_eq!(parser.print(stop), "return arg;");
 }
 
 #[test]

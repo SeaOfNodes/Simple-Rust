@@ -2,7 +2,6 @@ use crate::datastructures::arena::Arena;
 use crate::sea_of_nodes::ir_printer;
 use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
 use crate::sea_of_nodes::parser::Parser;
-use crate::sea_of_nodes::tests::test_print_stop_and_show;
 use crate::sea_of_nodes::types::Types;
 
 /// assertTrue(stop.ret().ctrl() instanceof ProjNode);
@@ -33,8 +32,9 @@ fn test_example() {
 
 #[test]
 fn test_regression() {
-    test_print_stop_and_show(
-        "
+    let arena = Arena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new("
 int a = 1;
 if(arg){}else{
     while(a < 10) {
@@ -42,9 +42,12 @@ if(arg){}else{
     }
 }
 return a;
-",
-        "return Phi(Region22,1,Phi(Loop11,1,(Phi_a+1)));",
-    )
+", &types);
+    let stop = parser.parse().unwrap();
+
+    parser.show_graph();
+
+    assert_eq!(parser.print(stop), "return Phi(Region22,1,Phi(Loop11,1,(Phi_a+1)));");
 }
 
 #[test]

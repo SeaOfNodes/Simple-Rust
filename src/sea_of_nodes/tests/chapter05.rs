@@ -1,9 +1,13 @@
-use crate::sea_of_nodes::tests::{test_error, test_print_stop, test_print_stop_and_show};
+use crate::datastructures::arena::Arena;
+use crate::sea_of_nodes::parser::Parser;
+use crate::sea_of_nodes::tests::{test_error, test_print_stop};
+use crate::sea_of_nodes::types::Types;
 
 #[test]
 fn test_if_stmt() {
-    test_print_stop_and_show(
-        "\
+    let arena = Arena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new("\
 int a = 1;
 if (arg == 1)
     a = arg+2;
@@ -12,24 +16,31 @@ else {
     #showGraph;
 }
 #showGraph;
-return a;",
-        "return Phi(Region17,(arg+2),(arg-3));",
-    );
+return a;", &types);
+    let stop = parser.parse().unwrap();
+
+    parser.show_graph();
+
+    assert_eq!(parser.print(stop), "return Phi(Region17,(arg+2),(arg-3));");
 }
 
 #[test]
 fn test_test() {
-    test_print_stop_and_show(
-        "\
+    let arena = Arena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new("\
 int c = 3;
 int b = 2;
 if (arg == 1) {
     b = 3;
     c = 4;
 }
-return c;",
-        "return Phi(Region16,4,3);",
-    );
+return c;", &types);
+    let stop = parser.parse().unwrap();
+
+    parser.show_graph();
+
+    assert_eq!(parser.print(stop), "return Phi(Region16,4,3);");
 }
 #[test]
 fn test_return2() {
@@ -45,31 +56,39 @@ else
 }
 #[test]
 fn test_if_merge_b() {
-    test_print_stop_and_show(
-        "\
+    let arena = Arena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new("\
 int a=arg+1;
 int b=0;
 if( arg==1 )
     b=a;
 else
     b=a+1;
-return a+b;",
-        "return ((arg*2)+Phi(Region20,2,3));",
-    );
+return a+b;", &types);
+    let stop = parser.parse().unwrap();
+
+    parser.show_graph();
+
+    assert_eq!(parser.print(stop), "return ((arg*2)+Phi(Region20,2,3));");
 }
 #[test]
 fn test_if_merge2() {
-    test_print_stop_and_show(
-        "\
+    let arena = Arena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new("\
 int a=arg+1;
 int b=arg+2;
 if( arg==1 )
     b=b+a;
 else
     a=b+1;
-return a+b;",
-        "return ((Phi(Region31,(arg*2),arg)+arg)+Phi(Region,4,5));",
-    );
+return a+b;", &types);
+    let stop = parser.parse().unwrap();
+
+    parser.show_graph();
+
+    assert_eq!(parser.print(stop), "return ((Phi(Region31,(arg*2),arg)+arg)+Phi(Region,4,5));");
 }
 #[test]
 fn test_merge3() {
@@ -107,16 +126,20 @@ return arg+a+b;
 }
 #[test]
 fn test_merge5() {
-    test_print_stop_and_show(
-        "\
+    let arena = Arena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new("\
 int a=arg==2;
 if( arg==1 )
 {
     a=arg==3;
 }
-return a;",
-        "return (arg==Phi(Region16,3,2));",
-    );
+return a;", &types);
+    let stop = parser.parse().unwrap();
+
+    parser.show_graph();
+
+    assert_eq!(parser.print(stop), "return (arg==Phi(Region16,3,2));");
 }
 #[test]
 fn test_true() {

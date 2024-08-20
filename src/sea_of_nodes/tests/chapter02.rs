@@ -1,6 +1,6 @@
 use crate::datastructures::arena::Arena;
 use crate::sea_of_nodes::parser::Parser;
-use crate::sea_of_nodes::tests::{test_print_stop, test_print_stop_and_show};
+use crate::sea_of_nodes::tests::test_print_stop;
 use crate::sea_of_nodes::types::Types;
 
 #[test]
@@ -43,5 +43,12 @@ fn test_minus_peephole() {
 
 #[test]
 fn test_example() {
-    test_print_stop_and_show("return 1+2*3+-5;", "return 2;");
+    let arena = Arena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new("return 1+2*3+-5;", &types);
+    let stop = parser.parse().unwrap();
+
+    parser.show_graph();
+
+    assert_eq!(parser.print(stop), "return 2;");
 }
