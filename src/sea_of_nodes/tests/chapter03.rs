@@ -24,10 +24,10 @@ fn test_var_scope() {
 #[test]
 fn test_var_scope_no_peephole() {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
+    let types = Types::new(&arena);
     let mut parser = Parser::new(
         "int a=1; int b=2; int c=0; { int b=3; c=a+b; #showGraph; } return c; #showGraph;",
-        &mut types,
+        &types,
     );
     parser.nodes.disable_peephole = true;
     let stop = parser.parse().unwrap();

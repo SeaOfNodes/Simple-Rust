@@ -16,18 +16,18 @@ mod chapter09;
 
 fn test_error(source: &str, error: &str) {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
+    let types = Types::new(&arena);
 
     assert_eq!(
-        Parser::new(source, &mut types).parse(),
+        Parser::new(source, &types).parse(),
         Err(error.to_string()),
     );
 }
 
 fn test_print_stop(source: &str, expected: &str) {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new(source, &mut types);
+    let types = Types::new(&arena);
+    let mut parser = Parser::new(source, &types);
     let stop = parser.parse().unwrap();
 
     assert_eq!(parser.print(stop), expected);
@@ -35,8 +35,8 @@ fn test_print_stop(source: &str, expected: &str) {
 
 fn test_print_stop_and_show(source: &str, expected: &str) {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new(source, &mut types);
+    let types = Types::new(&arena);
+    let mut parser = Parser::new(source, &types);
     let stop = parser.parse().unwrap();
 
     parser.show_graph();
@@ -56,14 +56,14 @@ enum Arg {
 
 fn test_print_stop_(show: Show, arg: Arg, source: &str, expected: &str) {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
+    let types = Types::new(&arena);
 
     let arg = match arg {
         Arg::Bot => types.ty_bot,
         Arg::Int(i) => types.get_int(i),
     };
 
-    let mut parser = Parser::new_with_arg(source, &mut types, arg);
+    let mut parser = Parser::new_with_arg(source, &types, arg);
     let stop = parser.parse().unwrap();
 
     if let Show::Yes = show {

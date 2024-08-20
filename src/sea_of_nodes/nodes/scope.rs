@@ -51,7 +51,7 @@ impl<'t> Nodes<'t> {
         Ok(())
     }
 
-    pub fn scope_lookup(&mut self, scope_node: NodeId, name: &str, types: &mut Types<'t>) -> Result<NodeId, ()> {
+    pub fn scope_lookup(&mut self, scope_node: NodeId, name: &str, types: &Types<'t>) -> Result<NodeId, ()> {
         let nesting_level = self.scope_mut(scope_node).scopes.len() - 1;
         self.scope_lookup_update(scope_node, name, None, nesting_level, types)
             .ok_or(())
@@ -62,7 +62,7 @@ impl<'t> Nodes<'t> {
         scope_node: NodeId,
         name: &str,
         value: NodeId,
-        types: &mut Types<'t>,
+        types: &Types<'t>,
     ) -> Result<NodeId, ()> {
         let nesting_level = self.scope_mut(scope_node).scopes.len() - 1;
         self.scope_lookup_update(scope_node, name, Some(value), nesting_level, types)
@@ -75,7 +75,7 @@ impl<'t> Nodes<'t> {
         name: &str,
         value: Option<NodeId>,
         nesting_level: usize,
-        types: &mut Types<'t>,
+        types: &Types<'t>,
     ) -> Option<NodeId> {
         let scope = self.scope_mut(scope_node);
         let syms = &mut scope.scopes[nesting_level];
@@ -148,7 +148,7 @@ impl<'t> Nodes<'t> {
         names
     }
 
-    pub fn scope_merge(&mut self, this: NodeId, that: NodeId, types: &mut Types<'t>) -> NodeId {
+    pub fn scope_merge(&mut self, this: NodeId, that: NodeId, types: &Types<'t>) -> NodeId {
         let c1 = self.inputs[this][0];
         let c2 = self.inputs[that][0];
         let region = self.create(Node::make_region(vec![None, c1, c2]));
@@ -189,7 +189,7 @@ impl<'t> Nodes<'t> {
         head: NodeId,
         back: NodeId,
         exit: NodeId,
-        types: &mut Types<'t>,
+        types: &Types<'t>,
     ) {
         let ctrl = self.inputs[head][0].unwrap();
         assert!(matches!(&self[ctrl], Node::Loop));

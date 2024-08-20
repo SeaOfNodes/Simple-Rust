@@ -8,7 +8,7 @@ use crate::sea_of_nodes::{graph_evaluator, ir_printer};
 #[test]
 fn test_ex6() {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
+    let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
 while(arg < 10) {
@@ -19,7 +19,7 @@ while(arg < 10) {
         break;
 }
 return arg;
-                ", &mut types);
+                ", &types);
     let stop = parser.parse().unwrap();
     parser.show_graph();
 
@@ -35,7 +35,7 @@ return arg;
 #[test]
 fn test_ex5() {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
+    let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
 int a = 1;
@@ -48,7 +48,7 @@ while(arg < 10) {
     a = a + 1;
 }
 return a;
-                ", &mut types);
+                ", &types);
     let stop = parser.parse().unwrap();
     parser.show_graph();
 
@@ -61,7 +61,7 @@ return a;
 #[test]
 fn test_ex4() {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
+    let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
 while(arg < 10) {
@@ -72,7 +72,7 @@ while(arg < 10) {
         break;
 }
 return arg;
-                ", &mut types);
+                ", &types);
     let stop = parser.parse().unwrap();
     parser.show_graph();
 
@@ -83,7 +83,7 @@ return arg;
 #[test]
 fn test_ex3() {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
+    let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
 while(arg < 10) {
@@ -92,7 +92,7 @@ while(arg < 10) {
         break;
 }
 return arg;
-                ", &mut types);
+                ", &types);
     let stop = parser.parse().unwrap();
     parser.show_graph();
 
@@ -104,7 +104,7 @@ return arg;
 #[test]
 fn test_ex2() {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
+    let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
 while(arg < 10) {
@@ -115,7 +115,7 @@ while(arg < 10) {
         continue;
 }
 return arg;
-                ", &mut types);
+                ", &types);
     let stop = parser.parse().unwrap();
     parser.show_graph();
 
@@ -127,7 +127,7 @@ return arg;
 #[test]
 fn test_ex1() {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
+    let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
 while(arg < 10) {
@@ -136,7 +136,7 @@ while(arg < 10) {
         continue;
 }
 return arg;
-                ", &mut types);
+                ", &types);
     let stop = parser.parse().unwrap();
     parser.show_graph();
 
@@ -147,7 +147,7 @@ return arg;
 #[test]
 fn test_regress1() {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
+    let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
 while( arg < 10 ) {
@@ -156,7 +156,7 @@ while( arg < 10 ) {
         break;
 }
 return arg;
-                ", &mut types);
+                ", &types);
     let stop = parser.parse().unwrap();
     parser.show_graph();
 
@@ -196,7 +196,7 @@ return arg;
 #[test]
 fn test_regress4() {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
+    let types = Types::new(&arena);
     let mut parser = Parser::new("
 int a = 1;
 while(arg < 10) {
@@ -207,7 +207,7 @@ while(arg < 10) {
     }
 }
 return a;
-", &mut types);
+", &types);
     let stop = parser.parse().unwrap();
     parser.show_graph();
 
@@ -218,7 +218,7 @@ return a;
 #[test]
 fn test_regress5() {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
+    let types = Types::new(&arena);
     let mut parser = Parser::new("
 int a = 1;
 while(1) {
@@ -227,7 +227,7 @@ while(1) {
     break;
 }
 return a;
-", &mut types);
+", &types);
     let stop = parser.parse().unwrap();
     parser.show_graph();
 

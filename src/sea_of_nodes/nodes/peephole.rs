@@ -3,7 +3,7 @@ use crate::sea_of_nodes::types::{Int, Ty, Type, Types};
 
 impl<'t> Nodes<'t> {
     #[must_use]
-    pub fn peephole(&mut self, node: NodeId, types: &mut Types<'t>) -> NodeId {
+    pub fn peephole(&mut self, node: NodeId, types: &Types<'t>) -> NodeId {
         let ty = self.compute(node, types);
 
         self.ty[node] = Some(ty);
@@ -35,7 +35,7 @@ impl<'t> Nodes<'t> {
         new
     }
 
-    fn compute(&mut self, node: NodeId, types: &mut Types<'t>) -> Ty<'t> {
+    fn compute(&mut self, node: NodeId, types: &Types<'t>) -> Ty<'t> {
         match &self[node] {
             Node::Constant(ty) => *ty,
             Node::Return => {
@@ -170,7 +170,7 @@ impl<'t> Nodes<'t> {
     fn compute_binary_int<F: FnOnce(i64, i64) -> i64>(
         &self,
         node: NodeId,
-        types: &mut Types<'t>,
+        types: &Types<'t>,
         op: F,
     ) -> Ty<'t> {
         let Some(first) = self.inputs[node][1].and_then(|n| self.ty[n]) else {

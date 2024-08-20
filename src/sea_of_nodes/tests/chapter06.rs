@@ -9,13 +9,13 @@ use crate::sea_of_nodes::types::Types;
 #[test]
 fn test_peephole_return() {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
+    let types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
 if( true ) return 2;
 return 1;
 ",
-        &mut types,
+        &types,
     );
     let stop = parser.parse().unwrap();
     parser.show_graph();
@@ -43,7 +43,7 @@ return (arg < a) < 3;
 #[test]
 fn test_peephole_cfg() {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
+    let types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
 int a=1;
@@ -53,7 +53,7 @@ else
   a=3;
 return a;
 ",
-        &mut types,
+        &types,
     );
     let stop = parser.parse().unwrap();
     parser.show_graph();

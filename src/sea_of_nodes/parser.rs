@@ -8,7 +8,7 @@ pub struct Parser<'s, 'mt, 't> {
     lexer: Lexer<'s>,
 
     /// Manages interned types.
-    types: &'mt mut Types<'t>,
+    types: &'mt Types<'t>,
 
     /// Manages all nodes and implements operations such as peephole.
     /// Keeps track of the current start for constant node creation.
@@ -39,11 +39,11 @@ pub fn is_keyword(s: &str) -> bool {
 }
 
 impl<'s, 'mt, 't> Parser<'s, 'mt, 't> {
-    pub fn new(source: &'s str, types: &'mt mut Types<'t>) -> Self {
+    pub fn new(source: &'s str, types: &'mt Types<'t>) -> Self {
         Self::new_with_arg(source, types, types.ty_bot)
     }
 
-    pub fn new_with_arg(source: &'s str, types: &'mt mut Types<'t>, arg: Ty<'t>) -> Self {
+    pub fn new_with_arg(source: &'s str, types: &'mt Types<'t>, arg: Ty<'t>) -> Self {
         let mut nodes = Nodes::new();
 
         let scope = nodes.create(Node::make_scope());
@@ -673,7 +673,7 @@ impl<'a> Lexer<'a> {
         self.peek().is_some_and(is_number)
     }
 
-    fn parse_number<'t>(&mut self, types: &mut Types<'t>) -> PResult<Ty<'t>> {
+    fn parse_number<'t>(&mut self, types: &Types<'t>) -> PResult<Ty<'t>> {
         let snum = self.parse_number_string();
 
         if snum.len() > 1 && snum.starts_with("0") {

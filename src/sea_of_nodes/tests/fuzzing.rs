@@ -14,8 +14,8 @@ fn test_xscope_after_while() {
 #[test]
 fn test_eval_negate_overflow() {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new("return -arg;", &mut types);
+    let types = Types::new(&arena);
+    let mut parser = Parser::new("return -arg;", &types);
     let stop = parser.parse().unwrap();
 
     assert_eq!("return (-arg);", parser.print(stop));

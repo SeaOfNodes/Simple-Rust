@@ -98,7 +98,7 @@ impl<'t> Nodes<'t> {
         id
     }
 
-    pub fn create_peepholed(&mut self, types: &mut Types<'t>, c: NodeCreation<'t>) -> NodeId {
+    pub fn create_peepholed(&mut self, types: &Types<'t>, c: NodeCreation<'t>) -> NodeId {
         let id = self.create(c);
         let better = self.peephole(id, types);
         debug_assert_eq!(better, self.peephole(better, types));
@@ -269,7 +269,7 @@ impl<'t> Nodes<'t> {
         }
         true
     }
-    fn single_unique_input(&self, phi: NodeId, types: &mut Types<'t>) -> Option<NodeId> {
+    fn single_unique_input(&self, phi: NodeId, types: &Types<'t>) -> Option<NodeId> {
         let region = self.inputs[phi][0].unwrap();
 
         let mut live = None;

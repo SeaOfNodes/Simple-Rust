@@ -13,7 +13,7 @@ fn assert_ret_ctrl_is_proj(nodes: &Nodes, stop: NodeId) {
 #[test]
 fn test_example() {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
+    let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
                 while(arg < 10) {
@@ -22,7 +22,7 @@ fn test_example() {
                 }
                 return arg;
                 ",
-        &mut types,
+        &types,
     );
     parser.nodes.disable_peephole = true;
     let stop = parser.parse().unwrap();
@@ -50,7 +50,7 @@ return a;
 #[test]
 fn test_while_nested() {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
+    let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
 int sum = 0;
@@ -65,7 +65,7 @@ while(i < arg) {
 }
 return sum;
 ",
-        &mut types,
+        &types,
     );
     let stop = parser.parse().unwrap();
     parser.show_graph();
@@ -79,7 +79,7 @@ return sum;
 #[test]
 fn test_while_scope() {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
+    let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
 int a = 1;
@@ -90,7 +90,7 @@ while(a < 10) {
 }
 return b;
 ",
-        &mut types,
+        &types,
     );
     parser.nodes.disable_peephole = true;
     let stop = parser.parse().unwrap();
@@ -107,7 +107,7 @@ return b;
 #[test]
 fn test_while_nested_if_and_inc() {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
+    let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
 int a = 1;
@@ -120,7 +120,7 @@ while(a < 10) {
 }
 return b;
 ",
-        &mut types,
+        &types,
     );
     let stop = parser.parse().unwrap();
     parser.show_graph();
@@ -135,7 +135,7 @@ return b;
 #[test]
 fn test_while() {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
+    let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
 int a = 1;
@@ -145,7 +145,7 @@ while(a < 10) {
 }
 return a;
 ",
-        &mut types,
+        &types,
     );
     parser.nodes.disable_peephole = true;
     let stop = parser.parse().unwrap();
@@ -157,7 +157,7 @@ return a;
 #[test]
 fn test_while_peep() {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
+    let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
 int a = 1;
@@ -167,7 +167,7 @@ while(a < 10) {
 }
 return a;
 ",
-        &mut types,
+        &types,
     );
     let stop = parser.parse().unwrap();
     parser.show_graph();
@@ -178,14 +178,14 @@ return a;
 #[test]
 fn test_while2() {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
+    let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
 int a = 1;
 while(arg) a = 2;
 return a;
 ",
-        &mut types,
+        &types,
     );
     parser.nodes.disable_peephole = true;
     let stop = parser.parse().unwrap();
@@ -199,14 +199,14 @@ return a;
 #[test]
 fn test_while2_peep() {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
+    let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
 int a = 1;
 while(arg) a = 2;
 return a;
 ",
-        &mut types,
+        &types,
     );
     let stop = parser.parse().unwrap();
     assert_eq!(parser.print(stop), "return Phi(Loop7,1,2);");
@@ -217,7 +217,7 @@ return a;
 #[test]
 fn test_while3() {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
+    let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
 int a = 1;
@@ -227,7 +227,7 @@ while(a < 10) {
 }
 return a;
 ",
-        &mut types,
+        &types,
     );
     parser.nodes.disable_peephole = true;
     let stop = parser.parse().unwrap();
@@ -239,7 +239,7 @@ return a;
 #[test]
 fn test_while3_peep() {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
+    let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
 int a = 1;
@@ -249,7 +249,7 @@ while(a < 10) {
 }
 return a;
 ",
-        &mut types,
+        &types,
     );
     let stop = parser.parse().unwrap();
     parser.show_graph();
@@ -260,7 +260,7 @@ return a;
 #[test]
 fn test_while4() {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
+    let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
 int a = 1;
@@ -271,7 +271,7 @@ while(a < 10) {
 }
 return a;
 ",
-        &mut types,
+        &types,
     );
     parser.nodes.disable_peephole = true;
     let stop = parser.parse().unwrap();
@@ -283,7 +283,7 @@ return a;
 #[test]
 fn test_while4_peep() {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
+    let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
 int a = 1;
@@ -294,7 +294,7 @@ while(a < 10) {
 }
 return a;
 ",
-        &mut types,
+        &types,
     );
     let stop = parser.parse().unwrap();
     parser.show_graph();

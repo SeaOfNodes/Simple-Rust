@@ -37,9 +37,9 @@ fn test_mul_1() {
 #[test]
 fn test_var_arg() {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
+    let types = Types::new(&arena);
     let arg = types.ty_bot;
-    let mut parser = Parser::new_with_arg("return arg; #showGraph;", &mut types, arg);
+    let mut parser = Parser::new_with_arg("return arg; #showGraph;", &types, arg);
     let stop = parser.parse().unwrap();
 
     assert!(matches!(&parser.nodes[stop], Node::Stop));
@@ -59,9 +59,9 @@ fn test_var_arg() {
 #[test]
 fn test_constant_arg() {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
+    let types = Types::new(&arena);
     let arg = types.get_int(2);
-    let mut parser = Parser::new_with_arg("return arg; #showGraph;", &mut types, arg);
+    let mut parser = Parser::new_with_arg("return arg; #showGraph;", &types, arg);
     let stop = parser.parse().unwrap();
 
     assert_eq!("return 2;", parser.print(stop));

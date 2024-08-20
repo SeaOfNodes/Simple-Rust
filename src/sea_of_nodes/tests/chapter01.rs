@@ -7,8 +7,8 @@ use crate::sea_of_nodes::types::{Int, Type, Types};
 #[test]
 fn test_simple_program() {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new("return 1;", &mut types);
+    let types = Types::new(&arena);
+    let mut parser = Parser::new("return 1;", &types);
     let stop = parser.parse().unwrap();
 
     assert!(matches!(&parser.nodes[stop], Node::Stop));
@@ -30,8 +30,8 @@ fn test_simple_program() {
 #[test]
 fn test_zero() {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new("return 0;", &mut types);
+    let types = Types::new(&arena);
+    let mut parser = Parser::new("return 0;", &types);
     let _stop = parser.parse().unwrap();
 
     assert!(matches!(

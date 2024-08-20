@@ -6,8 +6,8 @@ use crate::sea_of_nodes::types::Types;
 #[test]
 fn test_simple_program() {
     let arena = Arena::new();
-    let mut types = Types::new(&arena);
-    let mut parser = Parser::new("return 1+2*3+-5;", &mut types);
+    let types = Types::new(&arena);
+    let mut parser = Parser::new("return 1+2*3+-5;", &types);
     parser.nodes.disable_peephole = true;
     let stop = parser.parse().unwrap();
 

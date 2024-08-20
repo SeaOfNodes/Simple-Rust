@@ -4,7 +4,7 @@ use crate::sea_of_nodes::types::{Int, Type, Types};
 
 impl<'t> Nodes<'t> {
     /// do not peephole directly returned values!
-    pub(super) fn idealize(&mut self, node: NodeId, types: &mut Types<'t>) -> Option<NodeId> {
+    pub(super) fn idealize(&mut self, node: NodeId, types: &Types<'t>) -> Option<NodeId> {
         match &self[node] {
             Node::Add => self.idealize_add(node, types),
             Node::Sub => self.idealize_sub(node, types),
@@ -25,7 +25,7 @@ impl<'t> Nodes<'t> {
         }
     }
 
-    fn idealize_add(&mut self, node: NodeId, types: &mut Types<'t>) -> Option<NodeId> {
+    fn idealize_add(&mut self, node: NodeId, types: &Types<'t>) -> Option<NodeId> {
         let lhs = self.inputs[node][1]?;
         let rhs = self.inputs[node][2]?;
         let t1 = self.ty[lhs]?; // TODO is it safe to ignore this being None?
@@ -119,7 +119,7 @@ impl<'t> Nodes<'t> {
         None
     }
 
-    fn idealize_sub(&mut self, node: NodeId, types: &mut Types<'t>) -> Option<NodeId> {
+    fn idealize_sub(&mut self, node: NodeId, types: &Types<'t>) -> Option<NodeId> {
         if self.inputs[node][1]? == self.inputs[node][2]? {
             Some(self.create(Node::make_constant(self.start, types.ty_zero)))
         } else {
@@ -127,7 +127,7 @@ impl<'t> Nodes<'t> {
         }
     }
 
-    fn idealize_mul(&mut self, node: NodeId, types: &mut Types<'t>) -> Option<NodeId> {
+    fn idealize_mul(&mut self, node: NodeId, types: &Types<'t>) -> Option<NodeId> {
         let left = self.inputs[node][1]?;
         let right = self.inputs[node][2]?;
         let left_ty = self.ty[left]?;
@@ -146,7 +146,7 @@ impl<'t> Nodes<'t> {
         }
     }
 
-    fn idealize_bool(&mut self, op: BoolOp, node: NodeId, types: &mut Types<'t>) -> Option<NodeId> {
+    fn idealize_bool(&mut self, op: BoolOp, node: NodeId, types: &Types<'t>) -> Option<NodeId> {
         if self.inputs[node][1]? == self.inputs[node][2]? {
             let value = if op.compute(3, 3) {
                 types.ty_one
@@ -163,7 +163,7 @@ impl<'t> Nodes<'t> {
         phicon
     }
 
-    fn idealize_phi(&mut self, node: NodeId, types: &mut Types<'t>) -> Option<NodeId> {
+    fn idealize_phi(&mut self, node: NodeId, types: &Types<'t>) -> Option<NodeId> {
         if self.phi_no_or_in_progress_region(node) {
             return None;
         }
@@ -209,7 +209,7 @@ impl<'t> Nodes<'t> {
         None
     }
 
-    fn idealize_stop(&mut self, node: NodeId, types: &mut Types<'t>) -> Option<NodeId> {
+    fn idealize_stop(&mut self, node: NodeId, types: &Types<'t>) -> Option<NodeId> {
         let mut result = None;
         let mut i = 0;
         while i < self.inputs[node].len() {
@@ -223,7 +223,7 @@ impl<'t> Nodes<'t> {
         result
     }
 
-    fn idealize_return(&mut self, node: NodeId, types: &mut Types<'t>) -> Option<NodeId> {
+    fn idealize_return(&mut self, node: NodeId, types: &Types<'t>) -> Option<NodeId> {
         self.inputs[node][0].filter(|ctrl| self.ty[*ctrl] == Some(types.ty_xctrl))
     }
 
@@ -231,7 +231,7 @@ impl<'t> Nodes<'t> {
         &mut self,
         node: NodeId,
         index: usize,
-        types: &mut Types<'t>,
+        types: &Types<'t>,
     ) -> Option<NodeId> {
         if let Some(Type::Tuple { types: ts }) = self.ty[self.inputs[node][0]?].as_deref() {
             if ts[index] == types.ty_xctrl {
@@ -247,7 +247,7 @@ impl<'t> Nodes<'t> {
         None
     }
 
-    fn idealize_region(&mut self, node: NodeId, types: &mut Types<'t>) -> Option<NodeId> {
+    fn idealize_region(&mut self, node: NodeId, types: &Types<'t>) -> Option<NodeId> {
         if self.in_progress(node) {
             return None;
         }
@@ -314,7 +314,7 @@ impl<'t> Nodes<'t> {
     //     // Rotation is only valid for associative ops, e.g. Add, Mul, And, Or.
     //     // Do we have ((phi cons)|(x + (phi cons)) + con|(phi cons)) ?
     //     // Push constant up through the phi: x + (phi con0+con0 con1+con1...)
-    fn phi_con(&mut self, op: NodeId, rotate: bool, types: &mut Types<'t>) -> Option<NodeId> {
+    fn phi_con(&mut self, op: NodeId, rotate: bool, types: &Types<'t>) -> Option<NodeId> {
         let lhs = self.inputs[op][1]?;
         let rhs = self.inputs[op][2]?;
 
