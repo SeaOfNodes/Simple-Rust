@@ -1,5 +1,5 @@
 use crate::datastructures::arena::Arena;
-use crate::sea_of_nodes::nodes::Node;
+use crate::sea_of_nodes::nodes::{Node, ProjNode};
 use crate::sea_of_nodes::parser::Parser;
 use crate::sea_of_nodes::tests::test_error;
 use crate::sea_of_nodes::types::Types;
@@ -23,6 +23,7 @@ return arg;
         &types,
     );
     let stop = parser.parse().unwrap();
+    parser.iterate(stop);
     parser.show_graph();
 
     assert_eq!(
@@ -56,6 +57,7 @@ return a;
         &types,
     );
     let stop = parser.parse().unwrap();
+    parser.iterate(stop);
     parser.show_graph();
 
     assert_eq!(
@@ -84,6 +86,7 @@ return arg;
         &types,
     );
     let stop = parser.parse().unwrap();
+    parser.iterate(stop);
     parser.show_graph();
 
     assert_eq!(
@@ -109,6 +112,7 @@ return arg;
         &types,
     );
     let stop = parser.parse().unwrap();
+    parser.iterate(stop);
     parser.show_graph();
 
     assert_eq!(
@@ -136,6 +140,7 @@ return arg;
         &types,
     );
     let stop = parser.parse().unwrap();
+    parser.iterate(stop);
     parser.show_graph();
 
     assert_eq!("return Phi(Loop6,arg,(Phi_arg+1));", parser.print(stop));
@@ -158,6 +163,7 @@ return arg;
         &types,
     );
     let stop = parser.parse().unwrap();
+    parser.iterate(stop);
     parser.show_graph();
 
     assert_eq!("return Phi(Loop6,arg,(Phi_arg+1));", parser.print(stop));
@@ -180,6 +186,7 @@ return arg;
         &types,
     );
     let stop = parser.parse().unwrap();
+    parser.iterate(stop);
     parser.show_graph();
 
     assert_eq!("return arg;", parser.print(stop));
@@ -195,6 +202,7 @@ fn test_regress2() {
         &types,
     );
     let stop = parser.parse().unwrap();
+    parser.iterate(stop);
 
     parser.show_graph();
 
@@ -229,6 +237,7 @@ return arg;
         &types,
     );
     let stop = parser.parse().unwrap();
+    parser.iterate(stop);
 
     parser.show_graph();
 
@@ -254,6 +263,7 @@ return a;
         &types,
     );
     let stop = parser.parse().unwrap();
+    parser.iterate(stop);
     parser.show_graph();
 
     assert_eq!(
@@ -280,8 +290,12 @@ return a;
         &types,
     );
     let stop = parser.parse().unwrap();
+    parser.iterate(stop);
     parser.show_graph();
 
     assert_eq!("return (Phi(Loop7,1,Add)+1);", parser.print(stop));
-    assert!(matches!(parser.nodes.ret_ctrl(stop), Node::Region { .. }));
+    assert!(matches!(
+        parser.nodes.ret_ctrl(stop),
+        Node::Proj(ProjNode { index: 1, .. })
+    ));
 }

@@ -21,9 +21,8 @@ return a;",
         &types,
     );
     let stop = parser.parse().unwrap();
-
+    parser.iterate(stop);
     parser.show_graph();
-
     assert_eq!(parser.print(stop), "return Phi(Region17,(arg+2),(arg-3));");
 }
 
@@ -43,9 +42,8 @@ return c;",
         &types,
     );
     let stop = parser.parse().unwrap();
-
+    parser.iterate(stop);
     parser.show_graph();
-
     assert_eq!(parser.print(stop), "return Phi(Region16,4,3);");
 }
 #[test]
@@ -76,9 +74,8 @@ return a+b;",
         &types,
     );
     let stop = parser.parse().unwrap();
-
+    parser.iterate(stop);
     parser.show_graph();
-
     assert_eq!(parser.print(stop), "return ((arg*2)+Phi(Region20,2,3));");
 }
 #[test]
@@ -97,9 +94,8 @@ return a+b;",
         &types,
     );
     let stop = parser.parse().unwrap();
-
+    parser.iterate(stop);
     parser.show_graph();
-
     assert_eq!(
         parser.print(stop),
         "return ((Phi(Region31,(arg*2),arg)+arg)+Phi(Region,4,5));"
@@ -107,7 +103,9 @@ return a+b;",
 }
 #[test]
 fn test_merge3() {
-    test_print_stop(
+    let arena = Arena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new(
         "\
 int a=1;
 if( arg==1 )
@@ -121,7 +119,13 @@ else
     a=5;
 return a;
 #showGraph;",
-        "return Phi(Region33,Phi(Region21,2,3),Phi(Region31,4,5));",
+        &types,
+    );
+    let stop = parser.parse().unwrap();
+    parser.iterate(stop);
+    assert_eq!(
+        parser.print(stop),
+        "return Phi(Region33,Phi(Region21,2,3),Phi(Region31,4,5));"
     );
 }
 #[test]
@@ -154,9 +158,7 @@ return a;",
         &types,
     );
     let stop = parser.parse().unwrap();
-
-    parser.show_graph();
-
+    parser.iterate(stop);
     assert_eq!(parser.print(stop), "return (arg==Phi(Region16,3,2));");
 }
 #[test]

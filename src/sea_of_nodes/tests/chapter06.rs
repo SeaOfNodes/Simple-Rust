@@ -1,7 +1,6 @@
 use crate::datastructures::arena::Arena;
 use crate::sea_of_nodes::nodes::Node;
 use crate::sea_of_nodes::parser::Parser;
-use crate::sea_of_nodes::tests::test_print_stop;
 use crate::sea_of_nodes::types::Types;
 
 #[test]
@@ -16,6 +15,7 @@ return 1;
         &types,
     );
     let stop = parser.parse().unwrap();
+    parser.iterate(stop);
     parser.show_graph();
     assert_eq!("return 2;", parser.print(stop));
 
@@ -27,15 +27,20 @@ return 1;
 
 #[test]
 fn test_peephole_rotate() {
-    test_print_stop(
+    let arena = Arena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new(
         "\
 int a = 1;
 if (arg)
     a = 2;
 return (arg < a) < 3;
 ",
-        "return ((arg<Phi(Region12,2,1))<3);",
-    )
+        &types,
+    );
+    let stop = parser.parse().unwrap();
+    parser.iterate(stop);
+    assert_eq!(parser.print(stop), "return ((arg<Phi(Region12,2,1))<3);");
 }
 
 #[test]
@@ -54,6 +59,7 @@ return a;
         &types,
     );
     let stop = parser.parse().unwrap();
+    parser.iterate(stop);
     parser.show_graph();
     assert_eq!("return 2;", parser.print(stop));
 
@@ -83,6 +89,7 @@ return b;",
         &types,
     );
     let stop = parser.parse().unwrap();
+    parser.iterate(stop);
     parser.show_graph();
     assert_eq!(parser.print(stop), "return Phi(Region32,42,5);");
 }
@@ -107,8 +114,9 @@ return b;",
         &types,
     );
     let stop = parser.parse().unwrap();
+    parser.iterate(stop);
     parser.show_graph();
-    assert_eq!(parser.print(stop), "return Phi(Region28,2,5);");
+    assert_eq!(parser.print(stop), "return Phi(Region29,2,5);");
 }
 
 #[test]
@@ -159,6 +167,7 @@ return a;
         types.get_int(1),
     );
     let stop = parser.parse().unwrap();
+    parser.iterate(stop);
     parser.show_graph();
     assert_eq!(parser.print(stop), "return 3;");
 }
@@ -183,10 +192,11 @@ fn test_merge3_peephole() {
     let types = Types::new(&arena);
     let mut parser = Parser::new_with_arg(MERGE3_PEEPHOLE, &types, types.ty_bot);
     let stop = parser.parse().unwrap();
+    parser.iterate(stop);
     parser.show_graph();
     assert_eq!(
         parser.print(stop),
-        "return Phi(Region36,3,Phi(Region34,4,5));"
+        "return Phi(Region37,3,Phi(Region35,4,5));"
     );
 }
 
@@ -196,6 +206,7 @@ fn test_merge3_peephole1() {
     let types = Types::new(&arena);
     let mut parser = Parser::new_with_arg(MERGE3_PEEPHOLE, &types, types.get_int(1));
     let stop = parser.parse().unwrap();
+    parser.iterate(stop);
     parser.show_graph();
     assert_eq!(parser.print(stop), "return 3;");
 }
@@ -206,6 +217,7 @@ fn test_merge3_peephole3() {
     let types = Types::new(&arena);
     let mut parser = Parser::new_with_arg(MERGE3_PEEPHOLE, &types, types.get_int(3));
     let stop = parser.parse().unwrap();
+    parser.iterate(stop);
     parser.show_graph();
     assert_eq!(parser.print(stop), "return 4;");
 }
@@ -227,8 +239,9 @@ fn test_demo1_non_const() {
     let types = Types::new(&arena);
     let mut parser = Parser::new_with_arg(DEMO1, &types, types.ty_bot);
     let stop = parser.parse().unwrap();
+    parser.iterate(stop);
     parser.show_graph();
-    assert_eq!(parser.print(stop), "return Phi(Region22,4,1);");
+    assert_eq!(parser.print(stop), "return Phi(Region24,4,1);");
 }
 
 #[test]
@@ -237,6 +250,7 @@ fn test_demo1_true() {
     let types = Types::new(&arena);
     let mut parser = Parser::new_with_arg(DEMO1, &types, types.get_int(1));
     let stop = parser.parse().unwrap();
+    parser.iterate(stop);
     parser.show_graph();
     assert_eq!(parser.print(stop), "return 4;");
 }
@@ -247,6 +261,7 @@ fn test_demo1_false() {
     let types = Types::new(&arena);
     let mut parser = Parser::new_with_arg(DEMO1, &types, types.get_int(0));
     let stop = parser.parse().unwrap();
+    parser.iterate(stop);
     parser.show_graph();
     assert_eq!(parser.print(stop), "return 1;");
 }
@@ -270,10 +285,11 @@ fn test_demo2_non_const() {
     let types = Types::new(&arena);
     let mut parser = Parser::new_with_arg(DEMO2, &types, types.ty_bot);
     let stop = parser.parse().unwrap();
+    parser.iterate(stop);
     parser.show_graph();
     assert_eq!(
         parser.print(stop),
-        "return (Phi(Region33,Phi(Region22,2,3),0)+Phi(Region,3,1));"
+        "return (Phi(Region35,Phi(Region22,2,3),0)+Phi(Region,3,1));"
     );
 }
 
@@ -283,6 +299,7 @@ fn test_demo2_true() {
     let types = Types::new(&arena);
     let mut parser = Parser::new_with_arg(DEMO2, &types, types.get_int(1));
     let stop = parser.parse().unwrap();
+    parser.iterate(stop);
     parser.show_graph();
     assert_eq!(parser.print(stop), "return 6;");
 }
@@ -293,6 +310,7 @@ fn test_demo2_arg2() {
     let types = Types::new(&arena);
     let mut parser = Parser::new_with_arg(DEMO2, &types, types.get_int(2));
     let stop = parser.parse().unwrap();
+    parser.iterate(stop);
     parser.show_graph();
     assert_eq!(parser.print(stop), "return 5;");
 }

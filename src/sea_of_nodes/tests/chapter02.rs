@@ -4,7 +4,7 @@ use crate::sea_of_nodes::tests::test_print_stop;
 use crate::sea_of_nodes::types::Types;
 
 #[test]
-fn test_simple_program() {
+fn test_parse_grammar() {
     let arena = Arena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new("return 1+2*3+-5;", &types);
@@ -13,7 +13,7 @@ fn test_simple_program() {
 
     parser.show_graph();
 
-    assert_eq!("return (1+((2*3)+(-5)));", parser.print(stop));
+    assert_eq!("return ((1+(2*3))+(-5));", parser.print(stop));
 }
 
 #[test]
