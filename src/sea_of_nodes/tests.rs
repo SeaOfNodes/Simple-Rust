@@ -33,35 +33,6 @@ fn test_print_stop(source: &str, expected: &str) {
     assert_eq!(parser.print(stop), expected);
 }
 
-enum Show {
-    No,
-    Yes,
-}
-
-enum Arg {
-    Bot,
-    Int(i64),
-}
-
-fn test_print_stop_(show: Show, arg: Arg, source: &str, expected: &str) {
-    let arena = Arena::new();
-    let types = Types::new(&arena);
-
-    let arg = match arg {
-        Arg::Bot => types.ty_bot,
-        Arg::Int(i) => types.get_int(i),
-    };
-
-    let mut parser = Parser::new_with_arg(source, &types, arg);
-    let stop = parser.parse().unwrap();
-
-    if let Show::Yes = show {
-        parser.show_graph();
-    }
-
-    assert_eq!(parser.print(stop), expected);
-}
-
 impl<'t> Nodes<'t> {
     pub fn ret_ctrl(&self, stop: NodeId) -> &Node<'t> {
         assert!(matches!(&self[stop], Node::Stop));
