@@ -204,13 +204,13 @@ impl<'s, 't> Parser<'s, 't> {
         self.require(")")?;
 
         // IfNode takes current control and predicate
-        let if_node = self.nodes.create(Node::make_if(ctrl, pred));
-        self.nodes.keep(if_node);
-        let if_node = self.nodes.peephole(if_node);
+        let if_node = self.peephole(Node::make_if(ctrl, pred));
 
         // Setup projection nodes
+        self.nodes.keep(if_node);
         let if_true = self.peephole(Node::make_proj(if_node, 0, "True".to_string()));
         self.nodes.unkeep(if_node);
+        self.nodes.keep(if_true);
         let if_false = self.peephole(Node::make_proj(if_node, 1, "False".to_string()));
 
         // Clone the body Scope to create the break/exit Scope which accounts for any
@@ -227,6 +227,7 @@ impl<'s, 't> Parser<'s, 't> {
 
         // Parse the true side, which corresponds to loop body
         // Our current scope is the body Scope
+        self.nodes.unkeep(if_true);
         self.set_ctrl(if_true);
         self.parse_statement()?; // Parse loop body
 
@@ -284,7 +285,8 @@ impl<'s, 't> Parser<'s, 't> {
 
         // toScope is either the break scope, or a scope that was created here
         debug_assert!(self.nodes.scope(to_scope).scopes.len() <= break_scopes_len);
-        self.nodes.scope_merge(to_scope, cur);
+        let region = self.nodes.scope_merge(to_scope, cur);
+        self.nodes.set_def(to_scope, 0, Some(region)); // set ctrl
         to_scope
     }
 
@@ -320,14 +322,15 @@ impl<'s, 't> Parser<'s, 't> {
 
         // IfNode takes current control and predicate
         let if_ctrl = self.ctrl();
-        let if_node = self.nodes.create(Node::make_if(if_ctrl, pred));
-        self.nodes.keep(if_node);
-        let if_node = self.nodes.peephole(if_node);
+        let if_node = self.peephole(Node::make_if(if_ctrl, pred));
 
         // Setup projection nodes
+        self.nodes.keep(if_node);
         let if_true = self.peephole(Node::make_proj(if_node, 0, "True".to_string()));
         self.nodes.unkeep(if_node);
+        self.nodes.keep(if_true);
         let if_false = self.peephole(Node::make_proj(if_node, 1, "False".to_string()));
+        self.nodes.keep(if_false);
 
         // In if true branch, the ifT proj node becomes the ctrl
         // But first clone the scope and set it as current
@@ -336,12 +339,14 @@ impl<'s, 't> Parser<'s, 't> {
         self.x_scopes.push(false_scope);
 
         // Parse the true side
+        self.nodes.unkeep(if_true);
         self.set_ctrl(if_true);
         self.parse_statement()?;
         let true_scope = self.scope;
 
         // Parse the false side
         self.scope = false_scope;
+        self.nodes.unkeep(if_false);
         self.set_ctrl(if_false);
         if self.matchx("else") {
             self.parse_statement()?;
@@ -435,24 +440,40 @@ impl<'s, 't> Parser<'s, 't> {
     ///     expr : additiveExpr op additiveExpr
     /// </pre>
     fn parse_comparison(&mut self) -> PResult<NodeId> {
-        let lhs = self.parse_addition()?;
-        let rhs = Self::parse_comparison;
-        if self.match_("==") {
-            rhs(self).map(|rhs| self.peephole(Node::make_bool([lhs, rhs], BoolOp::EQ)))
-        } else if self.match_("!=") {
-            rhs(self)
-                .map(|rhs| self.peephole(Node::make_bool([lhs, rhs], BoolOp::EQ)))
-                .map(|expr| self.peephole(Node::make_not(expr)))
-        } else if self.match_("<=") {
-            rhs(self).map(|rhs| self.peephole(Node::make_bool([lhs, rhs], BoolOp::LE)))
-        } else if self.match_("<") {
-            rhs(self).map(|rhs| self.peephole(Node::make_bool([lhs, rhs], BoolOp::LT)))
-        } else if self.match_(">=") {
-            rhs(self).map(|rhs| self.peephole(Node::make_bool([rhs, lhs], BoolOp::LE)))
-        } else if self.match_(">") {
-            rhs(self).map(|rhs| self.peephole(Node::make_bool([rhs, lhs], BoolOp::LT)))
-        } else {
-            Ok(lhs)
+        let mut lhs = self.parse_addition()?;
+        loop {
+            let mut negate = false;
+            let (op, idx) = if self.match_("==") {
+                (BoolOp::EQ, 2)
+            } else if self.match_("!=") {
+                negate = true;
+                (BoolOp::EQ, 2)
+            } else if self.match_("<=") {
+                (BoolOp::LE, 2)
+            } else if self.match_("<") {
+                (BoolOp::LT, 2)
+            } else if self.match_(">=") {
+                (BoolOp::LE, 1)
+            } else if self.match_(">") {
+                (BoolOp::LT, 1)
+            } else {
+                return Ok(lhs);
+            };
+            // do it before parsing rhs to get same ids as java...
+            lhs = self.nodes.create((
+                Node::Bool(op),
+                if idx == 2 {
+                    vec![None, Some(lhs), None]
+                } else {
+                    vec![None, None, Some(lhs)]
+                },
+            ));
+            let rhs = self.parse_addition()?;
+            self.nodes.set_def(lhs, idx, Some(rhs));
+            lhs = self.nodes.peephole(lhs);
+            if negate {
+                lhs = self.peephole(Node::make_not(lhs));
+            }
         }
     }
 
@@ -460,14 +481,19 @@ impl<'s, 't> Parser<'s, 't> {
     ///     additiveExpr : multiplicativeExpr (('+' | '-') multiplicativeExpr)*
     /// </pre>
     fn parse_addition(&mut self) -> PResult<NodeId> {
-        let lhs = self.parse_multiplication()?;
-        let rhs = Self::parse_addition;
-        if self.match_("+") {
-            rhs(self).map(|rhs| self.peephole(Node::make_add([lhs, rhs])))
-        } else if self.match_("-") {
-            rhs(self).map(|rhs| self.peephole(Node::make_sub([lhs, rhs])))
-        } else {
-            Ok(lhs)
+        let mut lhs = self.parse_multiplication()?;
+        loop {
+            let op = if self.match_("+") {
+                Node::Add
+            } else if self.match_("-") {
+                Node::Sub
+            } else {
+                return Ok(lhs);
+            };
+            lhs = self.nodes.create((op, vec![None, Some(lhs), None]));
+            let rhs = self.parse_multiplication()?;
+            self.nodes.set_def(lhs, 2, Some(rhs));
+            lhs = self.nodes.peephole(lhs);
         }
     }
 
@@ -475,14 +501,19 @@ impl<'s, 't> Parser<'s, 't> {
     ///     multiplicativeExpr : unaryExpr (('*' | '/') unaryExpr)*
     /// </pre>
     fn parse_multiplication(&mut self) -> PResult<NodeId> {
-        let lhs = self.parse_unary()?;
-        let rhs = Self::parse_multiplication;
-        if self.match_("*") {
-            rhs(self).map(|rhs| self.peephole(Node::make_mul([lhs, rhs])))
-        } else if self.match_("/") {
-            rhs(self).map(|rhs| self.peephole(Node::make_div([lhs, rhs])))
-        } else {
-            Ok(lhs)
+        let mut lhs = self.parse_unary()?;
+        loop {
+            let op = if self.match_("*") {
+                Node::Mul
+            } else if self.match_("/") {
+                Node::Div
+            } else {
+                return Ok(lhs);
+            };
+            lhs = self.nodes.create((op, vec![None, Some(lhs), None]));
+            let rhs = self.parse_unary()?;
+            self.nodes.set_def(lhs, 2, Some(rhs));
+            lhs = self.nodes.peephole(lhs);
         }
     }
 
