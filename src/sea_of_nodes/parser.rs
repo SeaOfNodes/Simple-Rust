@@ -73,10 +73,6 @@ impl<'s, 't> Parser<'s, 't> {
         }
     }
 
-    pub fn src(&self) -> &'s str {
-        self.lexer.source
-    }
-
     fn ctrl(&mut self) -> NodeId {
         self.nodes.inputs[self.scope][0].expect("has ctrl")
     }
@@ -387,7 +383,15 @@ impl<'s, 't> Parser<'s, 't> {
 
     /// Dumps out the node graph
     pub fn show_graph(&mut self) {
-        let dot = graph_visualizer::generate_dot_output(self, false).unwrap();
+        let dot = graph_visualizer::generate_dot_output(
+            &self.nodes,
+            self.stop,
+            Some(self.scope),
+            &self.x_scopes,
+            self.lexer.source,
+            false,
+        )
+        .unwrap();
         if !self.disable_show_graph_println {
             println!("{dot}");
             // uncomment to open in browser:

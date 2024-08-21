@@ -6,7 +6,6 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
-use crate::sea_of_nodes::parser::Parser;
 
 pub fn run_graphviz_and_chromium(input: String) {
     let child = Command::new(&"bash")
@@ -55,25 +54,33 @@ pub fn run_graphviz_and_chromium(input: String) {
 }
 
 pub fn generate_dot_output(
-    parser: &Parser,
+    nodes: &Nodes,
+    stop: NodeId,
+    scope: Option<NodeId>,
+    x_scopes: &[NodeId],
+    source: &str,
     separate_control_cluster: bool,
 ) -> Result<String, fmt::Error> {
-    let all = find_all(parser);
+    let all = find_all(nodes, &[Some(stop), scope]);
 
     let mut sb = String::new();
-    writeln!(sb, "digraph \"{}\" {{", parser.src().replace("\"", "\\\""))?;
+    writeln!(sb, "digraph \"{}\" {{", source.replace("\"", "\\\""))?;
 
     // TODO write /* file.ro */
     writeln!(sb, "\trankdir=BT;")?;
     writeln!(sb, "\tordering=\"in\";")?;
     writeln!(sb, "\tconcentrate=\"true\";")?;
-    nodes(&mut sb, &parser.nodes, &all, separate_control_cluster)?;
-    for s in &parser.x_scopes {
-        scope(&mut sb, &parser.nodes, *s)?;
+    do_nodes(&mut sb, nodes, &all, separate_control_cluster)?;
+    for &scope in x_scopes {
+        if !nodes.is_dead(scope) {
+            do_scope(&mut sb, nodes, scope)?;
+        }
     }
-    node_edges(&mut sb, &parser.nodes, &all)?;
-    for scope in &parser.x_scopes {
-        scope_edges(&mut sb, &parser.nodes, *scope)?;
+    node_edges(&mut sb, nodes, &all)?;
+    for &scope in x_scopes {
+        if !nodes.is_dead(scope) {
+            scope_edges(&mut sb, nodes, scope)?;
+        }
     }
     writeln!(sb, "}}")?;
     Ok(sb)
@@ -172,7 +179,7 @@ fn nodes_by_cluster(
     writeln!(sb, "\t}}")
 }
 
-fn nodes(
+fn do_nodes(
     sb: &mut String,
     nodes: &Nodes,
     all: &HashSet<NodeId>,
@@ -182,7 +189,7 @@ fn nodes(
     nodes_by_cluster(sb, false, nodes, all, separate_control_cluster)
 }
 
-fn scope(sb: &mut String, nodes: &Nodes, scope_node: NodeId) -> fmt::Result {
+fn do_scope(sb: &mut String, nodes: &Nodes, scope_node: NodeId) -> fmt::Result {
     let Node::Scope(scope) = &nodes[scope_node] else {
         unreachable!();
     };
@@ -298,13 +305,12 @@ fn def_name(nodes: &Nodes, def: NodeId) -> String {
     }
 }
 
-fn find_all(parser: &Parser) -> HashSet<NodeId> {
+fn find_all(nodes: &Nodes, leaves: &[Option<NodeId>]) -> HashSet<NodeId> {
     let mut all = HashSet::new();
-    for output in &parser.nodes.outputs[parser.nodes.start] {
-        walk(&parser.nodes, &mut all, Some(*output));
-    }
-    for node in &parser.nodes.inputs[parser.scope] {
-        walk(&parser.nodes, &mut all, *node);
+    for &node in leaves.iter().flatten() {
+        for output in &nodes.outputs[node] {
+            walk(nodes, &mut all, Some(*output));
+        }
     }
     all
 }
