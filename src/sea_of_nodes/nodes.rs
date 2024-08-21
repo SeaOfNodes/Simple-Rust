@@ -6,11 +6,14 @@ pub use node::{BoolOp, Node, ProjNode};
 pub use scope::ScopeNode;
 
 use crate::datastructures::id::Id;
+use crate::datastructures::id_set::IdSet;
 use crate::datastructures::id_vec::IdVec;
 use crate::sea_of_nodes::types::{Ty, Types};
+use iter_peeps::IterPeeps;
 
 mod id;
 mod idealize;
+mod iter_peeps;
 mod node;
 mod peephole;
 mod print;
@@ -45,6 +48,13 @@ pub struct Nodes<'t> {
     /// meaning
     pub outputs: IdVec<NodeId, Vec<NodeId>>,
 
+    /// Some of the peephole rules get complex, and search further afield than
+    /// just the nearest neighbor.  These peepholes can fail the pattern match
+    /// on a node some distance away, and if that node ever changes we should
+    /// retry the peephole.  Track a set of Nodes dependent on `this`, and
+    /// revisit them if `this` changes.
+    pub deps: IdVec<NodeId, Vec<NodeId>>,
+
     /// Immediate dominator tree depth, used to approximate a real IDOM during
     ///  parsing where we do not have the whole program, and also peepholes
     ///  change the CFG incrementally.
@@ -59,6 +69,14 @@ pub struct Nodes<'t> {
     /// Creating nodes such as constants and computing peepholes requires
     /// interning new types and operations such as meet and join.
     pub types: &'t Types<'t>,
+
+    /// Worklist for iterative peepholes
+    pub iter_peeps: IterPeeps,
+
+    pub iter_cnt: usize,
+    pub iter_nop_cnt: usize,
+
+    pub walk_visited: IdSet<NodeId>,
 }
 
 pub type NodeCreation<'t> = (Node<'t>, Vec<Option<NodeId>>);
@@ -71,10 +89,15 @@ impl<'t> Nodes<'t> {
             inputs: IdVec::new(vec![vec![]]),
             outputs: IdVec::new(vec![vec![]]),
             ty: IdVec::new(vec![None]),
+            deps: IdVec::new(vec![vec![]]),
             idepth: IdVec::new(vec![0]),
             disable_peephole: false,
             start: NodeId::DUMMY,
             types,
+            iter_peeps: IterPeeps::new(),
+            iter_cnt: 0,
+            iter_nop_cnt: 0,
+            walk_visited: IdSet::zeros(0),
         }
     }
     pub fn len(&self) -> usize {
@@ -90,6 +113,7 @@ impl<'t> Nodes<'t> {
         self.inputs.push(inputs);
         self.outputs.push(vec![]);
         self.ty.push(None);
+        self.deps.push(vec![]);
         self.idepth.push(0);
         for i in 0..self.inputs[id].len() {
             if let Some(input) = self.inputs[id][i] {
@@ -347,6 +371,47 @@ impl<'t> Nodes<'t> {
     fn in_progress(&self, region: NodeId) -> bool {
         debug_assert!(matches!(self[region], Node::Region { .. } | Node::Loop));
         self.inputs[region].last().unwrap().is_none()
+    }
+
+    /// Utility to walk the entire graph applying a function; return the first
+    /// not-null result.
+    fn walk_non_reentrant<T, F: FnMut(&mut Self, NodeId) -> Option<T>>(
+        &mut self,
+        node: NodeId,
+        mut f: F,
+    ) -> Option<T> {
+        assert!(self.walk_visited.is_empty());
+        let result = self.walk_non_reentrant_inner(node, &mut f);
+        self.walk_visited.clear();
+        result
+    }
+
+    fn walk_non_reentrant_inner<T, F: FnMut(&mut Self, NodeId) -> Option<T>>(
+        &mut self,
+        node: NodeId,
+        f: &mut F,
+    ) -> Option<T> {
+        if self.walk_visited.get(node) {
+            return None; // Been there, done that
+        }
+        self.walk_visited.add(node);
+        if let result @ Some(_) = f(self, node) {
+            return result;
+        };
+        for i in 0..self.inputs[node].len() {
+            if let Some(node) = self.inputs[node][i] {
+                if let result @ Some(_) = self.walk_non_reentrant_inner(node, f) {
+                    return result;
+                };
+            }
+        }
+        for i in 0..self.outputs[node].len() {
+            let node = self.outputs[node][i];
+            if let result @ Some(_) = self.walk_non_reentrant_inner(node, f) {
+                return result;
+            };
+        }
+        None
     }
 }
 

@@ -55,6 +55,14 @@ impl<E: Id> IdSet<E> {
         let (word, bit) = IdSet::index(&element);
         self.words.get(word).is_some_and(|w| (w & (1 << bit)) != 0)
     }
+
+    pub fn clear(&mut self) {
+        self.words.iter_mut().for_each(|w| *w = 0);
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.words.iter().all(|w| *w == 0)
+    }
 }
 
 #[cfg(test)]
@@ -66,6 +74,7 @@ mod tests {
         let mut set = IdSet::zeros(0);
         set.add(42);
         assert!(set.get(42));
+        assert!(!set.is_empty());
         set.add(43);
         set.remove(42);
         assert!(!set.get(42));
@@ -77,5 +86,6 @@ mod tests {
         }
 
         assert_eq!(set.words.iter().sum::<usize>(), 0);
+        assert!(set.is_empty());
     }
 }

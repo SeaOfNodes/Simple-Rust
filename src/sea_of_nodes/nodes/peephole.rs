@@ -26,6 +26,11 @@ impl<'t> Nodes<'t> {
         node // no progress
     }
 
+    #[must_use]
+    pub fn peephole_opt(&mut self, node: NodeId) -> Option<NodeId> {
+        todo!("{node}")
+    }
+
     fn dead_code_elimination(&mut self, old: NodeId, new: NodeId) -> NodeId {
         if new != old && self.is_unused(old) {
             self.keep(new);
@@ -35,7 +40,7 @@ impl<'t> Nodes<'t> {
         new
     }
 
-    fn compute(&mut self, node: NodeId) -> Ty<'t> {
+    pub(crate) fn compute(&mut self, node: NodeId) -> Ty<'t> {
         let types = self.types;
         match &self[node] {
             Node::Constant(ty) => *ty,
