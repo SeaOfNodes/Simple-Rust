@@ -147,7 +147,8 @@ fn post_ord(
     // First walk the CFG, then everything
     if nodes.is_cfg(n) {
         for &use_ in &nodes.outputs[n] {
-            if nodes.is_cfg(use_)
+            if use_ != NodeId::DUMMY
+                && nodes.is_cfg(use_)
                 && nodes.outputs[use_].len() >= 1
                 && !matches!(nodes[nodes.outputs[use_][0]], Node::Loop)
             {
@@ -155,13 +156,15 @@ fn post_ord(
             }
         }
         for &use_ in &nodes.outputs[n] {
-            if nodes.is_cfg(use_) {
+            if use_ != NodeId::DUMMY && nodes.is_cfg(use_) {
                 post_ord(use_, rpos, visit, bfs, nodes);
             }
         }
     }
     for &use_ in &nodes.outputs[n] {
-        post_ord(use_, rpos, visit, bfs, nodes);
+        if use_ != NodeId::DUMMY {
+            post_ord(use_, rpos, visit, bfs, nodes);
+        }
     }
     rpos.push(n); // Post-order
 }
