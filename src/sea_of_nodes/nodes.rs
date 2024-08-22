@@ -1,4 +1,5 @@
-use std::num::NonZeroU32;
+use std::collections::HashSet;
+use std::num::{NonZeroU32, NonZeroU64};
 use std::ops::{Index, IndexMut};
 
 pub use id::NodeId;
@@ -11,6 +12,7 @@ use crate::datastructures::id_vec::IdVec;
 use crate::sea_of_nodes::types::{Ty, Types};
 use iter_peeps::IterPeeps;
 
+mod gvn;
 mod id;
 mod idealize;
 mod iter_peeps;
@@ -58,7 +60,7 @@ pub struct Nodes<'t> {
     /// Immediate dominator tree depth, used to approximate a real IDOM during
     ///  parsing where we do not have the whole program, and also peepholes
     ///  change the CFG incrementally.
-    pub idepth: IdVec<NodeId, u32>,
+    idepth: IdVec<NodeId, u32>,
 
     /// If this is true peephole only computes the type.
     pub disable_peephole: bool,
@@ -71,12 +73,23 @@ pub struct Nodes<'t> {
     pub types: &'t Types<'t>,
 
     /// Worklist for iterative peepholes
-    pub iter_peeps: IterPeeps,
+    iter_peeps: IterPeeps,
 
     pub iter_cnt: usize,
     pub iter_nop_cnt: usize,
 
-    pub walk_visited: IdSet<NodeId>,
+    walk_visited: IdSet<NodeId>,
+
+    /// Global Value Numbering. Hash over opcode and inputs; hits in this table
+    /// are structurally equal.
+    gvn: HashSet<NodeId>,
+
+    /// Cached hash.  If zero, then not computed AND this Node is NOT in the GVN
+    /// table - and can have its edges hacked (which will change his hash
+    /// anyway).  If Non-Zero then this Node is IN the GVN table, or is being
+    /// probed to see if it can be inserted.  His edges are "locked", because
+    /// hacking his edges will change his hash.
+    hash: IdVec<NodeId, Option<NonZeroU64>>,
 }
 
 pub type NodeCreation<'t> = (Node<'t>, Vec<Option<NodeId>>);
@@ -98,6 +111,8 @@ impl<'t> Nodes<'t> {
             iter_cnt: 0,
             iter_nop_cnt: 0,
             walk_visited: IdSet::zeros(0),
+            gvn: HashSet::new(),
+            hash: IdVec::new(vec![None]),
         }
     }
     pub fn len(&self) -> usize {
@@ -115,6 +130,7 @@ impl<'t> Nodes<'t> {
         self.ty.push(None);
         self.deps.push(vec![]);
         self.idepth.push(0);
+        self.hash.push(None);
         for i in 0..self.inputs[id].len() {
             if let Some(input) = self.inputs[id][i] {
                 self.add_use(input, id);
@@ -369,7 +385,10 @@ impl<'t> Nodes<'t> {
     }
 
     fn in_progress(&self, region: NodeId) -> bool {
-        debug_assert!(matches!(self[region], Node::Region { .. } | Node::Loop));
+        debug_assert!(matches!(
+            self[region],
+            Node::Region { .. } | Node::Loop | Node::Phi(_)
+        ));
         self.inputs[region].last().unwrap().is_none()
     }
 
