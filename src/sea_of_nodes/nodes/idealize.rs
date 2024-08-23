@@ -175,7 +175,9 @@ impl<'t> Nodes<'t> {
         if !self.instanceof_region(region) {
             return self.inputs[node][1]; // Input has collapse to e.g. starting control.
         }
-        if Self::in_progress(&self.nodes, &self.inputs, node) || self.inputs[region.unwrap()].is_empty() {
+        if Self::in_progress(&self.nodes, &self.inputs, node)
+            || self.inputs[region.unwrap()].is_empty()
+        {
             return None; // Input is in-progress
         }
 
@@ -263,7 +265,9 @@ impl<'t> Nodes<'t> {
             //             // edge and make the loop a single-entry Region which folds away
             //             // the Loop).  Folding the entry path confused the loop structure,
             //             // moving the backedge to the entry point.
-            if !(matches!(&self[node], Node::Loop) && self.inputs[node][1] == self.inputs[node][path]) {
+            if !(matches!(&self[node], Node::Loop)
+                && self.inputs[node][1] == self.inputs[node][path])
+            {
                 // Cannot use the obvious output iterator here, because a Phi
                 // deleting an input might recursively delete *itself*.  This
                 // shuffles the output array, and we might miss iterating an
@@ -275,7 +279,9 @@ impl<'t> Nodes<'t> {
 
                     for i in 0..nouts {
                         let phi = self.outputs[node][i];
-                        if matches!(&self[phi], Node::Phi(_)) && self.inputs[node].len() == self.inputs[phi].len() {
+                        if matches!(&self[phi], Node::Phi(_))
+                            && self.inputs[node].len() == self.inputs[phi].len()
+                        {
                             self.del_def(phi, path);
                         }
                     }
@@ -305,7 +311,9 @@ impl<'t> Nodes<'t> {
     }
 
     fn has_phi(&self, node: NodeId) -> bool {
-        self.outputs[node].iter().any(|phi| matches!(&self[*phi], Node::Phi(_)))
+        self.outputs[node]
+            .iter()
+            .any(|phi| matches!(&self[*phi], Node::Phi(_)))
     }
 
     fn idealize_if(&mut self, node: NodeId) -> Option<NodeId> {
@@ -322,8 +330,13 @@ impl<'t> Nodes<'t> {
                     self.add_dep(if_pred, node);
                     if if_pred == pred {
                         if let Node::Proj(p) = &self[prior] {
-                            let value = if p.index == 0 { self.types.ty_one } else { self.types.ty_zero };
-                            let new_constant = self.create_peepholed(Node::make_constant(self.start, value));
+                            let value = if p.index == 0 {
+                                self.types.ty_one
+                            } else {
+                                self.types.ty_zero
+                            };
+                            let new_constant =
+                                self.create_peepholed(Node::make_constant(self.start, value));
                             self.set_def(node, 1, Some(new_constant));
                             return Some(node);
                         }
@@ -354,10 +367,14 @@ impl<'t> Nodes<'t> {
             return true;
         }
 
-        if matches!(self[lo], Node::Phi(_)) && self.ty[self.inputs[lo][0].unwrap()] == Some(self.types.ty_xctrl) {
+        if matches!(self[lo], Node::Phi(_))
+            && self.ty[self.inputs[lo][0].unwrap()] == Some(self.types.ty_xctrl)
+        {
             return false;
         }
-        if matches!(self[hi], Node::Phi(_)) && self.ty[self.inputs[hi][0].unwrap()] == Some(self.types.ty_xctrl) {
+        if matches!(self[hi], Node::Phi(_))
+            && self.ty[self.inputs[hi][0].unwrap()] == Some(self.types.ty_xctrl)
+        {
             return false;
         }
 

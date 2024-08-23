@@ -38,7 +38,7 @@ use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
 
 pub struct IterPeeps {
     work: WorkList,
-    mid_assert: bool,
+    pub(crate) mid_assert: bool,
 }
 
 impl IterPeeps {

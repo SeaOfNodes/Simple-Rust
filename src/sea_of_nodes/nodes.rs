@@ -357,8 +357,7 @@ impl<'t> Nodes<'t> {
             // to the control because we can be peeped should it become dead.
             let region_in_i = self.inputs[region][i].unwrap();
             self.add_dep(region_in_i, phi);
-            if self.ty[region_in_i] != Some(self.types.ty_xctrl)
-                && self.inputs[phi][i] != Some(phi)
+            if self.ty[region_in_i] != Some(self.types.ty_xctrl) && self.inputs[phi][i] != Some(phi)
             {
                 if live.is_none() || live == self.inputs[phi][i] {
                     live = self.inputs[phi][i];
@@ -375,8 +374,18 @@ impl<'t> Nodes<'t> {
         match &self[node] {
             Node::Start { .. } => None,
             Node::Loop => self.inputs[node][1],
-            Node::Region { cached_idom: None } => {
-                if let &[_, Some(i1), Some(i2)] = self.inputs[node].as_slice() {
+            Node::Region { cached_idom } => {
+                if let Some(ci) = cached_idom {
+                    if self.is_dead(*ci) {
+                        self[node] = Node::Region { cached_idom: None };
+                    } else {
+                        return *cached_idom;
+                    }
+                }
+
+                if let &[_, i1] = self.inputs[node].as_slice() {
+                    i1 // 1-input is that one input
+                } else if let &[_, Some(i1), Some(i2)] = self.inputs[node].as_slice() {
                     // Walk the LHS & RHS idom trees in parallel until they match, or either fails
                     let mut lhs = self.idom(i1)?;
                     let mut rhs = self.idom(i2)?;
@@ -391,16 +400,17 @@ impl<'t> Nodes<'t> {
                         }
                     }
                     self.idepth[node] = self.idepth[lhs] + 1;
-                    self[node] = Node::Region {
-                        cached_idom: Some(lhs),
-                    };
+                    if !self.iter_peeps.mid_assert {
+                        self[node] = Node::Region {
+                            cached_idom: Some(lhs),
+                        };
+                    }
                     Some(lhs)
                 } else {
                     // Fails for anything other than 2-inputs
                     None
                 }
             }
-            Node::Region { cached_idom } => *cached_idom,
             _ => {
                 let idom = self.inputs[node][0].expect("don't ask");
 
@@ -426,8 +436,8 @@ impl<'t> Nodes<'t> {
             nodes[region],
             Node::Region { .. } | Node::Loop | Node::Phi(_)
         ));
-        (matches!(&nodes[region], Node::Phi(_)) || !inputs[region].is_empty()) &&
-            inputs[region].last().unwrap().is_none()
+        (matches!(&nodes[region], Node::Phi(_)) || !inputs[region].is_empty())
+            && inputs[region].last().unwrap().is_none()
     }
 
     /// Utility to walk the entire graph applying a function; return the first
@@ -472,7 +482,7 @@ impl<'t> Nodes<'t> {
     }
 
     pub fn instanceof_region(&self, node: Option<NodeId>) -> bool {
-        node.is_some_and(|n| matches!(&self[n], Node::Region {..} | Node::Loop))
+        node.is_some_and(|n| matches!(&self[n], Node::Region { .. } | Node::Loop))
     }
 }
 
