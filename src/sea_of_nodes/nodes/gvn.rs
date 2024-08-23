@@ -43,7 +43,7 @@ impl<'t> Nodes<'t> {
                 !Self::in_progress(nodes, inputs, this)
             }
             (Node::Proj(p1), Node::Proj(p2)) => p1.index == p2.index,
-            _ => false,
+            _ => true,
         }
     }
 
