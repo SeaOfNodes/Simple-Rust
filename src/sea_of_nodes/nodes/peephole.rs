@@ -1,6 +1,8 @@
+use crate::sea_of_nodes::nodes::gvn::GvnEntry;
 use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
 use crate::sea_of_nodes::types::{Int, Ty, Type};
 use std::collections::hash_map::RawEntryMut;
+use std::hash::BuildHasher;
 
 impl<'t> Nodes<'t> {
     /// Try to peephole at this node and return a better replacement Node.
@@ -50,20 +52,24 @@ impl<'t> Nodes<'t> {
 
         // Global Value Numbering
         if self.hash[node].is_none() {
-            let hash = self.hash_code(node);
-            match self.gvn.raw_entry_mut().from_hash(hash.get(), |n| {
-                Self::equals(&self.nodes, &self.inputs, node, *n)
+            let entry = GvnEntry {
+                hash: self.hash_code(node),
+                node,
+            };
+            let h = self.gvn.hasher().hash_one(entry);
+            match self.gvn.raw_entry_mut().from_hash(h, |o| {
+                entry.hash == o.hash && Self::equals(&self.nodes, &self.inputs, entry.node, o.node)
             }) {
                 RawEntryMut::Vacant(v) => {
-                    v.insert(node, ()); // Put in table now
-                    self.hash[node] = Some(hash);
+                    v.insert(entry, ()); // Put in table now
+                    self.hash[node] = Some(entry.hash);
                 }
                 RawEntryMut::Occupied(o) => {
                     // Because of random worklist ordering, the two equal nodes
                     // might have different types.  Because of monotonicity, both
                     // types are valid.  To preserve monotonicity, the resulting
                     // shared Node has to have the best of both types.
-                    let n = *o.key();
+                    let n = o.key().node;
                     self.set_type(n, self.types.join(self.ty[n].unwrap(), ty));
 
                     return Some(self.dead_code_elimination(node, n)); // Return previous; does Common Subexpression Elimination

@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::num::{NonZeroU32, NonZeroU64};
+use std::num::NonZeroU32;
 use std::ops::{Index, IndexMut};
 
 pub use id::NodeId;
@@ -8,6 +8,7 @@ pub use scope::ScopeNode;
 
 use crate::datastructures::id_set::IdSet;
 use crate::datastructures::id_vec::IdVec;
+use crate::sea_of_nodes::nodes::gvn::GvnEntry;
 use crate::sea_of_nodes::types::{Ty, Types};
 use iter_peeps::IterPeeps;
 
@@ -81,14 +82,14 @@ pub struct Nodes<'t> {
 
     /// Global Value Numbering. Hash over opcode and inputs; hits in this table
     /// are structurally equal.
-    gvn: HashMap<NodeId, ()>,
+    gvn: HashMap<GvnEntry, ()>,
 
     /// Cached hash.  If zero, then not computed AND this Node is NOT in the GVN
     /// table - and can have its edges hacked (which will change his hash
     /// anyway).  If Non-Zero then this Node is IN the GVN table, or is being
     /// probed to see if it can be inserted.  His edges are "locked", because
     /// hacking his edges will change his hash.
-    hash: IdVec<NodeId, Option<NonZeroU64>>,
+    hash: IdVec<NodeId, Option<NonZeroU32>>,
 }
 
 pub type NodeCreation<'t> = (Node<'t>, Vec<Option<NodeId>>);
@@ -144,12 +145,7 @@ impl<'t> Nodes<'t> {
 
     pub fn create_peepholed(&mut self, c: NodeCreation<'t>) -> NodeId {
         let id = self.create(c);
-        let better = self.peephole(id);
-        debug_assert_eq!(better, self.peephole(better));
-        if better != id {
-            // TODO: we could re-use the dead slots: self.nodes.trim_end()
-        }
-        better
+        self.peephole(id)
     }
 
     pub fn is_dead(&self, node: NodeId) -> bool {
