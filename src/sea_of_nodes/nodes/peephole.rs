@@ -1,34 +1,106 @@
 use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
 use crate::sea_of_nodes::types::{Int, Ty, Type};
+use std::collections::hash_map::RawEntryMut;
 
 impl<'t> Nodes<'t> {
+    /// Try to peephole at this node and return a better replacement Node.
+    /// Always returns some not-null Node (often this).
     #[must_use]
     pub fn peephole(&mut self, node: NodeId) -> NodeId {
-        let ty = self.compute(node);
-
-        self.ty[node] = Some(ty);
-
         if self.disable_peephole {
-            return node;
+            self.ty[node] = Some(self.compute(node));
+            node // Peephole optimizations turned off
+        } else if let Some(n) = self.peephole_opt(node) {
+            let n = self.peephole(n);
+            self.dead_code_elimination(node, n)
+        } else {
+            node // Cannot return null for no-progress
         }
-
-        if !matches!(self[node], Node::Constant(_)) && ty.is_constant() {
-            let start = self.start;
-            let new_node = self.create_peepholed(Node::make_constant(start, ty));
-            return self.dead_code_elimination(node, new_node);
-        }
-
-        if let Some(idealized) = self.idealize(node) {
-            let new_node = self.peephole(idealized);
-            return self.dead_code_elimination(node, new_node);
-        }
-
-        node // no progress
     }
 
+    /// Try to peephole at this node and return a better replacement Node if
+    /// possible.  We compute a {@link Type} and then check and replace:
+    /// <ul>
+    /// <li>if the Type {@link Type#isConstant}, we replace with a {@link ConstantNode}</li>
+    /// <li>in a future chapter we will look for a
+    /// <a href="https://en.wikipedia.org/wiki/Common_subexpression_elimination">Common Subexpression</a>
+    /// to eliminate.</li>
+    /// <li>we ask the Node for a better replacement.  The "better replacement"
+    /// is things like {@code (1+2)} becomes {@code 3} and {@code (1+(x+2))} becomes
+    /// {@code (x+(1+2))}.  By canonicalizing expressions we fold common addressing
+    /// math constants, remove algebraic identities and generally simplify the
+    /// code. </li>
+    ///
+    /// Unlike peephole above, this explicitly returns null for no-change, or not-null
+    /// for a better replacement (which can be this).
+    /// </ul>
     #[must_use]
     pub fn peephole_opt(&mut self, node: NodeId) -> Option<NodeId> {
-        todo!("{node}")
+        self.iter_cnt += 1;
+
+        // Compute initial or improved Type
+        let ty = self.compute(node);
+        let old = self.set_type(node, ty);
+
+        // Replace constant computations from non-constants with a constant node
+        if !matches!(self[node], Node::Constant(_)) && ty.is_high_or_constant() {
+            let constant = self.create_peepholed(Node::make_constant(self.start, ty));
+            return self.peephole_opt(constant);
+        }
+
+        // Global Value Numbering
+        if self.hash[node].is_none() {
+            let hash = self.hash_code(node);
+            match self.gvn.raw_entry_mut().from_hash(hash.get(), |n| {
+                Self::equals(&self.nodes, &self.inputs, node, *n)
+            }) {
+                RawEntryMut::Vacant(v) => {
+                    v.insert(node, ()); // Put in table now
+                    self.hash[node] = Some(hash);
+                }
+                RawEntryMut::Occupied(o) => {
+                    // Because of random worklist ordering, the two equal nodes
+                    // might have different types.  Because of monotonicity, both
+                    // types are valid.  To preserve monotonicity, the resulting
+                    // shared Node has to have the best of both types.
+                    let n = *o.key();
+                    self.set_type(n, self.types.join(self.ty[n].unwrap(), ty));
+
+                    return Some(self.dead_code_elimination(node, n)); // Return previous; does Common Subexpression Elimination
+                }
+            }
+        }
+
+        // Ask each node for a better replacement
+        if let idealized @ Some(_) = self.idealize(node) {
+            return idealized; // Something changes, report progress
+        }
+
+        if old == self.ty[node] {
+            self.iter_nop_cnt += 1;
+            None
+        } else {
+            Some(node) // Report progress
+        }
+    }
+
+    /// Set the type.  Assert monotonic progress.
+    /// If changing, add users to worklist.
+    pub(crate) fn set_type(&mut self, node: NodeId, ty: Ty<'t>) -> Option<Ty<'t>> {
+        let old = self.ty[node];
+        if let Some(old) = old {
+            debug_assert!(self.types.isa(ty, old));
+        }
+        if old == Some(ty) {
+            return old;
+        }
+        self.ty[node] = Some(ty); // Set _type late for easier assert debugging
+
+        for o in &self.outputs[node] {
+            self.iter_peeps.add(*o);
+        }
+        self.move_deps_to_worklist(node);
+        old
     }
 
     fn dead_code_elimination(&mut self, old: NodeId, new: NodeId) -> NodeId {
@@ -146,7 +218,7 @@ impl<'t> Nodes<'t> {
                 }
             }
             Node::Region { .. } => {
-                if self.in_progress(node) {
+                if Self::in_progress(&self.nodes, &self.inputs, node) {
                     types.ty_ctrl
                 } else {
                     self.inputs[node]
@@ -158,7 +230,7 @@ impl<'t> Nodes<'t> {
                 }
             }
             Node::Loop => {
-                if self.in_progress(node) {
+                if Self::in_progress(&self.nodes, &self.inputs, node) {
                     types.ty_ctrl
                 } else {
                     let entry = self.inputs[node][1].unwrap();

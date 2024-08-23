@@ -243,7 +243,7 @@ impl<'t> Nodes<'t> {
     }
 
     fn idealize_region(&mut self, node: NodeId) -> Option<NodeId> {
-        if self.in_progress(node) {
+        if Self::in_progress(&self.nodes, &self.inputs, node) {
             return None;
         }
 

@@ -102,7 +102,7 @@ impl Display for PrintNodes2<'_, '_, '_> {
             Node::Proj(proj) => write!(f, "{}", proj.label),
             Node::If => write!(f, "if( {} )", input(1)),
             Node::Phi(_) => {
-                if nodes.in_progress(nodes.inputs[node][0].unwrap()) {
+                if Nodes::in_progress(&nodes.nodes, &nodes.inputs, nodes.inputs[node][0].unwrap()) {
                     write!(f, "Z")?;
                 }
                 write!(f, "Phi(")?;

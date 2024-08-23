@@ -193,7 +193,7 @@ impl<'t> Nodes<'t> {
     pub fn scope_end_loop(&mut self, head: NodeId, back: NodeId, exit: NodeId) {
         let ctrl = self.inputs[head][0].unwrap();
         assert!(matches!(&self[ctrl], Node::Loop));
-        assert!(self.in_progress(ctrl));
+        assert!(Self::in_progress(&self.nodes, &self.inputs, ctrl));
 
         self.set_def(ctrl, 2, self.inputs[back][0]);
 

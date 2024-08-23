@@ -97,7 +97,8 @@ impl<'t> Nodes<'t> {
 
             // peepholeOpt can return brand-new nodes, needing an initial type set
             if self.ty[x].is_none() {
-                self.ty[x] = Some(self.compute(x));
+                let ty = self.compute(x);
+                self.set_type(x, ty);
             }
 
             // Changes require neighbors onto the worklist

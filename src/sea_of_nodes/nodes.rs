@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::num::{NonZeroU32, NonZeroU64};
 use std::ops::{Index, IndexMut};
 
@@ -6,7 +6,6 @@ pub use id::NodeId;
 pub use node::{BoolOp, Node, ProjNode};
 pub use scope::ScopeNode;
 
-use crate::datastructures::id::Id;
 use crate::datastructures::id_set::IdSet;
 use crate::datastructures::id_vec::IdVec;
 use crate::sea_of_nodes::types::{Ty, Types};
@@ -28,7 +27,7 @@ mod scope;
 ///    while `self.inputs[x]` automatically decides
 pub struct Nodes<'t> {
     /// indexed by self[id]
-    nodes: Vec<Node<'t>>,
+    nodes: IdVec<NodeId, Node<'t>>,
 
     pub ty: IdVec<NodeId, Option<Ty<'t>>>,
 
@@ -82,7 +81,7 @@ pub struct Nodes<'t> {
 
     /// Global Value Numbering. Hash over opcode and inputs; hits in this table
     /// are structurally equal.
-    gvn: HashSet<NodeId>,
+    gvn: HashMap<NodeId, ()>,
 
     /// Cached hash.  If zero, then not computed AND this Node is NOT in the GVN
     /// table - and can have its edges hacked (which will change his hash
@@ -98,7 +97,7 @@ impl<'t> Nodes<'t> {
     pub fn new(types: &'t Types<'t>) -> Self {
         let dummy = Node::Stop;
         Nodes {
-            nodes: vec![dummy],
+            nodes: IdVec::new(vec![dummy]),
             inputs: IdVec::new(vec![vec![]]),
             outputs: IdVec::new(vec![vec![]]),
             ty: IdVec::new(vec![None]),
@@ -111,7 +110,7 @@ impl<'t> Nodes<'t> {
             iter_cnt: 0,
             iter_nop_cnt: 0,
             walk_visited: IdSet::zeros(0),
-            gvn: HashSet::new(),
+            gvn: HashMap::new(),
             hash: IdVec::new(vec![None]),
         }
     }
@@ -290,7 +289,7 @@ impl<'t> Nodes<'t> {
         let region = self.inputs[phi][0];
         region.is_none()
             || !matches!(&self[region.unwrap()], Node::Region { .. } | Node::Loop)
-            || self.in_progress(region.unwrap())
+            || Self::in_progress(&self.nodes, &self.inputs, region.unwrap())
     }
 
     /// ignores input 0
@@ -384,12 +383,16 @@ impl<'t> Nodes<'t> {
         }
     }
 
-    fn in_progress(&self, region: NodeId) -> bool {
+    fn in_progress(
+        nodes: &IdVec<NodeId, Node<'t>>,
+        inputs: &IdVec<NodeId, Vec<Option<NodeId>>>,
+        region: NodeId,
+    ) -> bool {
         debug_assert!(matches!(
-            self[region],
+            nodes[region],
             Node::Region { .. } | Node::Loop | Node::Phi(_)
         ));
-        self.inputs[region].last().unwrap().is_none()
+        inputs[region].last().unwrap().is_none()
     }
 
     /// Utility to walk the entire graph applying a function; return the first
@@ -438,12 +441,12 @@ impl<'t> Index<NodeId> for Nodes<'t> {
     type Output = Node<'t>;
 
     fn index(&self, index: NodeId) -> &Self::Output {
-        &self.nodes[index.index()]
+        &self.nodes[index]
     }
 }
 
 impl<'t> IndexMut<NodeId> for Nodes<'t> {
     fn index_mut(&mut self, index: NodeId) -> &mut Self::Output {
-        &mut self.nodes[index.index()]
+        &mut self.nodes[index]
     }
 }
