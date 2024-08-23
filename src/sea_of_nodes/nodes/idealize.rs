@@ -15,13 +15,13 @@ impl<'t> Nodes<'t> {
             Node::Return => self.idealize_return(node),
             Node::Proj(p) => self.idealize_proj(node, p.index),
             Node::Region { .. } | Node::Loop => self.idealize_region(node),
+            Node::If => self.idealize_if(node),
             Node::Constant(_)
             | Node::Start { .. }
             | Node::Div
             | Node::Minus
             | Node::Scope(_)
-            | Node::Not
-            | Node::If => None,
+            | Node::Not => None,
         }
     }
 
@@ -280,6 +280,34 @@ impl<'t> Nodes<'t> {
             return self.inputs[node][1];
         }
         Some(node)
+    }
+
+    fn idealize_if(&mut self, node: NodeId) -> Option<NodeId> {
+        // Hunt up the immediate dominator tree.  If we find an identical if
+        // test on either the true or false branch, that side wins.
+        let pred = self.inputs[node][1]?;
+        if self.ty[pred]?.is_high_or_constant() {
+            let mut prior = node;
+            let mut dom = self.idom(node);
+            while let Some(d) = dom {
+                self.add_dep(d, node);
+                if matches!(&self[d], Node::If) {
+                    let if_pred = self.inputs[d][1]?;
+                    self.add_dep(if_pred, node);
+                    if if_pred == pred {
+                        if let Node::Proj(p) = &self[prior] {
+                            let value = if p.index == 0 { self.types.ty_one } else { self.types.ty_zero };
+                            let new_constant = self.create_peepholed(Node::make_constant(self.start, value));
+                            self.set_def(node, 1, Some(new_constant));
+                            return Some(node);
+                        }
+                    }
+                }
+                prior = d;
+                dom = self.idom(d);
+            }
+        }
+        None
     }
 
     fn find_dead_input(&self, node: NodeId) -> Option<usize> {

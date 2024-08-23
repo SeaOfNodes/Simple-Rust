@@ -177,10 +177,17 @@ impl<'t> Nodes<'t> {
                 }
 
                 let pred = self.inputs[node][1].unwrap();
+                let t = self.ty[pred].unwrap();
+
+                // High types mean NEITHER side is reachable.
+                // Wait until the type falls to decide which way to go.
+                if t == types.ty_top || t == types.ty_int_top {
+                    return types.ty_if_neither;
+                }
 
                 // If constant is 0 then false branch is reachable
                 // Else true branch is reachable
-                if let Some(Type::Int(Int::Constant(c))) = self.ty[pred].as_deref() {
+                if let Type::Int(Int::Constant(c)) = &*t {
                     return if *c == 0 {
                         types.ty_if_false
                     } else {
