@@ -300,13 +300,6 @@ impl<'t> Nodes<'t> {
         }
     }
 
-    pub fn phi_no_or_in_progress_region(&self, phi: NodeId) -> bool {
-        let region = self.inputs[phi][0];
-        region.is_none()
-            || !matches!(&self[region.unwrap()], Node::Region { .. } | Node::Loop)
-            || Self::in_progress(&self.nodes, &self.inputs, region.unwrap())
-    }
-
     /// Does this node contain all constants?
     /// Ignores in(0), as is usually control.
     /// In an input is not a constant, we add dep as
@@ -315,16 +308,25 @@ impl<'t> Nodes<'t> {
     /// It is sufficient for one of the non-const
     /// inputs to have the dependency so we don't bother
     /// checking the rest.
-    pub fn all_cons(&mut self, node: NodeId) -> bool {
-        if matches!(&self[node], Node::Phi(_)) && self.phi_no_or_in_progress_region(node) {
-            return false;
+    pub fn all_cons(&mut self, node: NodeId, dep: NodeId) -> bool {
+        if matches!(&self[node], Node::Phi(_)) {
+            let region = self.inputs[node][0];
+            if !self.instanceof_region(region) {
+                return false;
+            }
+            // When the region completes (is no longer in progress) the Phi can
+            // become a "all constants" Phi, and the "dep" might make progress.
+            self.add_dep(node, dep);
+            if Self::in_progress(&self.nodes, &self.inputs, region.unwrap()) {
+                return false;
+            }
         }
         if let Some(non_const) = self.inputs[node]
             .iter()
             .skip(1)
             .find(|n| !self.ty[n.unwrap()].unwrap().is_constant())
         {
-            self.add_dep(node, non_const.unwrap()); // If in(i) becomes a constant later, will trigger some peephole
+            self.add_dep(non_const.unwrap(), dep); // If in(i) becomes a constant later, will trigger some peephole
             false
         } else {
             true
@@ -341,17 +343,21 @@ impl<'t> Nodes<'t> {
         }
         true
     }
-    fn single_unique_input(&self, phi: NodeId) -> Option<NodeId> {
+    fn single_unique_input(&mut self, phi: NodeId) -> Option<NodeId> {
         let region = self.inputs[phi][0].unwrap();
+        if matches!(&self[region], Node::Loop)
+            && self.ty[self.inputs[region][1].unwrap()] == Some(self.types.ty_xctrl)
+        {
+            return None; // Dead entry loops just ignore and let the loop collapse
+        }
 
         let mut live = None;
         for i in 1..self.inputs[phi].len() {
-            if matches!(&self[region], Node::Loop)
-                && self.ty[self.inputs[region][1].unwrap()] == Some(self.types.ty_xctrl)
-            {
-                return None; // Dead entry loops just ignore and let the loop collapse
-            }
-            if self.ty[self.inputs[region][i].unwrap()] != Some(self.types.ty_xctrl)
+            // If the region's control input is live, add this as a dependency
+            // to the control because we can be peeped should it become dead.
+            let region_in_i = self.inputs[region][i].unwrap();
+            self.add_dep(region_in_i, phi);
+            if self.ty[region_in_i] != Some(self.types.ty_xctrl)
                 && self.inputs[phi][i] != Some(phi)
             {
                 if live.is_none() || live == self.inputs[phi][i] {
@@ -420,7 +426,8 @@ impl<'t> Nodes<'t> {
             nodes[region],
             Node::Region { .. } | Node::Loop | Node::Phi(_)
         ));
-        inputs[region].last().unwrap().is_none()
+        (matches!(&nodes[region], Node::Phi(_)) || !inputs[region].is_empty()) &&
+            inputs[region].last().unwrap().is_none()
     }
 
     /// Utility to walk the entire graph applying a function; return the first
@@ -462,6 +469,10 @@ impl<'t> Nodes<'t> {
             };
         }
         None
+    }
+
+    pub fn instanceof_region(&self, node: Option<NodeId>) -> bool {
+        node.is_some_and(|n| matches!(&self[n], Node::Region {..} | Node::Loop))
     }
 }
 

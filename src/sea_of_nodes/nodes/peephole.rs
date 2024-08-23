@@ -215,12 +215,28 @@ impl<'t> Nodes<'t> {
                 types.ty_if_both
             }
             Node::Phi(_) => {
-                if self.phi_no_or_in_progress_region(node) {
+                let region = self.inputs[node][0].unwrap();
+                if !self.instanceof_region(Some(region)) {
+                    if self.ty[region] == Some(types.ty_xctrl) {
+                        types.ty_top
+                    } else {
+                        self.ty[node].unwrap()
+                    }
+                } else if Self::in_progress(&self.nodes, &self.inputs, node) {
                     types.ty_bot
                 } else {
-                    self.inputs[node].iter().skip(1).fold(types.ty_top, |t, n| {
-                        types.meet(t, self.ty[n.unwrap()].unwrap())
-                    })
+                    let mut t = types.ty_top;
+                    for i in 1..self.inputs[node].len() {
+                        // If the region's control input is live, add this as a dependency
+                        // to the control because we can be peeped should it become dead.
+                        let r_in_i = self.inputs[region][i].unwrap();
+                        self.add_dep(r_in_i, node);
+                        let in_i = self.inputs[node][i].unwrap();
+                        if self.ty[r_in_i] != Some(types.ty_xctrl) && in_i != node {
+                            t = types.meet(t, self.ty[in_i].unwrap())
+                        }
+                    }
+                    t
                 }
             }
             Node::Region { .. } => {

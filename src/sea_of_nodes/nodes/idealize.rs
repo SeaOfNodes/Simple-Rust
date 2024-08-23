@@ -28,11 +28,7 @@ impl<'t> Nodes<'t> {
     fn idealize_add(&mut self, node: NodeId) -> Option<NodeId> {
         let lhs = self.inputs[node][1]?;
         let rhs = self.inputs[node][2]?;
-        let t1 = self.ty[lhs]?; // TODO is it safe to ignore this being None?
         let t2 = self.ty[rhs]?;
-
-        // Already handled by peephole constant folding
-        debug_assert!(!t1.is_constant() || !t2.is_constant(), "{t1} {t2}");
 
         // Add of 0.  We do not check for (0+x) because this will already
         // canonicalize to (x+0)
@@ -53,6 +49,12 @@ impl<'t> Nodes<'t> {
             return Some(self.swap_12(node));
         }
 
+        // x+(-y) becomes x-y
+        if matches!(&self[rhs], Node::Minus) {
+            let y = self.inputs[rhs][1].unwrap();
+            return Some(self.create(Node::make_sub([lhs, y])));
+        }
+
         // Now we might see (add add non) or (add non non) or (add add add) but never (add non add)
 
         // Do we have  x + (y + z) ?
@@ -68,7 +70,7 @@ impl<'t> Nodes<'t> {
 
         // Now we might see (add add non) or (add non non) but never (add non add) nor (add add add)
         if !matches!(self[lhs], Node::Add) {
-            return if self.spline_cmp(lhs, rhs) {
+            return if self.spine_cmp(lhs, rhs, node) {
                 Some(self.swap_12(node))
             } else {
                 self.phi_con(node, true)
@@ -85,6 +87,11 @@ impl<'t> Nodes<'t> {
 
         // Do we have (x + con1) + con2?
         // Replace with (x + (con1+con2) which then fold the constants
+        // lhs.in(2) is con1 here
+        // If lhs.in(2) is not a constant, we add ourselves as a dependency
+        // because if it later became a constant then we could make this
+        // transformation.
+        self.add_dep(self.inputs[lhs][2]?, node);
         if self.ty[self.inputs[lhs][2]?]?.is_constant() && t2.is_constant() {
             let x = self.inputs[lhs][1]?;
             let con1 = self.inputs[lhs][2]?;
@@ -102,11 +109,11 @@ impl<'t> Nodes<'t> {
             return phicon;
         }
 
-        // Now we sort along the spline via rotates, to gather similar things together.
+        // Now we sort along the spine via rotates, to gather similar things together.
 
         // Do we rotate (x + y) + z
         // into         (x + z) + y ?
-        if self.spline_cmp(self.inputs[lhs][2]?, rhs) {
+        if self.spine_cmp(self.inputs[lhs][2]?, rhs, node) {
             // return new AddNode(new AddNode(lhs.in(1), rhs).peephole(), lhs.in(2));
             let x = self.inputs[lhs][1]?;
             let y = self.inputs[lhs][2]?;
@@ -164,8 +171,12 @@ impl<'t> Nodes<'t> {
     }
 
     fn idealize_phi(&mut self, node: NodeId) -> Option<NodeId> {
-        if self.phi_no_or_in_progress_region(node) {
-            return None;
+        let region = self.inputs[node][0];
+        if !self.instanceof_region(region) {
+            return self.inputs[node][1]; // Input has collapse to e.g. starting control.
+        }
+        if Self::in_progress(&self.nodes, &self.inputs, node) || self.inputs[region.unwrap()].is_empty() {
+            return None; // Input is in-progress
         }
 
         // If we have only a single unique input, become it.
@@ -276,12 +287,12 @@ impl<'t> Nodes<'t> {
             .find(|&i| self.ty[self.inputs[node][i].unwrap()].unwrap() == self.types.ty_xctrl)
     }
 
-    // Compare two off-spline nodes and decide what order they should be in.
+    // Compare two off-spine nodes and decide what order they should be in.
     // Do we rotate ((x + hi) + lo) into ((x + lo) + hi) ?
     // Generally constants always go right, then Phi-of-constants, then muls, then others.
     // Ties with in a category sort by node ID.
     // TRUE if swapping hi and lo.
-    fn spline_cmp(&mut self, hi: NodeId, lo: NodeId) -> bool {
+    fn spine_cmp(&mut self, hi: NodeId, lo: NodeId, dep: NodeId) -> bool {
         if self.ty[lo].is_some_and(|t| t.is_constant()) {
             return false;
         }
@@ -289,10 +300,17 @@ impl<'t> Nodes<'t> {
             return true;
         }
 
-        if matches!(self[lo], Node::Phi(_)) && self.all_cons(lo) {
+        if matches!(self[lo], Node::Phi(_)) && self.ty[self.inputs[lo][0].unwrap()] == Some(self.types.ty_xctrl) {
             return false;
         }
-        if matches!(self[hi], Node::Phi(_)) && self.all_cons(hi) {
+        if matches!(self[hi], Node::Phi(_)) && self.ty[self.inputs[hi][0].unwrap()] == Some(self.types.ty_xctrl) {
+            return false;
+        }
+
+        if matches!(self[lo], Node::Phi(_)) && self.all_cons(lo, dep) {
+            return false;
+        }
+        if matches!(self[hi], Node::Phi(_)) && self.all_cons(hi, dep) {
             return true;
         }
 
@@ -314,19 +332,19 @@ impl<'t> Nodes<'t> {
         let rhs = self.inputs[op][2]?;
 
         // LHS is either a Phi of constants, or another op with Phi of constants
-        let mut lphi = self.pcon(Some(lhs));
+        let mut lphi = self.pcon(Some(lhs), op);
         if rotate && lphi.is_none() && self.inputs[lhs].len() > 2 {
             // Only valid to rotate constants if both are same associative ops
             if self[lhs].operation() != self[op].operation() {
                 return None;
             }
-            lphi = self.pcon(self.inputs[lhs][2]); // Will rotate with the Phi push
+            lphi = self.pcon(self.inputs[lhs][2], op); // Will rotate with the Phi push
         }
 
         let lphi = lphi?;
 
         // RHS is a constant or a Phi of constants
-        if !matches!(&self[rhs], Node::Constant(_)) && self.pcon(Some(rhs)).is_none() {
+        if !matches!(&self[rhs], Node::Constant(_)) && self.pcon(Some(rhs), op).is_none() {
             return None;
         }
 
@@ -375,7 +393,13 @@ impl<'t> Nodes<'t> {
             ))
         })
     }
-    fn pcon(&mut self, op: Option<NodeId>) -> Option<NodeId> {
-        op.filter(|op| matches!(&self[*op], Node::Phi(_)) && self.all_cons(*op))
+
+    /// Tests if the op is a phi and has all constant inputs.
+    /// If not, returns null.
+    /// If op is a phi, but its inputs are not all constants, then dep is added as
+    /// a dependency to the phi's non-const input, because if later the input turn into a constant
+    /// dep can make progress.
+    fn pcon(&mut self, op: Option<NodeId>, dep: NodeId) -> Option<NodeId> {
+        op.filter(|op| matches!(&self[*op], Node::Phi(_)) && self.all_cons(*op, dep))
     }
 }
