@@ -258,28 +258,54 @@ impl<'t> Nodes<'t> {
             return None;
         }
 
-        let path = self.find_dead_input(node)?;
+        if let Some(path) = self.find_dead_input(node) {
+            //             // Do not delete the entry path of a loop (ok to remove the back
+            //             // edge and make the loop a single-entry Region which folds away
+            //             // the Loop).  Folding the entry path confused the loop structure,
+            //             // moving the backedge to the entry point.
+            if !(matches!(&self[node], Node::Loop) && self.inputs[node][1] == self.inputs[node][path]) {
+                // Cannot use the obvious output iterator here, because a Phi
+                // deleting an input might recursively delete *itself*.  This
+                // shuffles the output array, and we might miss iterating an
+                // unrelated Phi. So on rare occasions we repeat the loop to get
+                // all the Phis.
+                let mut nouts = 0;
+                while nouts != self.outputs[node].len() {
+                    nouts = self.outputs[node].len();
 
-        for i in 0..self.outputs[node].len() {
-            let phi = self.outputs[node][i];
-            if matches!(&self[phi], Node::Phi(_)) {
-                self.del_def(phi, path);
+                    for i in 0..nouts {
+                        let phi = self.outputs[node][i];
+                        if matches!(&self[phi], Node::Phi(_)) && self.inputs[node].len() == self.inputs[phi].len() {
+                            self.del_def(phi, path);
+                        }
+                    }
+                }
+                if let Node::Region { cached_idom } = &mut self[node] {
+                    *cached_idom = None; // Clear idom cache
+                }
+
+                return if self.is_dead(node) {
+                    Some(self.create(Node::make_constant(self.start, self.types.ty_xctrl)))
+                } else {
+                    self.del_def(node, path);
+                    Some(node)
+                };
             }
         }
-        self.del_def(node, path);
 
         // If down to a single input, become that input - but also make all
-        // Phis an identity on *their* single input.
-        if self.inputs[node].len() == 2 {
-            for i in 0..self.outputs[node].len() {
-                let phi = self.outputs[node][i];
-                if matches!(&self[phi], Node::Phi(_)) {
-                    todo!("Currently does not happen, because no loops");
-                }
+        if self.inputs[node].len() == 2 && !self.has_phi(node) {
+            if let Node::Region { cached_idom } = &mut self[node] {
+                *cached_idom = None; // Clear idom cache
             }
-            return self.inputs[node][1];
+            self.inputs[node][1]
+        } else {
+            None
         }
-        Some(node)
+    }
+
+    fn has_phi(&self, node: NodeId) -> bool {
+        self.outputs[node].iter().any(|phi| matches!(&self[*phi], Node::Phi(_)))
     }
 
     fn idealize_if(&mut self, node: NodeId) -> Option<NodeId> {
