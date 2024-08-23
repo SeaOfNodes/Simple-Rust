@@ -260,8 +260,7 @@ impl<'t> Nodes<'t> {
             [Type::Int(Int::Constant(v1)), Type::Int(Int::Constant(v2))] => {
                 types.get_int(op(*v1, *v2))
             }
-            [Type::Int(_), Type::Int(_)] => types.meet(first, second),
-            _ => types.ty_bot,
+            [_, _] => types.meet(first, second),
         }
     }
 }
