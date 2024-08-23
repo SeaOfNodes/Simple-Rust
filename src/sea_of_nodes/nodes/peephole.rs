@@ -144,7 +144,7 @@ impl<'t> Nodes<'t> {
                 };
                 match &*input {
                     Type::Int(Int::Constant(v)) => types.get_int(v.wrapping_neg()),
-                    _ => types.ty_bot,
+                    _ => types.meet(types.ty_top, input),
                 }
             }
             Node::Scope(_) => types.ty_bot,
@@ -157,7 +157,7 @@ impl<'t> Nodes<'t> {
                     Type::Int(Int::Constant(0)) => types.ty_one,
                     Type::Int(Int::Constant(_)) => types.ty_zero,
                     Type::Int(_) => input,
-                    _ => types.ty_bot,
+                    _ => types.meet(types.ty_top, input),
                 }
             }
             Node::Proj(n) => {
