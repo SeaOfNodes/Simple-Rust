@@ -44,6 +44,8 @@ impl<'t> Nodes<'t> {
         let ty = self.compute(node);
         let old = self.set_type(node, ty);
 
+        // println!("{:<3} {:<8} {:?}->{:?}", node, &self[node].label(), old, ty);
+
         // Replace constant computations from non-constants with a constant node
         if !matches!(self[node], Node::Constant(_)) && ty.is_high_or_constant() {
             let constant = self.create(Node::make_constant(self.start, ty));

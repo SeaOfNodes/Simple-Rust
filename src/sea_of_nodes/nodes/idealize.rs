@@ -320,7 +320,7 @@ impl<'t> Nodes<'t> {
         // Hunt up the immediate dominator tree.  If we find an identical if
         // test on either the true or false branch, that side wins.
         let pred = self.inputs[node][1]?;
-        if self.ty[pred]?.is_high_or_constant() {
+        if !self.ty[pred]?.is_high_or_constant() {
             let mut prior = node;
             let mut dom = self.idom(node);
             while let Some(d) = dom {
