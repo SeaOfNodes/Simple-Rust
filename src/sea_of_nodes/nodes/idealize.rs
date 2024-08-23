@@ -375,7 +375,7 @@ impl<'t> Nodes<'t> {
             ))
         })
     }
-    fn pcon(&self, op: Option<NodeId>) -> Option<NodeId> {
+    fn pcon(&mut self, op: Option<NodeId>) -> Option<NodeId> {
         op.filter(|op| matches!(&self[*op], Node::Phi(_)) && self.all_cons(*op))
     }
 }

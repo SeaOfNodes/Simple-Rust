@@ -168,7 +168,17 @@ impl<'t> Nodes<'t> {
     pub fn kill(&mut self, node: NodeId) {
         self.unlock(node);
         debug_assert!(self.is_unused(node));
-        self.pop_n(node, self.inputs[node].len());
+        for _ in 0..self.inputs[node].len() {
+            // Set all inputs to null, recursively killing unused Nodes
+            let old_def = self.inputs[node].pop().unwrap();
+            if let Some(old_def) = old_def {
+                self.iter_peeps.add(old_def); // Revisit neighbor because removed use
+                self.del_use(old_def, node);
+                if self.is_unused(old_def) {
+                    self.kill(old_def); // If we removed the last use, the old def is now dead
+                }
+            }
+        }
         self.inputs[node] = vec![]; // deallocate
         self.ty[node] = None; // flag as dead
         debug_assert!(self.is_dead(node));
@@ -230,6 +240,7 @@ impl<'t> Nodes<'t> {
             if self.is_unused(old_def) {
                 self.kill(old_def);
             }
+            self.move_deps_to_worklist(old_def);
         }
         self.inputs[node].swap_remove(index);
     }
@@ -296,15 +307,28 @@ impl<'t> Nodes<'t> {
             || Self::in_progress(&self.nodes, &self.inputs, region.unwrap())
     }
 
-    /// ignores input 0
-    pub fn all_cons(&self, node: NodeId) -> bool {
+    /// Does this node contain all constants?
+    /// Ignores in(0), as is usually control.
+    /// In an input is not a constant, we add dep as
+    /// a dependency to it, because dep can make progress
+    /// if the input becomes a constant later.
+    /// It is sufficient for one of the non-const
+    /// inputs to have the dependency so we don't bother
+    /// checking the rest.
+    pub fn all_cons(&mut self, node: NodeId) -> bool {
         if matches!(&self[node], Node::Phi(_)) && self.phi_no_or_in_progress_region(node) {
             return false;
         }
-        self.inputs[node]
+        if let Some(non_const) = self.inputs[node]
             .iter()
             .skip(1)
-            .all(|n| self.ty[n.unwrap()].unwrap().is_constant())
+            .find(|n| !self.ty[n.unwrap()].unwrap().is_constant())
+        {
+            self.add_dep(node, non_const.unwrap()); // If in(i) becomes a constant later, will trigger some peephole
+            false
+        } else {
+            true
+        }
     }
 
     fn same_op(&self, node: NodeId) -> bool {
