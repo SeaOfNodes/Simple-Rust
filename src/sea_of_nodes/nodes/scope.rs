@@ -218,6 +218,10 @@ impl<'t> Nodes<'t> {
                 if let Node::Phi(_) = &self[phi] {
                     // Do an eager useless-phi removal
                     let in_ = self.peephole(phi);
+                    for &o in &self.outputs[phi] {
+                        self.iter_peeps.add(o);
+                    }
+                    self.move_deps_to_worklist(phi);
                     if in_ != phi {
                         self.subsume(phi, in_);
                         self.set_def(head, i, Some(in_)); // Set the update back into Scope
