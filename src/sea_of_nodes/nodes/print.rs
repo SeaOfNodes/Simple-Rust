@@ -56,7 +56,7 @@ impl Display for PrintNodes2<'_, '_, '_> {
         let nodes = self.nodes;
         let inputs = &nodes.inputs[node];
 
-        if self.visited.borrow().get(node) {
+        if self.visited.borrow().get(node) && !matches!(&nodes[node], Node::Constant(_)) {
             return write!(f, "{}", nodes[node].label());
         }
         self.visited.borrow_mut().add(node);

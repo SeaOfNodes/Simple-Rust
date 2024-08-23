@@ -68,7 +68,11 @@ fn print_line(nodes: &Nodes, n: NodeId, sb: &mut String) -> fmt::Result {
     sb.push_str(" [[  ");
 
     for use_ in &nodes.outputs[n] {
-        write!(sb, "{use_:4} ")?;
+        if *use_ != NodeId::DUMMY {
+            write!(sb, "{use_:4} ")?;
+        } else {
+            write!(sb, "____ ")?;
+        }
     }
 
     let lim = 5 - nodes.inputs[n].len().max(3);

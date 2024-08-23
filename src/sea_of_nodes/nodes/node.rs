@@ -63,7 +63,7 @@ impl<'t> Node<'t> {
     /// Easy reading label for debugger
     pub fn label(&self) -> Cow<str> {
         Cow::Borrowed(match self {
-            Node::Constant(ty) => return Cow::Owned(format!("{ty}")),
+            Node::Constant(ty) => return Cow::Owned(format!("#{ty}")),
             Node::Return => "Return",
             Node::Start { .. } => "Start",
             Node::Add => "Add",
