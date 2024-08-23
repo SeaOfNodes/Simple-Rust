@@ -46,7 +46,7 @@ impl<'t> Nodes<'t> {
 
         // Replace constant computations from non-constants with a constant node
         if !matches!(self[node], Node::Constant(_)) && ty.is_high_or_constant() {
-            let constant = self.create_peepholed(Node::make_constant(self.start, ty));
+            let constant = self.create(Node::make_constant(self.start, ty));
             return self.peephole_opt(constant);
         }
 
