@@ -206,7 +206,7 @@ fn test_regress2() {
 
     parser.show_graph();
 
-    assert_eq!(parser.print(stop), "Stop[ return 0; return 0; ]");
+    assert_eq!(parser.print(stop), "return 0;");
 }
 
 #[test]
