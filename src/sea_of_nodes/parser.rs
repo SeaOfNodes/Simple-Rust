@@ -118,8 +118,8 @@ impl<'s, 't> Parser<'s, 't> {
         }
     }
 
-    pub fn iterate(&self, _stop: NodeId) -> NodeId {
-        todo!("self.nodes.iterate(stop) should this really be here or on a ParseResult?")
+    pub fn iterate(&mut self, stop: NodeId) {
+        self.nodes.iterate(stop)
     }
 
     /// <pre>
