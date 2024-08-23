@@ -38,10 +38,9 @@ impl<'t> Nodes<'t> {
     /// If the _hash is set, then the Node is in the GVN table; remove it.
     pub fn unlock(&mut self, node: NodeId) {
         if let Some(hash) = self.hash[node].take() {
-            let was_present = self.gvn.raw_entry_mut().from_hash(hash.get(), |n| {
+            match self.gvn.raw_entry_mut().from_hash(hash.get(), |n| {
                 Self::equals(&self.nodes, &self.inputs, node, *n)
-            });
-            match was_present {
+            }) {
                 RawEntryMut::Occupied(o) => {
                     assert_eq!(o.key(), &node);
                     o.remove();

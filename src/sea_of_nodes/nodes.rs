@@ -157,6 +157,7 @@ impl<'t> Nodes<'t> {
     }
 
     pub fn pop_n(&mut self, node: NodeId, n: usize) {
+        self.unlock(node);
         for _ in 0..n {
             let old_def = self.inputs[node].pop().unwrap();
             if let Some(old_def) = old_def {
@@ -169,6 +170,7 @@ impl<'t> Nodes<'t> {
     }
 
     pub fn kill(&mut self, node: NodeId) {
+        self.unlock(node);
         debug_assert!(self.is_unused(node));
         self.pop_n(node, self.inputs[node].len());
         self.inputs[node] = vec![]; // deallocate
@@ -180,6 +182,7 @@ impl<'t> Nodes<'t> {
     pub fn subsume(&mut self, this: NodeId, that: NodeId) {
         assert_ne!(this, that);
         while let Some(n) = self.outputs[this].pop() {
+            self.unlock(n);
             let idx = self.inputs[n]
                 .iter()
                 .position(|&x| x == Some(this))
@@ -191,6 +194,8 @@ impl<'t> Nodes<'t> {
     }
 
     pub fn set_def(&mut self, this: NodeId, index: usize, new_def: Option<NodeId>) {
+        self.unlock(this);
+
         let old_def = self.inputs[this][index];
         if old_def == new_def {
             return;
@@ -211,6 +216,7 @@ impl<'t> Nodes<'t> {
     }
 
     pub fn add_def(&mut self, node: NodeId, new_def: Option<NodeId>) {
+        self.unlock(node);
         self.inputs[node].push(new_def);
         if let Some(new_def) = new_def {
             self.add_use(new_def, node);
@@ -221,6 +227,7 @@ impl<'t> Nodes<'t> {
     /// shuffles the order deterministically - which is suitable for Region and
     /// Phi, but not for every Node.
     fn del_def(&mut self, node: NodeId, index: usize) {
+        self.unlock(node);
         let old_def = self.inputs[node][index];
         if let Some(old_def) = old_def {
             self.del_use(old_def, node);
@@ -246,6 +253,7 @@ impl<'t> Nodes<'t> {
     }
 
     pub fn swap_12(&mut self, node: NodeId) -> NodeId {
+        self.unlock(node);
         self.inputs[node].swap(1, 2);
         node
     }
