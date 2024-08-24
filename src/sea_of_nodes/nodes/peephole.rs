@@ -1,8 +1,5 @@
-use crate::sea_of_nodes::nodes::gvn::GvnEntry;
 use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
 use crate::sea_of_nodes::types::{Int, Ty, Type};
-use std::collections::hash_map::RawEntryMut;
-use std::hash::BuildHasher;
 
 impl<'t> Nodes<'t> {
     /// Try to peephole at this node and return a better replacement Node.
@@ -14,7 +11,8 @@ impl<'t> Nodes<'t> {
             node // Peephole optimizations turned off
         } else if let Some(n) = self.peephole_opt(node) {
             let n = self.peephole(n);
-            self.dead_code_elimination(node, n)
+            self.dead_code_elimination(node, n);
+            n
         } else {
             node // Cannot return null for no-progress
         }
@@ -53,30 +51,17 @@ impl<'t> Nodes<'t> {
         }
 
         // Global Value Numbering
-        if self.hash[node].is_none() {
-            let entry = GvnEntry {
-                hash: self.hash_code(node),
-                node,
-            };
-            let h = self.gvn.hasher().hash_one(entry);
-            match self.gvn.raw_entry_mut().from_hash(h, |o| {
-                entry.hash == o.hash && Self::equals(&self.nodes, &self.inputs, entry.node, o.node)
-            }) {
-                RawEntryMut::Vacant(v) => {
-                    v.insert(entry, ()); // Put in table now
-                    self.hash[node] = Some(entry.hash);
-                }
-                RawEntryMut::Occupied(o) => {
-                    // Because of random worklist ordering, the two equal nodes
-                    // might have different types.  Because of monotonicity, both
-                    // types are valid.  To preserve monotonicity, the resulting
-                    // shared Node has to have the best of both types.
-                    let n = o.key().node;
-                    self.set_type(n, self.types.join(self.ty[n].unwrap(), ty));
-
-                    return Some(self.dead_code_elimination(node, n)); // Return previous; does Common Subexpression Elimination
-                }
-            }
+        if let Some(replacement) = self.global_value_numbering(node) {
+            // Because of random worklist ordering, the two equal nodes
+            // might have different types.  Because of monotonicity, both
+            // types are valid.  To preserve monotonicity, the resulting
+            // shared Node has to have the best of both types.
+            self.set_type(
+                replacement,
+                self.types.join(self.ty[replacement].unwrap(), ty),
+            );
+            self.dead_code_elimination(node, replacement);
+            return Some(replacement);
         }
 
         // Ask each node for a better replacement
@@ -111,13 +96,12 @@ impl<'t> Nodes<'t> {
         old
     }
 
-    fn dead_code_elimination(&mut self, old: NodeId, new: NodeId) -> NodeId {
+    fn dead_code_elimination(&mut self, old: NodeId, new: NodeId) {
         if new != old && self.is_unused(old) {
             self.keep(new);
             self.kill(old);
             self.unkeep(new);
         }
-        new
     }
 
     pub(crate) fn compute(&mut self, node: NodeId) -> Ty<'t> {
