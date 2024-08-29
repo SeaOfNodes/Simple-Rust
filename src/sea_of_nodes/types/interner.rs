@@ -1,10 +1,10 @@
-use crate::datastructures::arena::Arena;
+use crate::datastructures::arena::DroplessArena;
 use crate::sea_of_nodes::types::{Ty, Type};
 use std::cell::RefCell;
 use std::collections::HashMap;
 
 pub struct Interner<'a> {
-    pub arena: &'a Arena<Type<'a>>,
+    pub arena: &'a DroplessArena,
 
     // If we ever want multithreading this could be a sharded hashmap like in rustc.
     // See InternedSet in rustc_middle/src/ty/context.rs
@@ -12,7 +12,7 @@ pub struct Interner<'a> {
 }
 
 impl<'t> Interner<'t> {
-    pub fn new(arena: &'t Arena<Type<'t>>) -> Self {
+    pub fn new(arena: &'t DroplessArena) -> Self {
         Self {
             arena,
             type_to_ty: Default::default(),
@@ -36,14 +36,14 @@ impl<'t> Interner<'t> {
 
 #[cfg(test)]
 mod tests {
-    use crate::datastructures::arena::Arena;
+    use crate::datastructures::arena::DroplessArena;
     use crate::sea_of_nodes::types::interner::Interner;
     use crate::sea_of_nodes::types::{Int, Type};
     use std::ptr;
 
     #[test]
     fn test_interner() {
-        let arena = Arena::new();
+        let arena = DroplessArena::new();
         let interner = Interner::new(&arena);
 
         let ty_bot_1 = interner.intern(Type::Bot);
@@ -58,13 +58,13 @@ mod tests {
         assert!(ptr::eq(ty_42.inner(), ty_42_too.inner()));
 
         let t1 = interner.intern(Type::Tuple {
-            types: vec![ty_bot_1, ty_bot_2, ty_42, ty_2, ty_42_too],
+            types: arena.alloc([ty_bot_1, ty_bot_2, ty_42, ty_2, ty_42_too]),
         });
         let t2 = interner.intern(Type::Tuple {
-            types: vec![ty_bot_2, ty_bot_1, ty_42_too, ty_2, ty_42],
+            types: arena.alloc([ty_bot_2, ty_bot_1, ty_42_too, ty_2, ty_42]),
         });
         let t3 = interner.intern(Type::Tuple {
-            types: vec![ty_bot_1, ty_bot_2, ty_42, ty_2, ty_2],
+            types: arena.alloc([ty_bot_1, ty_bot_2, ty_42, ty_2, ty_2]),
         });
         assert!(ptr::eq(t1.inner(), t2.inner()));
         assert!(!ptr::eq(t1.inner(), t3.inner()));

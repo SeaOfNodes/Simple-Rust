@@ -1,4 +1,4 @@
-use crate::datastructures::arena::Arena;
+use crate::datastructures::arena::DroplessArena;
 use crate::sea_of_nodes::parser::Parser;
 use crate::sea_of_nodes::tests::{test_error, test_print_stop};
 use crate::sea_of_nodes::types::Types;
@@ -23,7 +23,7 @@ fn test_var_scope() {
 
 #[test]
 fn test_var_scope_no_peephole() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "int a=1; int b=2; int c=0; { int b=3; c=a+b; #showGraph; } return c; #showGraph;",

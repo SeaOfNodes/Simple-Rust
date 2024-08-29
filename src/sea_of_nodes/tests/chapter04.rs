@@ -1,4 +1,4 @@
-use crate::datastructures::arena::Arena;
+use crate::datastructures::arena::DroplessArena;
 use crate::sea_of_nodes::nodes::Node;
 use crate::sea_of_nodes::parser::Parser;
 use crate::sea_of_nodes::tests::{test_error, test_print_stop};
@@ -36,7 +36,7 @@ fn test_mul_1() {
 
 #[test]
 fn test_var_arg() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let arg = types.ty_bot;
     let mut parser = Parser::new_with_arg("return arg; #showGraph;", &types, arg);
@@ -58,7 +58,7 @@ fn test_var_arg() {
 
 #[test]
 fn test_constant_arg() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let arg = types.get_int(2);
     let mut parser = Parser::new_with_arg("return arg; #showGraph;", &types, arg);

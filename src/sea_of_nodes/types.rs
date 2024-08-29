@@ -1,4 +1,4 @@
-use crate::datastructures::arena::Arena;
+use crate::datastructures::arena::DroplessArena;
 use crate::sea_of_nodes::types::interner::Interner;
 pub use crate::sea_of_nodes::types::r#type::*;
 pub use crate::sea_of_nodes::types::ty::Ty;
@@ -16,12 +16,12 @@ mod r#type;
 /// because we don't want `Ty<'t>` references that outlive their `Types`:
 ///
 /// ```compile_fail
-///     # use simple_rust::datastructures::arena::Arena;
+///     # use simple_rust::datastructures::arena ::DroplessArena;
 ///     # use simple_rust::sea_of_nodes::types::{Ty, Types};
 ///
 ///     fn get_t<'t>(types: &'t Types<'t>) -> Ty<'t> {types.ty_bot};
 ///
-///     let arena = Arena::new();
+///     let arena = DroplessArena::new();
 ///     let types = Types::new(&arena);
 ///     let t1 = get_t(&types);
 ///     drop(types);
@@ -50,7 +50,7 @@ pub struct Types<'a> {
 }
 
 impl<'a> Types<'a> {
-    pub fn new(arena: &'a Arena<Type<'a>>) -> Self {
+    pub fn new(arena: &'a DroplessArena) -> Self {
         let interner = Interner::new(arena);
 
         let ty_bot = interner.intern(Type::Bot);
@@ -64,16 +64,16 @@ impl<'a> Types<'a> {
         let ty_int_top = interner.intern(Type::Int(Int::Top));
 
         let ty_if_both = interner.intern(Type::Tuple {
-            types: vec![ty_ctrl, ty_ctrl],
+            types: arena.alloc([ty_ctrl, ty_ctrl]),
         });
         let ty_if_neither = interner.intern(Type::Tuple {
-            types: vec![ty_xctrl, ty_xctrl],
+            types: arena.alloc([ty_xctrl, ty_xctrl]),
         });
         let ty_if_true = interner.intern(Type::Tuple {
-            types: vec![ty_ctrl, ty_xctrl],
+            types: arena.alloc([ty_ctrl, ty_xctrl]),
         });
         let ty_if_false = interner.intern(Type::Tuple {
-            types: vec![ty_xctrl, ty_ctrl],
+            types: arena.alloc([ty_xctrl, ty_ctrl]),
         });
 
         Self {
@@ -103,7 +103,13 @@ impl<'a> Types<'a> {
         }
     }
 
-    pub fn get_tuple(&self, types: Vec<Ty<'a>>) -> Ty<'a> {
+    pub fn get_tuple_from_slice(&self, types: &[Ty<'a>]) -> Ty<'a> {
+        let types: &'a [Ty<'a>] = self.interner.arena.alloc_slice_copy(types);
+        self.interner.intern(Type::Tuple { types })
+    }
+
+    pub fn get_tuple_from_array<const N: usize>(&self, types: [Ty<'a>; N]) -> Ty<'a> {
+        let types: &'a [Ty<'a>] = self.interner.arena.alloc(types);
         self.interner.intern(Type::Tuple { types })
     }
 
@@ -130,11 +136,11 @@ impl<'a> Types<'a> {
             // Tuple sub-lattice
             (Type::Tuple { types: t1 }, Type::Tuple { types: t2 }) => {
                 assert_eq!(t1.len(), t2.len(), "{a} meet {b} not implemented");
-                self.get_tuple(
-                    t1.iter()
+                self.get_tuple_from_slice(
+                    &t1.iter()
                         .zip(t2.iter())
                         .map(|(x, y)| self.meet(*x, *y))
-                        .collect(),
+                        .collect::<Vec<_>>(),
                 )
             }
 
@@ -169,7 +175,9 @@ impl<'a> Types<'a> {
                 Int::Top => self.ty_int_bot,
                 Int::Constant(_) => ty, // self dual
             },
-            Type::Tuple { types } => self.get_tuple(types.iter().map(|t| self.dual(*t)).collect()),
+            Type::Tuple { types } => {
+                self.get_tuple_from_slice(&types.iter().map(|t| self.dual(*t)).collect::<Vec<_>>())
+            }
         }
     }
 }

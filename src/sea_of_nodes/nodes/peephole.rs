@@ -115,7 +115,7 @@ impl<'t> Nodes<'t> {
                 let expr = self.inputs[node][1]
                     .and_then(|n| self.ty[n])
                     .unwrap_or(types.ty_bot);
-                types.get_tuple(vec![ctrl, expr])
+                types.get_tuple_from_array([ctrl, expr])
             }
             Node::Start { args } => *args,
             Node::Add => self.compute_binary_int(node, i64::wrapping_add),

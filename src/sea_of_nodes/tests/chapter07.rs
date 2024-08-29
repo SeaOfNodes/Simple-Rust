@@ -1,4 +1,4 @@
-use crate::datastructures::arena::Arena;
+use crate::datastructures::arena::DroplessArena;
 use crate::sea_of_nodes::ir_printer;
 use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
 use crate::sea_of_nodes::parser::Parser;
@@ -11,7 +11,7 @@ fn assert_ret_ctrl_is_proj(nodes: &Nodes, stop: NodeId) {
 
 #[test]
 fn test_example() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -32,7 +32,7 @@ fn test_example() {
 
 #[test]
 fn test_regression() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -57,7 +57,7 @@ return a;
 
 #[test]
 fn test_while_nested() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -87,7 +87,7 @@ return sum;
 
 #[test]
 fn test_while_scope() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -115,7 +115,7 @@ return b;
 
 #[test]
 fn test_while_nested_if_and_inc() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -144,7 +144,7 @@ return b;
 
 #[test]
 fn test_while() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -166,7 +166,7 @@ return a;
 
 #[test]
 fn test_while_peep() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -188,7 +188,7 @@ return a;
 
 #[test]
 fn test_while2() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -209,7 +209,7 @@ return a;
 
 #[test]
 fn test_while2_peep() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -228,7 +228,7 @@ return a;
 
 #[test]
 fn test_while3() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -250,7 +250,7 @@ return a;
 
 #[test]
 fn test_while3_peep() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -272,7 +272,7 @@ return a;
 
 #[test]
 fn test_while4() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -295,7 +295,7 @@ return a;
 
 #[test]
 fn test_while4_peep() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "

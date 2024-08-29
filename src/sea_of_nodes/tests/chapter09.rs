@@ -1,11 +1,11 @@
-use crate::datastructures::arena::Arena;
+use crate::datastructures::arena::DroplessArena;
 use crate::sea_of_nodes::graph_evaluator;
 use crate::sea_of_nodes::parser::Parser;
 use crate::sea_of_nodes::types::Types;
 
 #[test]
 fn test_jig() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -27,7 +27,7 @@ return 0;
 
 #[test]
 fn test_gvn1() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -61,7 +61,7 @@ return x;
 
 #[test]
 fn test_gvn2() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -80,7 +80,7 @@ return arg*arg-arg*arg;
 
 #[test]
 fn test_worklist1() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -105,7 +105,7 @@ return arg;
 
 #[test]
 fn test_worklist2() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -132,7 +132,7 @@ return arg;
 
 #[test]
 fn test_worklist3() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -166,7 +166,7 @@ return arg;
 
 #[test]
 fn test_region_peep_bug() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -190,7 +190,7 @@ while(v1+arg) {
 
 #[test]
 fn test_while0() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new("while(0) continue; if(0) arg=0;", &types);
     let stop = parser.parse().unwrap();
@@ -201,7 +201,7 @@ fn test_while0() {
 
 #[test]
 fn test_while1() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -220,7 +220,7 @@ if(0) while(0) {
 
 #[test]
 fn test_precedence() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new("return 3-1+2;", &types);
     let stop = parser.parse().unwrap();
@@ -231,7 +231,7 @@ fn test_precedence() {
 
 #[test]
 fn test_swap2() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new("return 1+(1+1);", &types);
     let stop = parser.parse().unwrap();
@@ -242,7 +242,7 @@ fn test_swap2() {
 
 #[test]
 fn test_fuzz0() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -266,7 +266,7 @@ return a;
 
 #[test]
 fn test_fuzz1() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -287,7 +287,7 @@ return -0+0+0;
 
 #[test]
 fn test_fuzz2() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new("return 0+-0;", &types);
     let stop = parser.parse().unwrap();
@@ -298,7 +298,7 @@ fn test_fuzz2() {
 
 #[test]
 fn test_fuzz3() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new("int v0=0; while(0==69) while(v0) return 0;", &types);
     let stop = parser.parse().unwrap();
@@ -309,7 +309,7 @@ fn test_fuzz3() {
 
 #[test]
 fn test_fuzz4() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -328,7 +328,7 @@ while(1) {
 
 #[test]
 fn test_fuzz5() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -357,7 +357,7 @@ return 0!=0;
 
 #[test]
 fn test_fuzz6() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -375,7 +375,7 @@ while(0==1) while(v0)
 
 #[test]
 fn test_fuzz7() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -398,7 +398,7 @@ return v1+v0;
 
 #[test]
 fn test_fuzz8() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new("while(arg) arg = arg - 1; #showGraph; return arg;", &types);
     let stop = parser.parse().unwrap();
@@ -409,7 +409,7 @@ fn test_fuzz8() {
 
 #[test]
 fn test_meet() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut t1 = types.ty_top;
     let mut t2 = types.ty_int_top;

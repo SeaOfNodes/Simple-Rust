@@ -1,4 +1,4 @@
-use crate::datastructures::arena::Arena;
+use crate::datastructures::arena::DroplessArena;
 use crate::sea_of_nodes::nodes::Node;
 use crate::sea_of_nodes::parser::Parser;
 use crate::sea_of_nodes::tests::{test_error, test_print_stop};
@@ -6,7 +6,7 @@ use crate::sea_of_nodes::types::{Int, Type, Types};
 
 #[test]
 fn test_simple_program() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new("return 1;", &types);
     let stop = parser.parse().unwrap();
@@ -29,7 +29,7 @@ fn test_simple_program() {
 
 #[test]
 fn test_zero() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new("return 0;", &types);
     let _stop = parser.parse().unwrap();

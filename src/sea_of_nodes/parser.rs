@@ -49,7 +49,7 @@ impl<'s, 't> Parser<'s, 't> {
         let scope = nodes.create(Node::make_scope());
         nodes.ty[scope] = Some(types.ty_bot); // in java this is done by the constructor
 
-        let args = types.get_tuple(vec![types.ty_ctrl, arg]);
+        let args = types.get_tuple_from_array([types.ty_ctrl, arg]);
         let start = nodes.create(Node::make_start(args));
         nodes.ty[start] = Some(args);
         nodes.start = start;

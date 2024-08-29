@@ -4,17 +4,17 @@ use std::hash::Hash;
 
 use crate::sea_of_nodes::types::Ty;
 
-#[derive(Eq, PartialEq, Clone, Hash, Debug)]
+#[derive(Eq, PartialEq, Copy, Clone, Hash, Debug)]
 pub enum Type<'a> {
     Bot,   // all
     Top,   // any
     Ctrl,  // control flow bottom
     XCtrl, //  ctrl flow top (mini-lattice: any-xctrl-ctrl-all)
     Int(Int),
-    Tuple { types: Vec<Ty<'a>> },
+    Tuple { types: &'a [Ty<'a>] },
 }
 
-#[derive(Eq, PartialEq, Clone, Hash, Debug)]
+#[derive(Eq, PartialEq, Copy, Clone, Hash, Debug)]
 pub enum Int {
     Bot,
     Top,

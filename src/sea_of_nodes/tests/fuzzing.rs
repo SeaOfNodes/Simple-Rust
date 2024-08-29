@@ -1,4 +1,4 @@
-use crate::datastructures::arena::Arena;
+use crate::datastructures::arena::DroplessArena;
 use crate::sea_of_nodes::graph_evaluator;
 use crate::sea_of_nodes::parser::Parser;
 use crate::sea_of_nodes::tests::test_print_stop;
@@ -13,7 +13,7 @@ fn test_xscope_after_while() {
 
 #[test]
 fn test_eval_negate_overflow() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new("return -arg;", &types);
     let stop = parser.parse().unwrap();

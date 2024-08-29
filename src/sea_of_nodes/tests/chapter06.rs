@@ -1,11 +1,11 @@
-use crate::datastructures::arena::Arena;
+use crate::datastructures::arena::DroplessArena;
 use crate::sea_of_nodes::nodes::Node;
 use crate::sea_of_nodes::parser::Parser;
 use crate::sea_of_nodes::types::Types;
 
 #[test]
 fn test_peephole_return() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
@@ -27,7 +27,7 @@ return 1;
 
 #[test]
 fn test_peephole_rotate() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
@@ -45,7 +45,7 @@ return (arg < a) < 3;
 
 #[test]
 fn test_peephole_cfg() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
@@ -71,7 +71,7 @@ return a;
 
 #[test]
 fn test_if_if() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -96,7 +96,7 @@ return b;",
 
 #[test]
 fn test_if_arg_if() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
@@ -121,7 +121,7 @@ return b;",
 
 #[test]
 fn test_merge3_with2() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new_with_arg(
         "
@@ -146,7 +146,7 @@ return a;
 
 #[test]
 fn test_merge3_with1() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
 
     let mut parser = Parser::new_with_arg(
@@ -188,7 +188,7 @@ return a;
 
 #[test]
 fn test_merge3_peephole() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new_with_arg(MERGE3_PEEPHOLE, &types, types.ty_bot);
     let stop = parser.parse().unwrap();
@@ -202,7 +202,7 @@ fn test_merge3_peephole() {
 
 #[test]
 fn test_merge3_peephole1() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new_with_arg(MERGE3_PEEPHOLE, &types, types.get_int(1));
     let stop = parser.parse().unwrap();
@@ -213,7 +213,7 @@ fn test_merge3_peephole1() {
 
 #[test]
 fn test_merge3_peephole3() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new_with_arg(MERGE3_PEEPHOLE, &types, types.get_int(3));
     let stop = parser.parse().unwrap();
@@ -235,7 +235,7 @@ return a+b;
 
 #[test]
 fn test_demo1_non_const() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new_with_arg(DEMO1, &types, types.ty_bot);
     let stop = parser.parse().unwrap();
@@ -246,7 +246,7 @@ fn test_demo1_non_const() {
 
 #[test]
 fn test_demo1_true() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new_with_arg(DEMO1, &types, types.get_int(1));
     let stop = parser.parse().unwrap();
@@ -257,7 +257,7 @@ fn test_demo1_true() {
 
 #[test]
 fn test_demo1_false() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new_with_arg(DEMO1, &types, types.get_int(0));
     let stop = parser.parse().unwrap();
@@ -281,7 +281,7 @@ return a+b+c;
 
 #[test]
 fn test_demo2_non_const() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new_with_arg(DEMO2, &types, types.ty_bot);
     let stop = parser.parse().unwrap();
@@ -295,7 +295,7 @@ fn test_demo2_non_const() {
 
 #[test]
 fn test_demo2_true() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new_with_arg(DEMO2, &types, types.get_int(1));
     let stop = parser.parse().unwrap();
@@ -306,7 +306,7 @@ fn test_demo2_true() {
 
 #[test]
 fn test_demo2_arg2() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new_with_arg(DEMO2, &types, types.get_int(2));
     let stop = parser.parse().unwrap();

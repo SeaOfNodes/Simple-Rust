@@ -1,20 +1,20 @@
 pub mod script_generator;
 
-use simple_rust::datastructures::arena::Arena;
+use simple_rust::datastructures::arena ::DroplessArena;
 use simple_rust::sea_of_nodes::graph_evaluator;
 use simple_rust::sea_of_nodes::graph_evaluator::EResult;
 use simple_rust::sea_of_nodes::parser::Parser;
 use simple_rust::sea_of_nodes::types::Types;
 
 pub fn run_and_compare_eval(source: &str, definitely_valid: bool) {
-    let arena1 = Arena::new();
+    let arena1 = DroplessArena::new();
     let mut types1 = Types::new(&arena1);
     let mut parser1 = Parser::new(source, &mut types1);
     parser1.disable_show_graph_println = true;
     parser1.nodes.disable_peephole = true;
     let result1 = parser1.parse();
 
-    let arena2 = Arena::new();
+    let arena2 = DroplessArena::new();
     let mut types2 = Types::new(&arena2);
     let mut parser2 = Parser::new(source, &mut types2);
     parser2.disable_show_graph_println = true;

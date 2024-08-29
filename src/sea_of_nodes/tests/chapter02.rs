@@ -1,11 +1,11 @@
-use crate::datastructures::arena::Arena;
+use crate::datastructures::arena::DroplessArena;
 use crate::sea_of_nodes::parser::Parser;
 use crate::sea_of_nodes::tests::test_print_stop;
 use crate::sea_of_nodes::types::Types;
 
 #[test]
 fn test_parse_grammar() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new("return 1+2*3+-5;", &types);
     parser.nodes.disable_peephole = true;
@@ -43,7 +43,7 @@ fn test_minus_peephole() {
 
 #[test]
 fn test_example() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new("return 1+2*3+-5;", &types);
     let stop = parser.parse().unwrap();

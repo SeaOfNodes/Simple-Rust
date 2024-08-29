@@ -1,4 +1,4 @@
-use crate::datastructures::arena::Arena;
+use crate::datastructures::arena::DroplessArena;
 use crate::sea_of_nodes::nodes::{Node, ProjNode};
 use crate::sea_of_nodes::parser::Parser;
 use crate::sea_of_nodes::tests::test_error;
@@ -7,7 +7,7 @@ use crate::sea_of_nodes::{graph_evaluator, ir_printer};
 
 #[test]
 fn test_ex6() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -39,7 +39,7 @@ return arg;
 
 #[test]
 fn test_ex5() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -70,7 +70,7 @@ return a;
 
 #[test]
 fn test_ex4() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -98,7 +98,7 @@ return arg;
 
 #[test]
 fn test_ex3() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -124,7 +124,7 @@ return arg;
 
 #[test]
 fn test_ex2() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -149,7 +149,7 @@ return arg;
 
 #[test]
 fn test_ex1() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -172,7 +172,7 @@ return arg;
 
 #[test]
 fn test_regress1() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -195,7 +195,7 @@ return arg;
 
 #[test]
 fn test_regress2() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "if(1) return 0;  else while(arg>--arg) arg=arg+1; return 0;",
@@ -225,7 +225,7 @@ return arg;
 
 #[test]
 fn test_regress3() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -246,7 +246,7 @@ return arg;
 
 #[test]
 fn test_regress4() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "
@@ -275,7 +275,7 @@ return a;
 
 #[test]
 fn test_regress5() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "

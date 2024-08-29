@@ -1,11 +1,11 @@
-use crate::datastructures::arena::Arena;
+use crate::datastructures::arena::DroplessArena;
 use crate::sea_of_nodes::parser::Parser;
 use crate::sea_of_nodes::tests::{test_error, test_print_stop};
 use crate::sea_of_nodes::types::Types;
 
 #[test]
 fn test_if_stmt() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
@@ -28,7 +28,7 @@ return a;",
 
 #[test]
 fn test_test() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
@@ -60,7 +60,7 @@ else
 }
 #[test]
 fn test_if_merge_b() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
@@ -80,7 +80,7 @@ return a+b;",
 }
 #[test]
 fn test_if_merge2() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
@@ -103,7 +103,7 @@ return a+b;",
 }
 #[test]
 fn test_merge3() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
@@ -145,7 +145,7 @@ return arg+a+b;
 }
 #[test]
 fn test_merge5() {
-    let arena = Arena::new();
+    let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
