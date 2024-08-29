@@ -1,7 +1,7 @@
 use crate::datastructures::arena::DroplessArena;
 use crate::sea_of_nodes::types::{Ty, Type};
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub struct Interner<'a> {
     pub arena: &'a DroplessArena,
@@ -9,6 +9,8 @@ pub struct Interner<'a> {
     // If we ever want multithreading this could be a sharded hashmap like in rustc.
     // See InternedSet in rustc_middle/src/ty/context.rs
     pub type_to_ty: RefCell<HashMap<&'a Type<'a>, Ty<'a>>>,
+
+    pub strings: RefCell<HashSet<&'a str>>,
 }
 
 impl<'t> Interner<'t> {
@@ -16,6 +18,7 @@ impl<'t> Interner<'t> {
         Self {
             arena,
             type_to_ty: Default::default(),
+            strings: Default::default(),
         }
     }
 
@@ -31,6 +34,12 @@ impl<'t> Interner<'t> {
                 (copy, ty)
             })
             .1
+    }
+
+    pub fn intern_str(&self, s: &str) -> &'t str {
+        self.strings
+            .borrow_mut()
+            .get_or_insert_with(s, |_| self.arena.alloc_str(s))
     }
 }
 
@@ -68,5 +77,21 @@ mod tests {
         });
         assert!(ptr::eq(t1.inner(), t2.inner()));
         assert!(!ptr::eq(t1.inner(), t3.inner()));
+    }
+
+    #[test]
+    fn test_strings() {
+        let arena = DroplessArena::new();
+        let interner = Interner::new(&arena);
+        let a = interner.intern_str("foo");
+        let b = interner.intern_str("bar");
+        let aa = interner.intern_str("foo");
+        let aaa = interner.intern_str(a);
+        let bb = interner.intern_str(b);
+
+        assert!(ptr::eq(a, aa));
+        assert!(ptr::eq(a, aaa));
+        assert_ne!(a, b);
+        assert!(ptr::eq(b, bb));
     }
 }

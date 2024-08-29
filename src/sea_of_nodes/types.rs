@@ -47,6 +47,10 @@ pub struct Types<'a> {
     pub ty_if_neither: Ty<'a>,
     pub ty_if_true: Ty<'a>,
     pub ty_if_false: Ty<'a>,
+    pub ty_struct_bot: Ty<'a>,
+    pub ty_struct_top: Ty<'a>,
+    pub ty_memory_bot: Ty<'a>,
+    pub ty_memory_top: Ty<'a>,
 }
 
 impl<'a> Types<'a> {
@@ -79,6 +83,10 @@ impl<'a> Types<'a> {
             ty_if_false: intern(Type::Tuple {
                 types: arena.alloc([ty_xctrl, ty_ctrl]),
             }),
+            ty_struct_bot: intern(Type::Struct(Struct::Bot)),
+            ty_struct_top: intern(Type::Struct(Struct::Top)),
+            ty_memory_bot: intern(Type::Memory(Mem::Bot)),
+            ty_memory_top: intern(Type::Memory(Mem::Top)),
             interner,
         }
     }
@@ -102,8 +110,19 @@ impl<'a> Types<'a> {
         self.interner.intern(Type::Tuple { types })
     }
 
+    pub fn get_struct(&self, name: &'a str, fields: &[(&'a str, Ty<'a>)]) -> Ty<'a> {
+        let fields = self.interner.arena.alloc_slice_copy(fields);
+        self.interner
+            .intern(Type::Struct(Struct::Struct { name, fields }))
+    }
+
+    pub fn get_pointer(&self, to: Ty<'a>, nil: bool) -> Ty<'a> {
+        debug_assert!(matches!(*to, Type::Struct(_)));
+        self.interner.intern(Type::Pointer(MemPtr { to, nil }))
+    }
+
     pub fn meet(&self, a: Ty<'a>, b: Ty<'a>) -> Ty<'a> {
-        match (&*a, &*b) {
+        match (*a, *b) {
             (_, _) if a == b => a,
 
             // Bot wins, Top looses
@@ -133,6 +152,42 @@ impl<'a> Types<'a> {
                 )
             }
 
+            // Struct sub-lattice
+            (Type::Struct(sa), Type::Struct(sb)) => match (sa, sb) {
+                (Struct::Bot, _) | (_, Struct::Top) => a,
+                (_, Struct::Bot) | (Struct::Top, _) => b,
+                (
+                    Struct::Struct {
+                        name: na,
+                        fields: fas,
+                    },
+                    Struct::Struct {
+                        name: nb,
+                        fields: fbs,
+                    },
+                ) if na == nb => {
+                    assert_eq!(fas.len(), fbs.len(), "{a} meet {b} can't happen because struct name must be uniuqe in a compilation unit");
+                    let fields = fas.iter().zip(fbs).map(|(fa, fb)| {
+                        debug_assert_eq!(fa.0, fb.0, "{a} meet {b} can't happen because struct name must be uniuqe in a compilation unit");
+                        (fa.0, self.meet(fa.1, fb.1))
+                    }).collect::<Vec<_>>();
+                    self.get_struct(na, &fields)
+                }
+                _ => self.ty_struct_bot, // It's a struct; that's about all we know
+            },
+
+            // Pointer sub-lattice
+            (Type::Pointer(pa), Type::Pointer(pb)) => {
+                self.get_pointer(self.meet(pa.to, pb.to), pa.nil | pb.nil)
+            }
+
+            // Memory sub-lattice
+            (Type::Memory(ma), Type::Memory(mb)) => match (ma, mb) {
+                (Mem::Bot, _) | (_, Mem::Top) => a,
+                (_, Mem::Bot) | (Mem::Top, _) => b,
+                _ => self.ty_memory_bot,
+            },
+
             // different sub-lattices meet at bottom
             _ => self.ty_bot,
         }
@@ -154,7 +209,7 @@ impl<'a> Types<'a> {
     }
 
     pub fn dual(&self, ty: Ty<'a>) -> Ty<'a> {
-        match &*ty {
+        match *ty {
             Type::Bot => self.ty_top,
             Type::Top => self.ty_bot,
             Type::Ctrl => self.ty_xctrl,
@@ -167,6 +222,23 @@ impl<'a> Types<'a> {
             Type::Tuple { types } => {
                 self.get_tuple_from_slice(&types.iter().map(|t| self.dual(*t)).collect::<Vec<_>>())
             }
+            Type::Struct(s) => match s {
+                Struct::Bot => self.ty_struct_top,
+                Struct::Top => self.ty_struct_bot,
+                Struct::Struct { name, fields } => {
+                    let fields = fields
+                        .iter()
+                        .map(|&(name, ty)| (name, self.dual(ty)))
+                        .collect::<Vec<_>>();
+                    self.get_struct(name, &fields)
+                }
+            },
+            Type::Pointer(p) => self.get_pointer(self.dual(p.to), !p.nil),
+            Type::Memory(m) => match m {
+                Mem::Bot => self.ty_memory_top,
+                Mem::Top => self.ty_memory_bot,
+                Mem::Alias(_) => ty, // self dual
+            },
         }
     }
 }

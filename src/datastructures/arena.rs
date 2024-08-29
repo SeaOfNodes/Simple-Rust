@@ -81,6 +81,13 @@ impl DroplessArena {
             slice::from_raw_parts_mut(result, slice.len())
         }
     }
+
+    pub fn alloc_str(&self, s: &str) -> &mut str {
+        let bytes = self.alloc_slice_copy(s.as_bytes());
+        debug_assert_eq!(s.as_bytes(), bytes);
+        // SAFETY: the copied bytes are still valid utf8
+        unsafe { std::str::from_utf8_unchecked_mut(bytes) }
+    }
 }
 
 impl Drop for DroplessArena {
