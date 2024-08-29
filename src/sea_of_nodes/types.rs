@@ -52,45 +52,34 @@ pub struct Types<'a> {
 impl<'a> Types<'a> {
     pub fn new(arena: &'a DroplessArena) -> Self {
         let interner = Interner::new(arena);
+        let intern = |x| interner.intern(x);
 
-        let ty_bot = interner.intern(Type::Bot);
-        let ty_top = interner.intern(Type::Top);
-        let ty_ctrl = interner.intern(Type::Ctrl);
-        let ty_xctrl = interner.intern(Type::XCtrl);
-        let ty_zero = interner.intern(Type::Int(Int::Constant(0)));
-        let ty_one = interner.intern(Type::Int(Int::Constant(1)));
-        let ty_two = interner.intern(Type::Int(Int::Constant(2)));
-        let ty_int_bot = interner.intern(Type::Int(Int::Bot));
-        let ty_int_top = interner.intern(Type::Int(Int::Top));
-
-        let ty_if_both = interner.intern(Type::Tuple {
-            types: arena.alloc([ty_ctrl, ty_ctrl]),
-        });
-        let ty_if_neither = interner.intern(Type::Tuple {
-            types: arena.alloc([ty_xctrl, ty_xctrl]),
-        });
-        let ty_if_true = interner.intern(Type::Tuple {
-            types: arena.alloc([ty_ctrl, ty_xctrl]),
-        });
-        let ty_if_false = interner.intern(Type::Tuple {
-            types: arena.alloc([ty_xctrl, ty_ctrl]),
-        });
+        let ty_ctrl = intern(Type::Ctrl);
+        let ty_xctrl = intern(Type::XCtrl);
 
         Self {
-            interner,
-            ty_bot,
-            ty_top,
+            ty_bot: intern(Type::Bot),
+            ty_top: intern(Type::Top),
             ty_ctrl,
             ty_xctrl,
-            ty_zero,
-            ty_one,
-            ty_two,
-            ty_int_bot,
-            ty_int_top,
-            ty_if_both,
-            ty_if_neither,
-            ty_if_true,
-            ty_if_false,
+            ty_zero: intern(Type::Int(Int::Constant(0))),
+            ty_one: intern(Type::Int(Int::Constant(1))),
+            ty_two: intern(Type::Int(Int::Constant(2))),
+            ty_int_bot: intern(Type::Int(Int::Bot)),
+            ty_int_top: intern(Type::Int(Int::Top)),
+            ty_if_both: intern(Type::Tuple {
+                types: arena.alloc([ty_ctrl, ty_ctrl]),
+            }),
+            ty_if_neither: intern(Type::Tuple {
+                types: arena.alloc([ty_xctrl, ty_xctrl]),
+            }),
+            ty_if_true: intern(Type::Tuple {
+                types: arena.alloc([ty_ctrl, ty_xctrl]),
+            }),
+            ty_if_false: intern(Type::Tuple {
+                types: arena.alloc([ty_xctrl, ty_ctrl]),
+            }),
+            interner,
         }
     }
 
