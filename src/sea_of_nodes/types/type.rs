@@ -1,5 +1,5 @@
 use std::fmt;
-use std::fmt::{Display, Pointer};
+use std::fmt::Display;
 use std::hash::Hash;
 
 use crate::sea_of_nodes::types::Ty;

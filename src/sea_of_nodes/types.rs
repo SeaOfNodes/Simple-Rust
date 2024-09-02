@@ -274,7 +274,7 @@ impl<'a> Types<'a> {
     }
 
     /// compute greatest lower bound in the lattice
-    fn glb(&self, ty: Ty<'a>) -> Ty<'a> {
+    pub fn glb(&self, ty: Ty<'a>) -> Ty<'a> {
         match *ty {
             Type::Bot | Type::Top => self.ty_bot,
             Type::Ctrl => self.ty_xctrl, // why?
@@ -304,7 +304,7 @@ impl<'a> Types<'a> {
         }
     }
 
-    fn gather(&self) -> Vec<Ty<'a>> {
+    pub fn gather(&self) -> Vec<Ty<'a>> {
         let struct_test = self.get_struct("test", &[("test", self.ty_zero)]);
         let pointer_test = self.get_pointer(Some(struct_test), false);
         let mut ts = vec![

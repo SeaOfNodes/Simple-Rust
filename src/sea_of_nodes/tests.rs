@@ -13,6 +13,7 @@ mod chapter07;
 mod chapter08;
 mod chapter09;
 mod fuzzing;
+mod type_test;
 
 fn test_error(source: &str, error: &str) {
     let arena = DroplessArena::new();
