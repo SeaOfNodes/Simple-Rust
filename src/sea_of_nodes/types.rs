@@ -51,6 +51,10 @@ pub struct Types<'a> {
     pub ty_struct_top: Ty<'a>,
     pub ty_memory_bot: Ty<'a>,
     pub ty_memory_top: Ty<'a>,
+    pub ty_pointer_top: Ty<'a>,
+    pub ty_pointer_bot: Ty<'a>,
+    pub ty_pointer_null: Ty<'a>,
+    pub ty_pointer_void: Ty<'a>,
 }
 
 impl<'a> Types<'a> {
@@ -60,6 +64,9 @@ impl<'a> Types<'a> {
 
         let ty_ctrl = intern(Type::Ctrl);
         let ty_xctrl = intern(Type::XCtrl);
+
+        let ty_struct_bot = intern(Type::Struct(Struct::Bot));
+        let ty_struct_top = intern(Type::Struct(Struct::Top));
 
         Self {
             ty_bot: intern(Type::Bot),
@@ -83,10 +90,26 @@ impl<'a> Types<'a> {
             ty_if_false: intern(Type::Tuple {
                 types: arena.alloc([ty_xctrl, ty_ctrl]),
             }),
-            ty_struct_bot: intern(Type::Struct(Struct::Bot)),
-            ty_struct_top: intern(Type::Struct(Struct::Top)),
+            ty_struct_bot,
+            ty_struct_top,
             ty_memory_bot: intern(Type::Memory(Mem::Bot)),
             ty_memory_top: intern(Type::Memory(Mem::Top)),
+            ty_pointer_bot: intern(Type::Pointer(MemPtr {
+                to: Some(ty_struct_bot),
+                nil: true,
+            })),
+            ty_pointer_top: intern(Type::Pointer(MemPtr {
+                to: Some(ty_struct_top),
+                nil: false,
+            })),
+            ty_pointer_null: intern(Type::Pointer(MemPtr {
+                to: Some(ty_struct_top),
+                nil: true,
+            })),
+            ty_pointer_void: intern(Type::Pointer(MemPtr {
+                to: Some(ty_struct_bot),
+                nil: false,
+            })),
             interner,
         }
     }
@@ -116,8 +139,8 @@ impl<'a> Types<'a> {
             .intern(Type::Struct(Struct::Struct { name, fields }))
     }
 
-    pub fn get_pointer(&self, to: Ty<'a>, nil: bool) -> Ty<'a> {
-        debug_assert!(matches!(*to, Type::Struct(_)));
+    pub fn get_pointer(&self, to: Option<Ty<'a>>, nil: bool) -> Ty<'a> {
+        debug_assert!(matches!(to.as_deref(), None | Some(Type::Struct(_))));
         self.interner.intern(Type::Pointer(MemPtr { to, nil }))
     }
 
@@ -177,9 +200,10 @@ impl<'a> Types<'a> {
             },
 
             // Pointer sub-lattice
-            (Type::Pointer(pa), Type::Pointer(pb)) => {
-                self.get_pointer(self.meet(pa.to, pb.to), pa.nil | pb.nil)
-            }
+            (Type::Pointer(pa), Type::Pointer(pb)) => self.get_pointer(
+                Some(self.meet(pa.to.unwrap(), pb.to.unwrap())),
+                pa.nil | pb.nil,
+            ),
 
             // Memory sub-lattice
             (Type::Memory(ma), Type::Memory(mb)) => match (ma, mb) {
@@ -233,12 +257,46 @@ impl<'a> Types<'a> {
                     self.get_struct(name, &fields)
                 }
             },
-            Type::Pointer(p) => self.get_pointer(self.dual(p.to), !p.nil),
+            Type::Pointer(p) => {
+                let to = p.to.map(|to| self.dual(to));
+                self.get_pointer(to, !p.nil)
+            }
             Type::Memory(m) => match m {
                 Mem::Bot => self.ty_memory_top,
                 Mem::Top => self.ty_memory_bot,
                 Mem::Alias(_) => ty, // self dual
             },
+        }
+    }
+
+    /// compute greatest lower bound in the lattice
+    fn glb(&self, ty: Ty<'a>) -> Ty<'a> {
+        match *ty {
+            Type::Bot | Type::Top => self.ty_bot,
+            Type::Ctrl => self.ty_xctrl, // why?
+            Type::XCtrl => self.ty_bot,  // why?
+            Type::Int(_) => self.ty_int_bot,
+            Type::Tuple { types } => {
+                let types = types.iter().map(|&ty| self.glb(ty)).collect::<Vec<_>>();
+                self.get_tuple_from_slice(&types)
+            }
+            Type::Struct(s) => match s {
+                Struct::Bot => ty,
+                Struct::Top => ty, // no fields to lower?
+                Struct::Struct { name, fields } => {
+                    let fields = fields
+                        .iter()
+                        .map(|&(name, ty)| (name, self.glb(ty)))
+                        .collect::<Vec<_>>();
+                    self.get_struct(name, &fields)
+                }
+            },
+            Type::Pointer(MemPtr { to: None, .. }) => self.ty_pointer_bot,
+            Type::Pointer(MemPtr { to: Some(to), .. }) => {
+                let to = self.glb(to);
+                self.get_pointer(Some(to), true)
+            }
+            Type::Memory(_) => self.ty_memory_bot,
         }
     }
 }
