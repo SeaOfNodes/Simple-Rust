@@ -303,31 +303,4 @@ impl<'a> Types<'a> {
             Type::Memory(_) => self.ty_memory_bot,
         }
     }
-
-    pub fn gather(&self) -> Vec<Ty<'a>> {
-        let struct_test = self.get_struct("test", &[("test", self.ty_zero)]);
-        let pointer_test = self.get_pointer(Some(struct_test), false);
-        let mut ts = vec![
-            self.ty_bot,
-            self.ty_ctrl,
-            //
-            self.ty_zero,
-            self.ty_bot,
-            //
-            self.get_mem(1),
-            self.ty_memory_bot,
-            //
-            self.ty_pointer_null,
-            self.ty_pointer_bot,
-            pointer_test,
-            //
-            struct_test,
-            self.ty_struct_bot,
-            //
-            self.get_tuple_from_array([self.ty_int_bot, pointer_test]),
-        ];
-        let t2 = ts.iter().map(|t| self.dual(*t)).collect::<Vec<_>>();
-        ts.extend(t2);
-        ts
-    }
 }

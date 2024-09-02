@@ -119,7 +119,9 @@ impl<'t> Types<'t> {
     // symmetry for things with badly ordered _type fields.  The question is
     // still interesting for other orders.
     fn check_commute(&self, t0: Ty<'t>, t1: Ty<'t>) {
-        if t0 == t1 { return; }
+        if t0 == t1 {
+            return;
+        }
         // if( t0.is_simple() && !t1.is_simple() ) return; // By design, flipped the only allowed order
         let mta = self.meet(t0, t1);
         let mtb = self.meet(t1, t0); // Reverse args and try again
@@ -130,7 +132,9 @@ impl<'t> Types<'t> {
     // Expect: ~A & ~MT == ~A
     // Expect: ~B & ~MT == ~B
     fn check_symmetric(&self, t0: Ty<'t>, t1: Ty<'t>) {
-        if t1 == t0 { return; };
+        if t1 == t0 {
+            return;
+        };
         let mt = self.meet(t0, t1);
         let ta = self.meet(self.dual(mt), self.dual(t1));
         let tb = self.meet(self.dual(mt), self.dual(t0));
@@ -144,5 +148,32 @@ impl<'t> Types<'t> {
         let t01_2 = self.meet(t01, t2);
         let t0_12 = self.meet(t0, t12);
         assert_same(t01_2, t0_12);
+    }
+
+    fn gather(&self) -> Vec<Ty<'t>> {
+        let struct_test = self.get_struct("test", &[("test", self.ty_zero)]);
+        let pointer_test = self.get_pointer(Some(struct_test), false);
+        let mut ts = vec![
+            self.ty_bot,
+            self.ty_ctrl,
+            //
+            self.ty_zero,
+            self.ty_bot,
+            //
+            self.get_mem(1),
+            self.ty_memory_bot,
+            //
+            self.ty_pointer_null,
+            self.ty_pointer_bot,
+            pointer_test,
+            //
+            struct_test,
+            self.ty_struct_bot,
+            //
+            self.get_tuple_from_array([self.ty_int_bot, pointer_test]),
+        ];
+        let t2 = ts.iter().map(|t| self.dual(*t)).collect::<Vec<_>>();
+        ts.extend(t2);
+        ts
     }
 }
