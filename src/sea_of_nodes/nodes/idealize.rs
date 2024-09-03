@@ -1,5 +1,5 @@
 use crate::datastructures::id::Id;
-use crate::sea_of_nodes::nodes::node::{MemOp, MemOpKind};
+use crate::sea_of_nodes::nodes::node::{MemOp, MemOpKind, PhiNode};
 use crate::sea_of_nodes::nodes::{BoolOp, Node, NodeId, Nodes};
 use crate::sea_of_nodes::types::{Int, Ty, Type};
 
@@ -11,7 +11,7 @@ impl<'t> Nodes<'t> {
             Node::Sub => self.idealize_sub(node),
             Node::Mul => self.idealize_mul(node),
             Node::Bool(op) => self.idealize_bool(*op, node),
-            Node::Phi(_) => self.idealize_phi(node),
+            Node::Phi(PhiNode { ty, .. }) => self.idealize_phi(node, *ty),
             Node::Stop => self.idealize_stop(node),
             Node::Return => self.idealize_return(node),
             Node::Proj(p) => self.idealize_proj(node, p.index),
@@ -177,7 +177,7 @@ impl<'t> Nodes<'t> {
         phicon
     }
 
-    fn idealize_phi(&mut self, node: NodeId) -> Option<NodeId> {
+    fn idealize_phi(&mut self, node: NodeId, declared_ty: Ty<'t>) -> Option<NodeId> {
         let region = self.inputs[node][0];
         if !self.instanceof_region(region) {
             return self.inputs[node][1]; // Input has collapse to e.g. starting control.
@@ -218,8 +218,8 @@ impl<'t> Nodes<'t> {
             }
 
             let label = self[node].phi_label().unwrap();
-            let phi_lhs = Node::make_phi(label.to_string(), lhss);
-            let phi_rhs = Node::make_phi(label.to_string(), rhss);
+            let phi_lhs = Node::make_phi(label.to_string(), declared_ty, lhss);
+            let phi_rhs = Node::make_phi(label.to_string(), declared_ty, rhss);
 
             let phi_lhs = self.create_peepholed(phi_lhs);
             let phi_rhs = self.create_peepholed(phi_rhs);
@@ -361,9 +361,6 @@ impl<'t> Nodes<'t> {
     }
 
     fn idealize_load(&mut self, node: NodeId, declared_ty: Ty<'t>) -> Option<NodeId> {
-        let Node::MemOp(mem_op) = &self[node] else {
-            unreachable!()
-        };
         let mem = self.inputs[node][1]?;
         let ptr = self.inputs[node][2]?;
 
@@ -377,6 +374,9 @@ impl<'t> Nodes<'t> {
             let store_ptr = self.inputs[mem][2]?;
             // Must check same object
             if ptr == store_ptr {
+                let Node::MemOp(mem_op) = &self[node] else {
+                    unreachable!()
+                };
                 debug_assert_eq!(name, &mem_op.name); // Equiv class aliasing is perfect
                 return self.inputs[mem][3]; // store value
             }
@@ -394,10 +394,55 @@ impl<'t> Nodes<'t> {
             && self.inputs[mem].len() == 3
         {
             // Profit on RHS/Loop backedge
-            todo!("{declared_ty}")
+            if self.profit(node, mem, 2) ||
+                // Else must not be a loop to count profit on LHS.
+                (!matches!(self[self.inputs[mem][0].unwrap()], Node::Loop) && self.profit(node, mem, 1))
+            {
+                let Node::MemOp(mem_op) = &self[node] else {
+                    unreachable!()
+                };
+                let name = mem_op.name.clone();
+                let alias = mem_op.alias;
+
+                let ld1 = self.create_peepholed(Node::make_load(
+                    name.clone(),
+                    alias,
+                    declared_ty,
+                    [self.inputs[mem][1].unwrap(), ptr],
+                ));
+                let ld2 = self.create_peepholed(Node::make_load(
+                    name.clone(),
+                    alias,
+                    declared_ty,
+                    [self.inputs[mem][2].unwrap(), ptr],
+                ));
+
+                return Some(self.create_peepholed(Node::make_phi(
+                    name,
+                    self.ty[node].unwrap(),
+                    vec![self.inputs[mem][0], Some(ld1), Some(ld2)],
+                )));
+            }
         }
 
         None
+    }
+
+    /// Profitable if we find a matching Store on this Phi arm.
+    fn profit(&mut self, this: NodeId, phi_node: NodeId, idx: usize) -> bool {
+        let px = self.inputs[phi_node][idx];
+        px.is_some_and(|px| {
+            self.add_dep(px, this);
+            if let Node::MemOp(MemOp {
+                kind: MemOpKind::Store,
+                ..
+            }) = &self[px]
+            {
+                self.inputs[this][2] == self.inputs[px][2] // same ptr
+            } else {
+                false
+            }
+        })
     }
 
     fn idealize_store(&mut self, node: NodeId) -> Option<NodeId> {
@@ -510,7 +555,11 @@ impl<'t> Nodes<'t> {
             self[lphi].phi_label().unwrap(),
             self[rhs].phi_label().unwrap_or("")
         );
-        let phi = self.create_peepholed(Node::make_phi(label, ns));
+        let ty = match &self[lphi] {
+            Node::Phi(p) => p.ty,
+            _ => unreachable!(),
+        };
+        let phi = self.create_peepholed(Node::make_phi(label, ty, ns));
 
         // Rotate needs another op, otherwise just the phi
         Some(if lhs == lphi {

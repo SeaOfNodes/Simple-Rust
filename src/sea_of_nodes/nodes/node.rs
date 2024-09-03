@@ -13,12 +13,12 @@ pub enum Node<'t> {
     Mul,
     Div,
     Minus,
-    Scope(ScopeNode),
+    Scope(ScopeNode<'t>),
     Bool(BoolOp),
     Not,
     Proj(ProjNode),
     If,
-    Phi(PhiNode),
+    Phi(PhiNode<'t>),
     Region { cached_idom: Option<NodeId> },
     Loop,
     Stop,
@@ -58,8 +58,9 @@ pub struct ProjNode {
 }
 
 #[derive(Clone, Debug)]
-pub struct PhiNode {
+pub struct PhiNode<'t> {
     pub label: String,
+    pub ty: Ty<'t>,
 }
 
 #[derive(Clone, Debug)]
@@ -257,8 +258,8 @@ impl<'t> Node<'t> {
         (Node::If, vec![Some(ctrl), Some(pred)])
     }
 
-    pub fn make_phi(label: String, inputs: Vec<Option<NodeId>>) -> NodeCreation<'t> {
-        (Node::Phi(PhiNode { label }), inputs)
+    pub fn make_phi(label: String, ty: Ty<'t>, inputs: Vec<Option<NodeId>>) -> NodeCreation<'t> {
+        (Node::Phi(PhiNode { label, ty }), inputs)
     }
 
     pub fn make_region(inputs: Vec<Option<NodeId>>) -> NodeCreation<'t> {
@@ -271,5 +272,36 @@ impl<'t> Node<'t> {
 
     pub fn make_loop(entry: NodeId) -> NodeCreation<'t> {
         (Node::Loop, vec![None, Some(entry), None])
+    }
+
+    pub fn make_load(
+        name: String,
+        alias: u32,
+        declared_type: Ty<'t>,
+        [mem_slice, mem_ptr]: [NodeId; 2],
+    ) -> NodeCreation<'t> {
+        (
+            Node::MemOp(MemOp {
+                name,
+                alias,
+                kind: MemOpKind::Load { declared_type },
+            }),
+            vec![None, Some(mem_slice), Some(mem_ptr), None],
+        )
+    }
+
+    pub fn make_store(
+        name: String,
+        alias: u32,
+        [mem_slice, mem_ptr, value]: [NodeId; 3],
+    ) -> NodeCreation<'t> {
+        (
+            Node::MemOp(MemOp {
+                name,
+                alias,
+                kind: MemOpKind::Store,
+            }),
+            vec![None, Some(mem_slice), Some(mem_ptr), Some(value)],
+        )
     }
 }

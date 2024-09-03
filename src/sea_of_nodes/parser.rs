@@ -94,11 +94,21 @@ impl<'s, 't> Parser<'s, 't> {
         let start = self.nodes.start;
         let ctrl = self.peephole(Node::make_proj(start, 0, ScopeNode::CTRL.to_string()));
         self.nodes
-            .scope_define(self.scope, ScopeNode::CTRL.to_string(), ctrl)
+            .scope_define(
+                self.scope,
+                ScopeNode::CTRL.to_string(),
+                self.types.ty_ctrl,
+                ctrl,
+            )
             .expect("not in scope");
         let arg0 = self.peephole(Node::make_proj(start, 1, ScopeNode::ARG0.to_string()));
         self.nodes
-            .scope_define(self.scope, ScopeNode::ARG0.to_string(), arg0)
+            .scope_define(
+                self.scope,
+                ScopeNode::ARG0.to_string(),
+                self.types.ty_int_bot,
+                arg0,
+            )
             .expect("not in scope");
 
         self.parse_block()?;
@@ -429,7 +439,7 @@ impl<'s, 't> Parser<'s, 't> {
         self.require(";")?;
 
         self.nodes
-            .scope_define(self.scope, name.to_string(), expr)
+            .scope_define(self.scope, name.to_string(), todo!(), expr)
             .map_err(|()| format!("Redefining name '{name}'"))
     }
 

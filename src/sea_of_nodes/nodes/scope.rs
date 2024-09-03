@@ -1,25 +1,30 @@
 use std::collections::HashMap;
 
 use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
+use crate::sea_of_nodes::types::Ty;
 
 #[derive(Clone, Debug)]
-pub struct ScopeNode {
-    pub scopes: Vec<HashMap<String, usize>>,
+pub struct ScopeNode<'t> {
+    pub scopes: Vec<HashMap<String, (usize, Ty<'t>)>>,
 }
 
-impl ScopeNode {
+impl<'t> ScopeNode<'t> {
     pub const CTRL: &'static str = "$ctrl";
     pub const ARG0: &'static str = "arg";
+
+    fn lookup(&self, name: &str) -> Option<&(usize, Ty<'t>)> {
+        self.scopes.iter().rev().flat_map(|x| x.get(name)).next()
+    }
 }
 
 impl<'t> Nodes<'t> {
-    pub(crate) fn scope(&self, scope_node: NodeId) -> &ScopeNode {
+    pub(crate) fn scope(&self, scope_node: NodeId) -> &ScopeNode<'t> {
         let Node::Scope(scope) = &self[scope_node] else {
             panic!("Must be called with a scope node id")
         };
         scope
     }
-    pub(crate) fn scope_mut(&mut self, scope_node: NodeId) -> &mut ScopeNode {
+    pub(crate) fn scope_mut(&mut self, scope_node: NodeId) -> &mut ScopeNode<'t> {
         let Node::Scope(scope) = &mut self[scope_node] else {
             panic!("Must be called with a scope node id")
         };
@@ -38,12 +43,13 @@ impl<'t> Nodes<'t> {
         &mut self,
         scope_node: NodeId,
         name: String,
+        declared_ty: Ty<'t>,
         value: NodeId,
     ) -> Result<(), ()> {
         let len = self.inputs[scope_node].len();
         let scope = self.scope_mut(scope_node);
         let syms = scope.scopes.last_mut().unwrap();
-        if let Some(_old) = syms.insert(name, len) {
+        if let Some(_old) = syms.insert(name, (len, declared_ty)) {
             return Err(());
         }
         self.add_def(scope_node, Some(value));
@@ -76,7 +82,7 @@ impl<'t> Nodes<'t> {
     ) -> Option<NodeId> {
         let scope = self.scope_mut(scope_node);
         let syms = &mut scope.scopes[nesting_level];
-        if let Some(index) = syms.get(name).copied() {
+        if let Some((index, declared_ty)) = syms.get(name).copied() {
             let mut old = self.inputs[scope_node][index];
 
             if let Some(loop_) = old {
@@ -97,6 +103,7 @@ impl<'t> Nodes<'t> {
                         let recursive = self.scope_lookup_update(loop_, name, None, nesting_level);
                         let new_phi = self.create_peepholed(Node::make_phi(
                             name.to_string(),
+                            declared_ty,
                             vec![self.inputs[loop_][0], recursive, None],
                         ));
 
@@ -146,7 +153,7 @@ impl<'t> Nodes<'t> {
             panic!("expected scope");
         };
         for syms in &this_scope.scopes {
-            for (name, &index) in syms {
+            for (name, &(index, _)) in syms {
                 debug_assert!(names[index].is_none());
                 names[index] = Some(name.clone());
             }
@@ -174,8 +181,10 @@ impl<'t> Nodes<'t> {
                 let this_l = self.scope_lookup(this, &name).unwrap();
                 let that_l = self.scope_lookup(that, &name).unwrap();
 
+                let declared_ty = self.scope(this).lookup(&name).unwrap().1;
                 let phi = self.create_peepholed(Node::make_phi(
                     name,
+                    declared_ty,
                     vec![Some(region), Some(this_l), Some(that_l)],
                 ));
                 self.set_def(this, i, Some(phi));

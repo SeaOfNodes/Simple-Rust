@@ -280,7 +280,7 @@ fn scope_edges(sb: &mut String, nodes: &Nodes, scope_node: NodeId) -> fmt::Resul
     for (level, s) in scope.scopes.iter().rev().enumerate() {
         let scope_name = make_scope_name(nodes, scope_node, level + 1);
 
-        for (name, index) in s {
+        for (name, (index, _ty)) in s {
             let mut def = nodes.inputs[scope_node][*index];
             while def.is_some() && matches!(&nodes[def.unwrap()], Node::Scope(_)) {
                 def = nodes.inputs[def.unwrap()][*index]; // lazy
