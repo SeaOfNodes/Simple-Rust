@@ -87,45 +87,45 @@ impl<'t> Nodes<'t> {
                 continue;
             }
 
-            let Some(x) = self.peephole_opt(n) else {
-                continue;
-            };
-
-            if self.is_dead(x) {
-                continue;
-            }
-
-            // peepholeOpt can return brand-new nodes, needing an initial type set
-            if self.ty[x].is_none() {
-                let ty = self.compute(x);
-                self.set_type(x, ty);
-            }
-
-            // Changes require neighbors onto the worklist
-            if x != n || !(matches!(&self[x], Node::Constant(_))) {
-                // All outputs of n (changing node) not x (prior existing node).
-                for &z in &self.outputs[n] {
-                    self.iter_peeps.add(z);
+            if let Some(x) = self.peephole_opt(n) {
+                if self.is_dead(x) {
+                    continue;
                 }
 
-                // Everybody gets a free "go again" in case they didn't get
-                // made in their final form.
-                self.iter_peeps.add(x);
+                // peepholeOpt can return brand-new nodes, needing an initial type set
+                if self.ty[x].is_none() {
+                    let ty = self.compute(x);
+                    self.set_type(x, ty);
+                }
 
-                // If the result is not self, revisit all inputs (because
-                // there's a new user), and replace in the graph.
-                if x != n {
-                    for &z in self.inputs[n].iter().flatten() {
+                // Changes require neighbors onto the worklist
+                if x != n || !(matches!(&self[x], Node::Constant(_))) {
+                    // All outputs of n (changing node) not x (prior existing node).
+                    for &z in &self.outputs[n] {
                         self.iter_peeps.add(z);
                     }
-                    self.subsume(n, x);
+
+                    // Everybody gets a free "go again" in case they didn't get
+                    // made in their final form.
+                    self.iter_peeps.add(x);
+
+                    // If the result is not self, revisit all inputs (because
+                    // there's a new user), and replace in the graph.
+                    if x != n {
+                        for &z in self.inputs[n].iter().flatten() {
+                            self.iter_peeps.add(z);
+                        }
+                        self.subsume(n, x);
+                    }
                 }
+
+                // If there are distant neighbors, move to worklist
+                self.move_deps_to_worklist(n);
+                debug_assert!(self.progress_on_list(stop)); // Very expensive assert
             }
-
-            // If there are distant neighbors, move to worklist
-            self.move_deps_to_worklist(n);
-
-            debug_assert!(self.progress_on_list(stop)); // Very expensive assert
+            if self.is_unused(n) && !matches!(&self[n], Node::Stop) {
+                self.kill(n); // just plain dead
+            }
         }
     }
 
