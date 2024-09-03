@@ -104,6 +104,9 @@ impl<'t> Nodes<'t> {
             | Node::Not
             | Node::Proj(_)
             | Node::Phi(_)
+            | Node::Cast(_)
+            | Node::New(_)
+            | Node::MemOp(_)
             | Node::Stop => false,
         }
     }
@@ -128,6 +131,9 @@ impl<'t> Nodes<'t> {
             | Node::If
             | Node::Region { .. }
             | Node::Loop
+            | Node::Cast(_)
+            | Node::New(_)
+            | Node::MemOp(_)
             | Node::Stop => false,
         }
     }

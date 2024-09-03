@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::fmt;
 use std::fmt::Display;
 use std::hash::Hash;
@@ -73,6 +74,10 @@ impl<'t> Type<'t> {
             Type::Int(Int::Constant(value)) => *value,
             _ => unreachable!(),
         }
+    }
+
+    pub fn str(&self) -> Cow<str> {
+        todo!()
     }
 }
 

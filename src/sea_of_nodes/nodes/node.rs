@@ -22,6 +22,9 @@ pub enum Node<'t> {
     Region { cached_idom: Option<NodeId> },
     Loop,
     Stop,
+    Cast(Ty<'t>),
+    MemOp(MemOp<'t>),
+    New(Ty<'t>),
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -59,6 +62,19 @@ pub struct PhiNode {
     pub label: String,
 }
 
+#[derive(Clone, Debug)]
+pub struct MemOp<'t> {
+    pub name: String,
+    pub alias: u32,
+    pub kind: MemOpKind<'t>,
+}
+
+#[derive(Clone, Debug)]
+pub enum MemOpKind<'t> {
+    Load { declared_type: Ty<'t> },
+    Store,
+}
+
 impl<'t> Node<'t> {
     /// Easy reading label for debugger
     pub fn label(&self) -> Cow<str> {
@@ -84,6 +100,16 @@ impl<'t> Node<'t> {
             Node::Region { .. } => "Region",
             Node::Loop => "Loop",
             Node::Stop => "Stop",
+            Node::Cast(t) => return Cow::Owned(format!("({})", t.str())),
+            Node::New(_) => "new",
+            Node::MemOp(MemOp {
+                kind: MemOpKind::Load { .. },
+                ..
+            }) => "Load",
+            Node::MemOp(MemOp {
+                kind: MemOpKind::Store,
+                ..
+            }) => "Store",
         })
     }
 
@@ -107,6 +133,12 @@ impl<'t> Node<'t> {
             Node::Region { .. } => self.label(),
             Node::Loop => self.label(),
             Node::Stop => self.label(),
+            Node::Cast(t) => Cow::Owned(format!("({})", t.str())),
+            Node::New(_) => Cow::Borrowed("new"),
+            Node::MemOp(m) => match m.kind {
+                MemOpKind::Load { .. } => Cow::Borrowed("Load"),
+                MemOpKind::Store => Cow::Borrowed("Store"),
+            },
         }
     }
 
@@ -127,6 +159,9 @@ impl<'t> Node<'t> {
             | Node::Phi(_)
             | Node::Region { .. }
             | Node::Loop
+            | Node::Cast(_)
+            | Node::New(_)
+            | Node::MemOp(_)
             | Node::Stop => false,
         }
     }
@@ -160,6 +195,16 @@ impl<'t> Node<'t> {
             Node::Region { .. } => 16,
             Node::Loop => 17,
             Node::Stop => 18,
+            Node::Cast(_) => 19,
+            Node::New(_) => 20,
+            Node::MemOp(MemOp {
+                kind: MemOpKind::Load { .. },
+                ..
+            }) => 21,
+            Node::MemOp(MemOp {
+                kind: MemOpKind::Store,
+                ..
+            }) => 22,
         }
     }
 

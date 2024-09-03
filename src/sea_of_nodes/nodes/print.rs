@@ -4,7 +4,9 @@ use std::fmt::Display;
 
 use crate::datastructures::id::Id;
 use crate::datastructures::id_set::IdSet;
+use crate::sea_of_nodes::nodes::node::MemOpKind;
 use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
+use crate::sea_of_nodes::types::Type;
 
 pub struct PrintNodes<'a, 't> {
     node: Option<NodeId>,
@@ -41,7 +43,8 @@ impl<'t> Nodes<'t> {
     // Unique label for graph visualization, e.g. "Add12" or "Region30" or "EQ99"
     pub fn unique_name(&self, node: NodeId) -> String {
         match &self[node] {
-            Node::Constant(_) => format!("Con_{}", node),
+            Node::Constant(_) => format!("Con_{node}"),
+            Node::Cast(_) => format!("Cast_{node}"),
             _ => format!("{}{}", self[node].label(), node),
         }
     }
@@ -136,6 +139,19 @@ impl Display for PrintNodes2<'_, '_, '_> {
                     write!(f, "]")
                 }
             }
+            n @ Node::Cast(_) => {
+                write!(f, "{}{}", n.label(), input(1))
+            }
+            Node::New(t) => {
+                let Type::Pointer(p) = &**t else {
+                    unreachable!()
+                };
+                write!(f, "new {}", p.to.unwrap().str())
+            }
+            Node::MemOp(m) => match m.kind {
+                MemOpKind::Load { .. } => write!(f, ".{}", m.name),
+                MemOpKind::Store => write!(f, ".{}={};", m.name, input(3)),
+            },
         }
     }
 }

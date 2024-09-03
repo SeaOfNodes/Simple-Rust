@@ -1,3 +1,4 @@
+use crate::sea_of_nodes::nodes::node::MemOpKind;
 use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
 use crate::sea_of_nodes::types::{Int, Ty, Type};
 
@@ -253,6 +254,12 @@ impl<'t> Nodes<'t> {
                 }
             }
             Node::Stop => types.ty_bot,
+            Node::Cast(t) => types.join(self.ty[self.inputs[node][1].unwrap()].unwrap(), *t),
+            Node::MemOp(m) => match m.kind {
+                MemOpKind::Load { declared_type } => declared_type,
+                MemOpKind::Store => types.get_mem(m.alias),
+            },
+            Node::New(t) => *t,
         }
     }
 

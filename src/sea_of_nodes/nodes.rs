@@ -288,6 +288,9 @@ impl<'t> Nodes<'t> {
             | Node::Scope(_)
             | Node::Bool(_)
             | Node::Phi(_)
+            | Node::Cast(_)
+            | Node::MemOp(_)
+            | Node::New(_)
             | Node::Not => false,
         }
     }

@@ -1,6 +1,7 @@
 use crate::datastructures::id::Id;
+use crate::sea_of_nodes::nodes::node::{MemOp, MemOpKind};
 use crate::sea_of_nodes::nodes::{BoolOp, Node, NodeId, Nodes};
-use crate::sea_of_nodes::types::{Int, Type};
+use crate::sea_of_nodes::types::{Int, Ty, Type};
 
 impl<'t> Nodes<'t> {
     /// do not peephole directly returned values!
@@ -16,11 +17,17 @@ impl<'t> Nodes<'t> {
             Node::Proj(p) => self.idealize_proj(node, p.index),
             Node::Region { .. } | Node::Loop => self.idealize_region(node),
             Node::If => self.idealize_if(node),
+            Node::Cast(t) => self.idealize_cast(node, *t),
+            Node::MemOp(m) => match m.kind {
+                MemOpKind::Load { declared_type } => self.idealize_load(node, declared_type),
+                MemOpKind::Store => self.idealize_store(node),
+            },
             Node::Constant(_)
             | Node::Start { .. }
             | Node::Div
             | Node::Minus
             | Node::Scope(_)
+            | Node::New(_)
             | Node::Not => None,
         }
     }
@@ -347,6 +354,57 @@ impl<'t> Nodes<'t> {
             }
         }
         None
+    }
+
+    fn idealize_cast(&mut self, node: NodeId, ty: Ty<'t>) -> Option<NodeId> {
+        self.inputs[node][1].filter(|&n| self.ty[n].is_some_and(|t| self.types.isa(t, ty)))
+    }
+
+    fn idealize_load(&mut self, node: NodeId, declared_ty: Ty<'t>) -> Option<NodeId> {
+        let Node::MemOp(mem_op) = &self[node] else {
+            unreachable!()
+        };
+        let mem = self.inputs[node][1]?;
+        let ptr = self.inputs[node][2]?;
+
+        // Simple Load-after-Store on same address.
+        if let Node::MemOp(MemOp {
+            kind: MemOpKind::Store,
+            name,
+            ..
+        }) = &self[mem]
+        {
+            let store_ptr = self.inputs[mem][2]?;
+            // Must check same object
+            if ptr == store_ptr {
+                debug_assert_eq!(name, &mem_op.name); // Equiv class aliasing is perfect
+                return self.inputs[mem][3]; // store value
+            }
+        }
+
+        // Push a Load up through a Phi, as long as it collapses on at least
+        // one arm.  If at a Loop, the backedge MUST collapse - else we risk
+        // spinning the same transform around the loop indefinitely.
+        //   BEFORE (2 Sts, 1 Ld):          AFTER (1 St, 0 Ld):
+        //   if( pred ) ptr.x = e0;         val = pred ? e0
+        //   else       ptr.x = e1;                    : e1;
+        //   val = ptr.x;                   ptr.x = val;
+        if matches!(&self[mem], Node::Phi(_))
+            && self.ty[self.inputs[mem][0]?] == Some(self.types.ty_ctrl)
+            && self.inputs[mem].len() == 3
+        {
+            // Profit on RHS/Loop backedge
+            todo!("{declared_ty}")
+        }
+
+        None
+    }
+
+    fn idealize_store(&mut self, node: NodeId) -> Option<NodeId> {
+        let Node::MemOp(mem_op) = &self[node] else {
+            unreachable!()
+        };
+        todo!("{node}{mem_op:?}")
     }
 
     fn find_dead_input(&self, node: NodeId) -> Option<usize> {
