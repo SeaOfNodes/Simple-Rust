@@ -1,4 +1,5 @@
 use crate::sea_of_nodes::graph_visualizer;
+use crate::sea_of_nodes::nodes::index::ScopeId;
 use crate::sea_of_nodes::nodes::{BoolOp, Node, NodeCreation, NodeId, Nodes, ScopeNode};
 use crate::sea_of_nodes::types::{Ty, Types};
 
@@ -18,13 +19,13 @@ pub struct Parser<'s, 't> {
     pub(crate) stop: NodeId,
 
     /// The current scope changes as we parse.
-    pub(crate) scope: NodeId,
+    pub(crate) scope: ScopeId,
 
     /// stack of scopes for graph visualization
-    pub(crate) x_scopes: Vec<NodeId>,
+    pub(crate) x_scopes: Vec<ScopeId>,
 
-    continue_scope: Option<NodeId>,
-    break_scope: Option<NodeId>,
+    continue_scope: Option<ScopeId>,
+    break_scope: Option<ScopeId>,
     pub disable_show_graph_println: bool,
 }
 
@@ -47,6 +48,7 @@ impl<'s, 't> Parser<'s, 't> {
         let mut nodes = Nodes::new(types);
 
         let scope = nodes.create(Node::make_scope());
+        let scope = nodes.to_scope(scope).unwrap();
         nodes.ty[scope] = Some(types.ty_bot); // in java this is done by the constructor
 
         let args = types.get_tuple_from_array([types.ty_ctrl, arg]);
@@ -77,7 +79,7 @@ impl<'s, 't> Parser<'s, 't> {
         self.nodes.inputs[self.scope][0].expect("has ctrl")
     }
     fn set_ctrl(&mut self, node: NodeId) {
-        self.nodes.set_def(self.scope, 0, Some(node));
+        self.nodes.set_def(*self.scope, 0, Some(node));
     }
 
     fn peephole(&mut self, c: NodeCreation<'t>) -> NodeId {
@@ -198,7 +200,7 @@ impl<'s, 't> Parser<'s, 't> {
 
         // Save the current scope as the loop head
         let head = self.scope;
-        self.nodes.keep(head);
+        self.nodes.keep(*head);
 
         // Clone the head Scope to create a new Scope for the body.
         // Create phis eagerly as part of cloning
@@ -240,7 +242,7 @@ impl<'s, 't> Parser<'s, 't> {
         // Merge the loop bottom into other continue statements
         if self.continue_scope.is_some() {
             self.continue_scope = Some(self.jump_to(self.continue_scope));
-            self.nodes.kill(self.scope);
+            self.nodes.kill(*self.scope);
             self.scope = self.continue_scope.unwrap();
         }
 
@@ -251,8 +253,8 @@ impl<'s, 't> Parser<'s, 't> {
         // edge.  If the phi is redundant, it is replaced by its sole input.
         let exit = self.break_scope.unwrap();
         self.nodes.scope_end_loop(head, self.scope, exit);
-        self.nodes.unkeep(head);
-        self.nodes.kill(head);
+        self.nodes.unkeep(*head);
+        self.nodes.kill(*head);
 
         // Cleanup
         self.x_scopes.pop();
@@ -269,7 +271,7 @@ impl<'s, 't> Parser<'s, 't> {
         Ok(())
     }
 
-    fn jump_to(&mut self, to_scope: Option<NodeId>) -> NodeId {
+    fn jump_to(&mut self, to_scope: Option<ScopeId>) -> ScopeId {
         let cur = self.nodes.scope_dup(self.scope, false);
 
         let ctrl = self.peephole(Node::make_constant(self.nodes.start, self.types.ty_xctrl));
@@ -277,8 +279,8 @@ impl<'s, 't> Parser<'s, 't> {
 
         // Prune nested lexical scopes that have depth > than the loop head
         // We use _breakScope as a proxy for the loop head scope to obtain the depth
-        let break_scopes_len = self.nodes.scope(self.break_scope.unwrap()).scopes.len();
-        while self.nodes.scope(cur).scopes.len() > break_scopes_len {
+        let break_scopes_len = self.nodes[self.break_scope.unwrap()].scopes.len();
+        while self.nodes[cur].scopes.len() > break_scopes_len {
             self.nodes.scope_pop(cur);
         }
 
@@ -290,9 +292,9 @@ impl<'s, 't> Parser<'s, 't> {
         };
 
         // toScope is either the break scope, or a scope that was created here
-        debug_assert!(self.nodes.scope(to_scope).scopes.len() <= break_scopes_len);
+        debug_assert!(self.nodes[to_scope].scopes.len() <= break_scopes_len);
         let region = self.nodes.scope_merge(to_scope, cur);
-        self.nodes.set_def(to_scope, 0, Some(region)); // set ctrl
+        self.nodes.set_def(*to_scope, 0, Some(region)); // set ctrl
         to_scope
     }
 

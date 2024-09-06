@@ -5,6 +5,7 @@ use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::time::Duration;
 
+use crate::sea_of_nodes::nodes::index::ScopeId;
 use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
 
 pub fn run_graphviz_and_chromium(input: String) {
@@ -56,12 +57,12 @@ pub fn run_graphviz_and_chromium(input: String) {
 pub fn generate_dot_output(
     nodes: &Nodes,
     stop: NodeId,
-    scope: Option<NodeId>,
-    x_scopes: &[NodeId],
+    scope: Option<ScopeId>,
+    x_scopes: &[ScopeId],
     source: &str,
     separate_control_cluster: bool,
 ) -> Result<String, fmt::Error> {
-    let all = find_all(nodes, &[Some(stop), scope]);
+    let all = find_all(nodes, &[Some(stop), scope.as_deref().copied()]);
 
     let mut sb = String::new();
     writeln!(sb, "digraph \"{}\" {{", source.replace("\"", "\\\""))?;
@@ -72,13 +73,13 @@ pub fn generate_dot_output(
     writeln!(sb, "\tconcentrate=\"true\";")?;
     do_nodes(&mut sb, nodes, &all, separate_control_cluster)?;
     for &scope in x_scopes {
-        if !nodes.is_dead(scope) {
+        if !nodes.is_dead(*scope) {
             do_scope(&mut sb, nodes, scope)?;
         }
     }
     node_edges(&mut sb, nodes, &all)?;
     for &scope in x_scopes {
-        if !nodes.is_dead(scope) {
+        if !nodes.is_dead(*scope) {
             scope_edges(&mut sb, nodes, scope)?;
         }
     }
@@ -189,15 +190,12 @@ fn do_nodes(
     nodes_by_cluster(sb, false, nodes, all, separate_control_cluster)
 }
 
-fn do_scope(sb: &mut String, nodes: &Nodes, scope_node: NodeId) -> fmt::Result {
-    let Node::Scope(scope) = &nodes[scope_node] else {
-        unreachable!();
-    };
-
+fn do_scope(sb: &mut String, nodes: &Nodes, scope: ScopeId) -> fmt::Result {
+    let scopes = &nodes[scope].scopes;
     writeln!(sb, "\tnode [shape=plaintext];")?;
 
-    for (level, s) in scope.scopes.iter().rev().enumerate() {
-        let scope_name = make_scope_name(nodes, scope_node, level + 1);
+    for (level, s) in scopes.iter().rev().enumerate() {
+        let scope_name = make_scope_name(nodes, scope, level + 1);
 
         writeln!(sb, "\tsubgraph cluster_{scope_name} {{")?;
         writeln!(sb, "\t\t{scope_name} [label=<")?;
@@ -205,7 +203,7 @@ fn do_scope(sb: &mut String, nodes: &Nodes, scope_node: NodeId) -> fmt::Result {
             sb,
             "\t\t\t<TABLE BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\">"
         )?;
-        let scope_level = scope.scopes.len() - level - 1;
+        let scope_level = scopes.len() - level - 1;
         write!(sb, "\t\t\t<TR><TD BGCOLOR=\"cyan\">{scope_level}</TD>")?;
         for name in s.keys() {
             let port_name = make_port_name(&scope_name, name);
@@ -215,15 +213,15 @@ fn do_scope(sb: &mut String, nodes: &Nodes, scope_node: NodeId) -> fmt::Result {
         writeln!(sb, "\t\t\t</TABLE>>];")?;
     }
 
-    for _ in 0..scope.scopes.len() {
+    for _ in 0..scopes.len() {
         writeln!(sb, "\t}}")?;
     }
 
     Ok(())
 }
 
-fn make_scope_name(nodes: &Nodes, scope: NodeId, level: usize) -> String {
-    format!("{}_{level}", nodes.unique_name(scope))
+fn make_scope_name(nodes: &Nodes, scope: ScopeId, level: usize) -> String {
+    format!("{}_{level}", nodes.unique_name(*scope))
 }
 
 fn make_port_name(scope_name: &str, var_name: &str) -> String {
@@ -272,22 +270,19 @@ fn node_edges(sb: &mut String, nodes: &Nodes, all: &HashSet<NodeId>) -> fmt::Res
     Ok(())
 }
 
-fn scope_edges(sb: &mut String, nodes: &Nodes, scope_node: NodeId) -> fmt::Result {
+fn scope_edges(sb: &mut String, nodes: &Nodes, scope: ScopeId) -> fmt::Result {
     writeln!(sb, "\tedge [style=dashed color=cornflowerblue];")?;
-    let Node::Scope(scope) = &nodes[scope_node] else {
-        unreachable!();
-    };
-    for (level, s) in scope.scopes.iter().rev().enumerate() {
-        let scope_name = make_scope_name(nodes, scope_node, level + 1);
+    for (level, s) in nodes[scope].scopes.iter().rev().enumerate() {
+        let scope_name = make_scope_name(nodes, scope, level + 1);
 
         for (name, (index, _ty)) in s {
-            let mut def = nodes.inputs[scope_node][*index];
+            let mut def = nodes.inputs[scope][*index];
             while def.is_some() && matches!(&nodes[def.unwrap()], Node::Scope(_)) {
                 def = nodes.inputs[def.unwrap()][*index]; // lazy
             }
             if let Some(def) = def {
                 let port_name = make_port_name(&scope_name, name);
-                let def_name = def_name(&nodes, def);
+                let def_name = def_name(nodes, def);
                 writeln!(sb, "\t{scope_name}:\"{port_name}\" -> {def_name};")?;
             }
         }

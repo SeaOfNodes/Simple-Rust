@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::sea_of_nodes::nodes::index::ScopeId;
 use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
 use crate::sea_of_nodes::types::Ty;
 
@@ -18,75 +19,61 @@ impl<'t> ScopeNode<'t> {
 }
 
 impl<'t> Nodes<'t> {
-    pub(crate) fn scope(&self, scope_node: NodeId) -> &ScopeNode<'t> {
-        let Node::Scope(scope) = &self[scope_node] else {
-            panic!("Must be called with a scope node id")
-        };
-        scope
-    }
-    pub(crate) fn scope_mut(&mut self, scope_node: NodeId) -> &mut ScopeNode<'t> {
-        let Node::Scope(scope) = &mut self[scope_node] else {
-            panic!("Must be called with a scope node id")
-        };
-        scope
-    }
-    pub fn scope_push(&mut self, scope_node: NodeId) {
-        self.scope_mut(scope_node).scopes.push(HashMap::new());
+    pub fn scope_push(&mut self, scope: ScopeId) {
+        self[scope].scopes.push(HashMap::new());
     }
 
-    pub fn scope_pop(&mut self, scope_node: NodeId) {
-        let last = self.scope_mut(scope_node).scopes.pop().unwrap();
-        self.pop_n(scope_node, last.len());
+    pub fn scope_pop(&mut self, scope: ScopeId) {
+        let last = self[scope].scopes.pop().unwrap();
+        self.pop_n(*scope, last.len());
     }
 
     pub fn scope_define(
         &mut self,
-        scope_node: NodeId,
+        scope: ScopeId,
         name: String,
         declared_ty: Ty<'t>,
         value: NodeId,
     ) -> Result<(), ()> {
-        let len = self.inputs[scope_node].len();
-        let scope = self.scope_mut(scope_node);
-        let syms = scope.scopes.last_mut().unwrap();
+        let len = self.inputs[scope].len();
+        let syms = self[scope].scopes.last_mut().unwrap();
         if let Some(_old) = syms.insert(name, (len, declared_ty)) {
             return Err(());
         }
-        self.add_def(scope_node, Some(value));
+        self.add_def(*scope, Some(value));
         Ok(())
     }
 
-    pub fn scope_lookup(&mut self, scope_node: NodeId, name: &str) -> Result<NodeId, ()> {
-        let nesting_level = self.scope_mut(scope_node).scopes.len() - 1;
-        self.scope_lookup_update(scope_node, name, None, nesting_level)
+    pub fn scope_lookup(&mut self, scope: ScopeId, name: &str) -> Result<NodeId, ()> {
+        let nesting_level = self[scope].scopes.len() - 1;
+        self.scope_lookup_update(scope, name, None, nesting_level)
             .ok_or(())
     }
 
     pub fn scope_update(
         &mut self,
-        scope_node: NodeId,
+        scope: ScopeId,
         name: &str,
         value: NodeId,
     ) -> Result<NodeId, ()> {
-        let nesting_level = self.scope_mut(scope_node).scopes.len() - 1;
-        self.scope_lookup_update(scope_node, name, Some(value), nesting_level)
+        let nesting_level = self[scope].scopes.len() - 1;
+        self.scope_lookup_update(scope, name, Some(value), nesting_level)
             .ok_or(())
     }
 
     fn scope_lookup_update(
         &mut self,
-        scope_node: NodeId,
+        scope: ScopeId,
         name: &str,
         value: Option<NodeId>,
         nesting_level: usize,
     ) -> Option<NodeId> {
-        let scope = self.scope_mut(scope_node);
-        let syms = &mut scope.scopes[nesting_level];
+        let syms = &mut self[scope].scopes[nesting_level];
         if let Some((index, declared_ty)) = syms.get(name).copied() {
-            let mut old = self.inputs[scope_node][index];
+            let mut old = self.inputs[scope][index];
 
             if let Some(loop_) = old {
-                if matches!(self[loop_], Node::Scope(_)) {
+                if let Some(loop_) = self.to_scope(loop_) {
                     // Lazy Phi!
                     let loop_phi = self.inputs[loop_][index];
                     old = if loop_phi.is_some_and(|p| {
@@ -107,52 +94,51 @@ impl<'t> Nodes<'t> {
                             vec![self.inputs[loop_][0], recursive, None],
                         ));
 
-                        self.set_def(loop_, index, Some(new_phi));
+                        self.set_def(*loop_, index, Some(new_phi));
                         Some(new_phi)
                     };
-                    self.set_def(scope_node, index, old);
+                    self.set_def(*scope, index, old);
                 }
             }
 
             // Not lazy, so this is the answer
             if value.is_some() {
-                self.set_def(scope_node, index, value);
+                self.set_def(*scope, index, value);
                 value
             } else {
                 old
             }
         } else if nesting_level > 0 {
-            self.scope_lookup_update(scope_node, name, value, nesting_level - 1)
+            self.scope_lookup_update(scope, name, value, nesting_level - 1)
         } else {
             None
         }
     }
 
-    pub fn scope_dup(&mut self, scope_node: NodeId, lazy_loop_phis: bool) -> NodeId {
-        let clone = self.scope_mut(scope_node).clone();
+    pub fn scope_dup(&mut self, scope: ScopeId, lazy_loop_phis: bool) -> ScopeId {
+        let clone = self[scope].clone();
         let dup = self.create((Node::Scope(clone), vec![]));
-        self.add_def(dup, self.inputs[scope_node][0]); // ctrl
-        for i in 1..self.inputs[scope_node].len() {
+        let dup = self.to_scope(dup).unwrap();
+
+        self.add_def(*dup, self.inputs[scope][0]); // ctrl
+        for i in 1..self.inputs[scope].len() {
             // For lazy phis on loops we use a sentinel
             // that will trigger phi creation on update
             self.add_def(
-                dup,
+                *dup,
                 if lazy_loop_phis {
-                    Some(scope_node)
+                    Some(*scope)
                 } else {
-                    self.inputs[scope_node][i]
+                    self.inputs[scope][i]
                 },
             );
         }
         dup
     }
 
-    pub fn scope_reverse_names(&self, scope: NodeId) -> Vec<Option<String>> {
+    pub fn scope_reverse_names(&self, scope: ScopeId) -> Vec<Option<String>> {
         let mut names = vec![None; self.inputs[scope].len()];
-        let Node::Scope(this_scope) = &self[scope] else {
-            panic!("expected scope");
-        };
-        for syms in &this_scope.scopes {
+        for syms in &self[scope].scopes {
             for (name, &(index, _)) in syms {
                 debug_assert!(names[index].is_none());
                 names[index] = Some(name.clone());
@@ -161,12 +147,12 @@ impl<'t> Nodes<'t> {
         names
     }
 
-    pub fn scope_merge(&mut self, this: NodeId, that: NodeId) -> NodeId {
+    pub fn scope_merge(&mut self, this: ScopeId, that: ScopeId) -> NodeId {
         let c1 = self.inputs[this][0];
         let c2 = self.inputs[that][0];
         let region = self.create(Node::make_region(vec![None, c1, c2]));
         self.keep(region);
-        self.set_def(this, 0, Some(region)); // set ctrl
+        self.set_def(*this, 0, Some(region)); // set ctrl
 
         let names = self.scope_reverse_names(this);
 
@@ -181,17 +167,17 @@ impl<'t> Nodes<'t> {
                 let this_l = self.scope_lookup(this, &name).unwrap();
                 let that_l = self.scope_lookup(that, &name).unwrap();
 
-                let declared_ty = self.scope(this).lookup(&name).unwrap().1;
+                let declared_ty = self[this].lookup(&name).unwrap().1;
                 let phi = self.create_peepholed(Node::make_phi(
                     name,
                     declared_ty,
                     vec![Some(region), Some(this_l), Some(that_l)],
                 ));
-                self.set_def(this, i, Some(phi));
+                self.set_def(*this, i, Some(phi));
             }
         }
 
-        self.kill(that);
+        self.kill(*that);
 
         self.unkeep(region);
         self.peephole(region)
@@ -199,7 +185,7 @@ impl<'t> Nodes<'t> {
 
     /// Merge the backedge scope into this loop head scope
     /// We set the second input to the phi from the back edge (i.e. loop body)
-    pub fn scope_end_loop(&mut self, head: NodeId, back: NodeId, exit: NodeId) {
+    pub fn scope_end_loop(&mut self, head: ScopeId, back: ScopeId, exit: ScopeId) {
         let ctrl = self.inputs[head][0].unwrap();
         assert!(matches!(&self[ctrl], Node::Loop));
         assert!(Self::in_progress(&self.nodes, &self.inputs, ctrl));
@@ -207,19 +193,19 @@ impl<'t> Nodes<'t> {
         self.set_def(ctrl, 2, self.inputs[back][0]);
 
         for i in 1..self.inputs[head].len() {
-            if self.inputs[back][i] != Some(head) {
+            if self.inputs[back][i] != Some(*head) {
                 let phi = self.inputs[head][i].unwrap();
                 assert_eq!(self.inputs[phi][0], Some(ctrl));
                 assert_eq!(self.inputs[phi][2], None);
                 self.set_def(phi, 2, self.inputs[back][i]);
             }
-            if self.inputs[exit][i] == Some(head) {
+            if self.inputs[exit][i] == Some(*head) {
                 // Replace a lazy-phi on the exit path also
-                self.set_def(exit, i, self.inputs[head][i])
+                self.set_def(*exit, i, self.inputs[head][i])
             }
         }
 
-        self.kill(back); // Loop backedge is dead
+        self.kill(*back); // Loop backedge is dead
 
         // Now one-time do a useless-phi removal
         for i in 1..self.inputs[head].len() {
@@ -233,7 +219,7 @@ impl<'t> Nodes<'t> {
                     self.move_deps_to_worklist(phi);
                     if in_ != phi {
                         self.subsume(phi, in_);
-                        self.set_def(head, i, Some(in_)); // Set the update back into Scope
+                        self.set_def(*head, i, Some(in_)); // Set the update back into Scope
                     }
                 }
             }

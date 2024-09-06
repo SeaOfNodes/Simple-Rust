@@ -1,5 +1,5 @@
 use crate::datastructures::id_vec::IdVec;
-use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
+use crate::sea_of_nodes::nodes::{Node, NodeId, NodeVec, Nodes};
 use std::collections::hash_map::RawEntryMut;
 use std::hash::{BuildHasher, DefaultHasher, Hash, Hasher};
 use std::num::NonZeroU32;
@@ -54,7 +54,7 @@ impl<'t> Nodes<'t> {
     /// Two nodes are equal if they have the same inputs and the same "opcode"
     /// which means the same Java class, plus same internal parts.
     fn equals(
-        nodes: &IdVec<NodeId, Node<'t>>,
+        nodes: &NodeVec<'t>,
         inputs: &IdVec<NodeId, Vec<Option<NodeId>>>,
         this: NodeId,
         that: NodeId,

@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::num::NonZeroU32;
-use std::ops::{Index, IndexMut};
 
 pub use id::NodeId;
 pub use node::{BoolOp, Node, ProjNode};
@@ -15,11 +14,14 @@ use iter_peeps::IterPeeps;
 mod gvn;
 mod id;
 mod idealize;
+pub mod index;
 mod iter_peeps;
 mod node;
 mod peephole;
 mod print;
 mod scope;
+
+pub struct NodeVec<'t>(IdVec<NodeId, Node<'t>>);
 
 /// Using `IdVec` has two advantages over `Vec`+helper methods:
 /// 1) `self.inputs[x]` and `self.outputs[x]` can be borrowed simultaneously
@@ -28,7 +30,7 @@ mod scope;
 ///    while `self.inputs[x]` automatically decides
 pub struct Nodes<'t> {
     /// indexed by self[id]
-    nodes: IdVec<NodeId, Node<'t>>,
+    nodes: NodeVec<'t>,
 
     pub ty: IdVec<NodeId, Option<Ty<'t>>>,
 
@@ -98,7 +100,7 @@ impl<'t> Nodes<'t> {
     pub fn new(types: &'t Types<'t>) -> Self {
         let dummy = Node::Stop;
         Nodes {
-            nodes: IdVec::new(vec![dummy]),
+            nodes: NodeVec(IdVec::new(vec![dummy])),
             inputs: IdVec::new(vec![vec![]]),
             outputs: IdVec::new(vec![vec![]]),
             ty: IdVec::new(vec![None]),
@@ -116,15 +118,15 @@ impl<'t> Nodes<'t> {
         }
     }
     pub fn len(&self) -> usize {
-        self.nodes.len()
+        self.nodes.0.len()
     }
 
     pub fn create(&mut self, (node, inputs): NodeCreation<'t>) -> NodeId {
-        let id = u32::try_from(self.nodes.len())
+        let id = u32::try_from(self.len())
             .and_then(NonZeroU32::try_from)
             .map(NodeId)
             .unwrap();
-        self.nodes.push(node);
+        self.nodes.0.push(node);
         self.inputs.push(inputs);
         self.outputs.push(vec![]);
         self.ty.push(None);
@@ -431,7 +433,7 @@ impl<'t> Nodes<'t> {
     }
 
     fn in_progress(
-        nodes: &IdVec<NodeId, Node<'t>>,
+        nodes: &NodeVec<'t>,
         inputs: &IdVec<NodeId, Vec<Option<NodeId>>>,
         region: NodeId,
     ) -> bool {
@@ -486,19 +488,5 @@ impl<'t> Nodes<'t> {
 
     pub fn instanceof_region(&self, node: Option<NodeId>) -> bool {
         node.is_some_and(|n| matches!(&self[n], Node::Region { .. } | Node::Loop))
-    }
-}
-
-impl<'t> Index<NodeId> for Nodes<'t> {
-    type Output = Node<'t>;
-
-    fn index(&self, index: NodeId) -> &Self::Output {
-        &self.nodes[index]
-    }
-}
-
-impl<'t> IndexMut<NodeId> for Nodes<'t> {
-    fn index_mut(&mut self, index: NodeId) -> &mut Self::Output {
-        &mut self.nodes[index]
     }
 }

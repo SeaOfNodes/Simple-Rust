@@ -1,4 +1,5 @@
 use crate::datastructures::id::Id;
+use crate::sea_of_nodes::nodes::index::PhiId;
 use crate::sea_of_nodes::nodes::node::{MemOp, MemOpKind, PhiNode};
 use crate::sea_of_nodes::nodes::{BoolOp, Node, NodeId, Nodes};
 use crate::sea_of_nodes::types::{Int, Ty, Type};
@@ -11,7 +12,7 @@ impl<'t> Nodes<'t> {
             Node::Sub => self.idealize_sub(node),
             Node::Mul => self.idealize_mul(node),
             Node::Bool(op) => self.idealize_bool(*op, node),
-            Node::Phi(PhiNode { ty, .. }) => self.idealize_phi(node, *ty),
+            Node::Phi(PhiNode { ty, .. }) => self.idealize_phi(self.to_phi(node).unwrap(), *ty),
             Node::Stop => self.idealize_stop(node),
             Node::Return => self.idealize_return(node),
             Node::Proj(p) => self.idealize_proj(node, p.index),
@@ -177,19 +178,19 @@ impl<'t> Nodes<'t> {
         phicon
     }
 
-    fn idealize_phi(&mut self, node: NodeId, declared_ty: Ty<'t>) -> Option<NodeId> {
+    fn idealize_phi(&mut self, node: PhiId, declared_ty: Ty<'t>) -> Option<NodeId> {
         let region = self.inputs[node][0];
         if !self.instanceof_region(region) {
             return self.inputs[node][1]; // Input has collapse to e.g. starting control.
         }
-        if Self::in_progress(&self.nodes, &self.inputs, node)
+        if Self::in_progress(&self.nodes, &self.inputs, *node)
             || self.inputs[region.unwrap()].is_empty()
         {
             return None; // Input is in-progress
         }
 
         // If we have only a single unique input, become it.
-        if let live @ Some(_) = self.single_unique_input(node) {
+        if let live @ Some(_) = self.single_unique_input(*node) {
             return live;
         }
 
@@ -201,7 +202,7 @@ impl<'t> Nodes<'t> {
         if self.inputs[op].len() == 3
             && self.inputs[op][0].is_none()
             && !self.is_cfg(op)
-            && self.same_op(node)
+            && self.same_op(*node)
         {
             let n_in = &self.inputs[node];
 
@@ -217,7 +218,7 @@ impl<'t> Nodes<'t> {
                 rhss[i] = self.inputs[n_in[i].unwrap()][2];
             }
 
-            let label = self[node].phi_label().unwrap();
+            let label = &self[node].label;
             let phi_lhs = Node::make_phi(label.to_string(), declared_ty, lhss);
             let phi_rhs = Node::make_phi(label.to_string(), declared_ty, rhss);
 
@@ -516,6 +517,7 @@ impl<'t> Nodes<'t> {
         }
 
         let lphi = lphi?;
+        let lphi = self.to_phi(lphi).unwrap();
 
         // RHS is a constant or a Phi of constants
         if !matches!(&self[rhs], Node::Constant(_)) && self.pcon(Some(rhs), op).is_none() {
@@ -552,17 +554,16 @@ impl<'t> Nodes<'t> {
 
         let label = format!(
             "{}{}",
-            self[lphi].phi_label().unwrap(),
-            self[rhs].phi_label().unwrap_or("")
+            self[lphi].label,
+            self.to_phi(rhs)
+                .map(|p| self[p].label.as_str())
+                .unwrap_or("")
         );
-        let ty = match &self[lphi] {
-            Node::Phi(p) => p.ty,
-            _ => unreachable!(),
-        };
+        let ty = self[lphi].ty;
         let phi = self.create_peepholed(Node::make_phi(label, ty, ns));
 
         // Rotate needs another op, otherwise just the phi
-        Some(if lhs == lphi {
+        Some(if lhs == *lphi {
             phi
         } else {
             self.create((
