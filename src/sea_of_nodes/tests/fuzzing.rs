@@ -1,14 +1,17 @@
 use crate::datastructures::arena::DroplessArena;
 use crate::sea_of_nodes::graph_evaluator;
 use crate::sea_of_nodes::parser::Parser;
-use crate::sea_of_nodes::tests::test_print_stop;
 use crate::sea_of_nodes::types::Types;
 
 /// This used to crash with index out of bounds in the graph visualizer,
 /// because the parse_while changed the current scope but not the x_scope.
 #[test]
 fn test_xscope_after_while() {
-    test_print_stop("while(0)break;#showGraph;", "Stop[ ]");
+    let arena = DroplessArena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new("while(0)break;#showGraph;", &types);
+    let stop = parser.parse().unwrap();
+    assert_eq!(parser.print(stop), "Stop[ ]");
 }
 
 #[test]

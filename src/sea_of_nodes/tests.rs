@@ -22,15 +22,6 @@ fn test_error(source: &str, error: &str) {
     assert_eq!(Parser::new(source, &types).parse(), Err(error.to_string()),);
 }
 
-fn test_print_stop(source: &str, expected: &str) {
-    let arena = DroplessArena::new();
-    let types = Types::new(&arena);
-    let mut parser = Parser::new(source, &types);
-    let stop = parser.parse().unwrap();
-
-    assert_eq!(parser.print(stop), expected);
-}
-
 impl<'t> Nodes<'t> {
     pub fn ret_ctrl(&self, stop: NodeId) -> &Node<'t> {
         assert!(matches!(&self[stop], Node::Stop));

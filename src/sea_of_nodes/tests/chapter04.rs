@@ -1,37 +1,61 @@
 use crate::datastructures::arena::DroplessArena;
 use crate::sea_of_nodes::nodes::Node;
 use crate::sea_of_nodes::parser::Parser;
-use crate::sea_of_nodes::tests::{test_error, test_print_stop};
+use crate::sea_of_nodes::tests::test_error;
 use crate::sea_of_nodes::types::Types;
 
 #[test]
 fn test_peephole() {
-    test_print_stop("return 1+arg+2; #showGraph;", "return (arg+3);");
+    let arena = DroplessArena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new("return 1+arg+2; #showGraph;", &types);
+    let stop = parser.parse().unwrap();
+    assert_eq!(parser.print(stop), "return (arg+3);");
 }
 
 #[test]
 fn test_peephole_2() {
-    test_print_stop("return (1+arg)+2;", "return (arg+3);");
+    let arena = DroplessArena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new("return (1+arg)+2;", &types);
+    let stop = parser.parse().unwrap();
+    assert_eq!(parser.print(stop), "return (arg+3);");
 }
 
 #[test]
 fn test_add_0() {
-    test_print_stop("return 0+arg;", "return arg;");
+    let arena = DroplessArena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new("return 0+arg;", &types);
+    let stop = parser.parse().unwrap();
+    assert_eq!(parser.print(stop), "return arg;");
 }
 
 #[test]
 fn test_add_add_mul() {
-    test_print_stop("return arg+0+arg;", "return (arg*2);");
+    let arena = DroplessArena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new("return arg+0+arg;", &types);
+    let stop = parser.parse().unwrap();
+    assert_eq!(parser.print(stop), "return (arg*2);");
 }
 
 #[test]
 fn test_peephole_3() {
-    test_print_stop("return 1+arg+2+arg+3; #showGraph;", "return ((arg*2)+6);");
+    let arena = DroplessArena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new("return 1+arg+2+arg+3; #showGraph;", &types);
+    let stop = parser.parse().unwrap();
+    assert_eq!(parser.print(stop), "return ((arg*2)+6);");
 }
 
 #[test]
 fn test_mul_1() {
-    test_print_stop("return 1*arg;", "return arg;");
+    let arena = DroplessArena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new("return 1*arg;", &types);
+    let stop = parser.parse().unwrap();
+    assert_eq!(parser.print(stop), "return arg;");
 }
 
 #[test]
@@ -69,34 +93,55 @@ fn test_constant_arg() {
 
 #[test]
 fn test_comp_eq() {
-    test_print_stop("return 3==3; #showGraph;", "return 1;");
+    let arena = DroplessArena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new("return 3==3; #showGraph;", &types);
+    let stop = parser.parse().unwrap();
+    assert_eq!(parser.print(stop), "return 1;");
 }
 
 #[test]
 fn test_comp_eq_2() {
-    test_print_stop("return 3==4; #showGraph;", "return 0;");
+    let arena = DroplessArena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new("return 3==4; #showGraph;", &types);
+    let stop = parser.parse().unwrap();
+    assert_eq!(parser.print(stop), "return 0;");
 }
 #[test]
 fn test_comp_neq() {
-    test_print_stop("return 3!=3; #showGraph;", "return 0;");
+    let arena = DroplessArena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new("return 3!=3; #showGraph;", &types);
+    let stop = parser.parse().unwrap();
+    assert_eq!(parser.print(stop), "return 0;");
 }
 
 #[test]
 fn test_comp_neq_2() {
-    test_print_stop("return 3!=4; #showGraph;", "return 1;");
+    let arena = DroplessArena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new("return 3!=4; #showGraph;", &types);
+    let stop = parser.parse().unwrap();
+    assert_eq!(parser.print(stop), "return 1;");
 }
 
 #[test]
 fn test_bug_1() {
-    test_print_stop(
-        "int a=arg+1; int b=a; b=1; return a+2; #showGraph;",
-        "return (arg+3);",
-    );
+    let arena = DroplessArena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new("int a=arg+1; int b=a; b=1; return a+2; #showGraph;", &types);
+    let stop = parser.parse().unwrap();
+    assert_eq!(parser.print(stop), "return (arg+3);");
 }
 
 #[test]
 fn test_bug_2() {
-    test_print_stop("int a=arg+1; a=a; return a; #showGraph;", "return (arg+1);");
+    let arena = DroplessArena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new("int a=arg+1; a=a; return a; #showGraph;", &types);
+    let stop = parser.parse().unwrap();
+    assert_eq!(parser.print(stop), "return (arg+1);");
 }
 
 #[test]
@@ -106,5 +151,9 @@ fn test_bug_3() {
 
 #[test]
 fn test_bug_4() {
-    test_print_stop("return -arg;", "return (-arg);");
+    let arena = DroplessArena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new("return -arg;", &types);
+    let stop = parser.parse().unwrap();
+    assert_eq!(parser.print(stop), "return (-arg);");
 }

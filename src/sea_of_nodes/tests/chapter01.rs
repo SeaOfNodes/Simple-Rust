@@ -1,7 +1,7 @@
 use crate::datastructures::arena::DroplessArena;
 use crate::sea_of_nodes::nodes::Node;
 use crate::sea_of_nodes::parser::Parser;
-use crate::sea_of_nodes::tests::{test_error, test_print_stop};
+use crate::sea_of_nodes::tests::test_error;
 use crate::sea_of_nodes::types::{Int, Type, Types};
 
 #[test]
@@ -62,7 +62,11 @@ fn test_bad2() {
 
 #[test]
 fn test_not_bad3() {
-    test_print_stop("return --12;", "return 12;");
+    let arena = DroplessArena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new("return --12;", &types);
+    let stop = parser.parse().unwrap();
+    assert_eq!(parser.print(stop), "return 12;");
 }
 
 #[test]
@@ -72,7 +76,11 @@ fn test_bad4() {
 
 #[test]
 fn test_not_bad5() {
-    test_print_stop("return -100;", "return -100;");
+    let arena = DroplessArena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new("return -100;", &types);
+    let stop = parser.parse().unwrap();
+    assert_eq!(parser.print(stop), "return -100;");
 }
 
 #[test]
