@@ -49,7 +49,7 @@ fn test_zero() {
 
 #[test]
 fn test_bad1() {
-    test_error("ret", "Syntax error, expected =: ");
+    test_error("ret", "Undefined name 'ret'");
 }
 
 #[test]
@@ -85,7 +85,7 @@ fn test_not_bad5() {
 
 #[test]
 fn test_bad6() {
-    test_error("return100", "Syntax error, expected =: ");
+    test_error("return100", "Undefined name 'return100'");
 }
 
 #[test]

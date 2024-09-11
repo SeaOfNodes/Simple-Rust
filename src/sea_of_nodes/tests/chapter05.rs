@@ -23,7 +23,7 @@ return a;",
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
-    assert_eq!(parser.print(stop), "return Phi(Region17,(arg+2),(arg-3));");
+    assert_eq!(parser.print(stop), "return Phi(Region18,(arg+2),(arg-3));");
 }
 
 #[test]
@@ -80,7 +80,7 @@ return a+b;",
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
-    assert_eq!(parser.print(stop), "return ((arg*2)+Phi(Region20,2,3));");
+    assert_eq!(parser.print(stop), "return ((arg*2)+Phi(Region21,2,3));");
 }
 #[test]
 fn test_if_merge2() {
@@ -102,7 +102,7 @@ return a+b;",
     parser.show_graph();
     assert_eq!(
         parser.print(stop),
-        "return ((Phi(Region31,(arg*2),arg)+arg)+Phi(Region,4,5));"
+        "return ((Phi(Region32,(arg*2),arg)+arg)+Phi(Region,4,5));"
     );
 }
 #[test]
@@ -129,7 +129,7 @@ return a;
     parser.iterate(stop);
     assert_eq!(
         parser.print(stop),
-        "return Phi(Region33,Phi(Region21,2,3),Phi(Region31,4,5));"
+        "return Phi(Region36,Phi(Region22,2,3),Phi(Region34,4,5));"
     );
 }
 #[test]
@@ -151,7 +151,7 @@ return arg+a+b;
     let stop = parser.parse().unwrap();
     assert_eq!(
         parser.print(stop),
-        "return ((arg+Phi(Region13,1,0))+Phi(Region22,2,0));"
+        "return ((arg+Phi(Region13,1,0))+Phi(Region28,2,0));"
     );
 }
 #[test]
@@ -227,6 +227,6 @@ fn test_keyword2() {
 fn test_keyword3() {
     test_error(
         "int a=1; ififif(arg)inta=2;return a;",
-        "Syntax error, expected =: (",
+        "Undefined name 'ififif'",
     );
 }

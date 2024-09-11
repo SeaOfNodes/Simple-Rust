@@ -91,7 +91,7 @@ return b;",
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
-    assert_eq!(parser.print(stop), "return Phi(Region32,42,5);");
+    assert_eq!(parser.print(stop), "return Phi(Region37,42,5);");
 }
 
 #[test]
@@ -116,7 +116,7 @@ return b;",
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
-    assert_eq!(parser.print(stop), "return Phi(Region29,2,5);");
+    assert_eq!(parser.print(stop), "return Phi(Region30,2,5);");
 }
 
 #[test]
@@ -196,7 +196,7 @@ fn test_merge3_peephole() {
     parser.show_graph();
     assert_eq!(
         parser.print(stop),
-        "return Phi(Region37,3,Phi(Region35,4,5));"
+        "return Phi(Region41,3,Phi(Region39,4,5));"
     );
 }
 
@@ -289,7 +289,7 @@ fn test_demo2_non_const() {
     parser.show_graph();
     assert_eq!(
         parser.print(stop),
-        "return (Phi(Region35,Phi(Region22,2,3),0)+Phi(Region,3,1));"
+        "return (Phi(Region36,Phi(Region23,2,3),0)+Phi(Region,3,1));"
     );
 }
 

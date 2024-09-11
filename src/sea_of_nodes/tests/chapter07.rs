@@ -51,7 +51,7 @@ return a;
     parser.show_graph();
     assert_eq!(
         parser.print(stop),
-        "return Phi(Region22,1,Phi(Loop11,1,(Phi_a+1)));"
+        "return Phi(Region24,1,Phi(Loop13,1,(Phi_a+1)));"
     );
 }
 
@@ -106,7 +106,7 @@ return b;
     parser.show_graph();
     assert_eq!(
         parser.print(stop),
-        "return Phi(Loop8,2,Phi(Region26,Phi_b,4));"
+        "return Phi(Loop8,2,Phi(Region27,Phi_b,4));"
     );
     assert_ret_ctrl_is_proj(&parser.nodes, stop);
 
@@ -136,7 +136,7 @@ return b;
     parser.show_graph();
     assert_eq!(
         parser.print(stop),
-        "return Phi(Loop8,2,(Phi(Region26,Phi_b,4)+1));"
+        "return Phi(Loop8,2,(Phi(Region27,Phi_b,4)+1));"
     );
     assert_ret_ctrl_is_proj(&parser.nodes, stop);
     println!("{}", ir_printer::pretty_print(&parser.nodes, stop, 99));
