@@ -38,9 +38,9 @@ pub struct Types<'a> {
     pub ty_top: Ty<'a>,
     pub ty_ctrl: Ty<'a>,
     pub ty_xctrl: Ty<'a>,
-    pub ty_zero: Ty<'a>,
-    pub ty_one: Ty<'a>,
-    pub ty_two: Ty<'a>,
+    pub ty_int_zero: Ty<'a>,
+    pub ty_int_one: Ty<'a>,
+    pub ty_int_two: Ty<'a>,
     pub ty_int_bot: Ty<'a>,
     pub ty_int_top: Ty<'a>,
     pub ty_if_both: Ty<'a>,
@@ -73,9 +73,9 @@ impl<'a> Types<'a> {
             ty_top: intern(Type::Top),
             ty_ctrl,
             ty_xctrl,
-            ty_zero: intern(Type::Int(Int::Constant(0))),
-            ty_one: intern(Type::Int(Int::Constant(1))),
-            ty_two: intern(Type::Int(Int::Constant(2))),
+            ty_int_zero: intern(Type::Int(Int::Constant(0))),
+            ty_int_one: intern(Type::Int(Int::Constant(1))),
+            ty_int_two: intern(Type::Int(Int::Constant(2))),
             ty_int_bot: intern(Type::Int(Int::Bot)),
             ty_int_top: intern(Type::Int(Int::Top)),
             ty_if_both: intern(Type::Tuple {
@@ -95,19 +95,19 @@ impl<'a> Types<'a> {
             ty_memory_bot: intern(Type::Memory(Mem::Bot)),
             ty_memory_top: intern(Type::Memory(Mem::Top)),
             ty_pointer_bot: intern(Type::Pointer(MemPtr {
-                to: Some(ty_struct_bot),
+                to: ty_struct_bot,
                 nil: true,
             })),
             ty_pointer_top: intern(Type::Pointer(MemPtr {
-                to: Some(ty_struct_top),
+                to: ty_struct_top,
                 nil: false,
             })),
             ty_pointer_null: intern(Type::Pointer(MemPtr {
-                to: Some(ty_struct_top),
+                to: ty_struct_top,
                 nil: true,
             })),
             ty_pointer_void: intern(Type::Pointer(MemPtr {
-                to: Some(ty_struct_bot),
+                to: ty_struct_bot,
                 nil: false,
             })),
             interner,
@@ -116,9 +116,9 @@ impl<'a> Types<'a> {
 
     pub fn get_int(&self, value: i64) -> Ty<'a> {
         match value {
-            0 => self.ty_zero,
-            1 => self.ty_one,
-            2 => self.ty_two,
+            0 => self.ty_int_zero,
+            1 => self.ty_int_one,
+            2 => self.ty_int_two,
             _ => self.interner.intern(Type::Int(Int::Constant(value))),
         }
     }
@@ -133,14 +133,18 @@ impl<'a> Types<'a> {
         self.interner.intern(Type::Tuple { types })
     }
 
+    pub fn get_str(&self, name: &str) -> &'a str {
+        self.interner.intern_str(name)
+    }
+
     pub fn get_struct(&self, name: &'a str, fields: &[(&'a str, Ty<'a>)]) -> Ty<'a> {
         let fields = self.interner.arena.alloc_slice_copy(fields);
         self.interner
             .intern(Type::Struct(Struct::Struct { name, fields }))
     }
 
-    pub fn get_pointer(&self, to: Option<Ty<'a>>, nil: bool) -> Ty<'a> {
-        debug_assert!(matches!(to.as_deref(), None | Some(Type::Struct(_))));
+    pub fn get_pointer(&self, to: Ty<'a>, nil: bool) -> Ty<'a> {
+        debug_assert!(matches!(*to, Type::Struct(_)));
         self.interner.intern(Type::Pointer(MemPtr { to, nil }))
     }
 
@@ -204,10 +208,9 @@ impl<'a> Types<'a> {
             },
 
             // Pointer sub-lattice
-            (Type::Pointer(pa), Type::Pointer(pb)) => self.get_pointer(
-                Some(self.meet(pa.to.unwrap(), pb.to.unwrap())),
-                pa.nil | pb.nil,
-            ),
+            (Type::Pointer(pa), Type::Pointer(pb)) => {
+                self.get_pointer(self.meet(pa.to, pb.to), pa.nil | pb.nil)
+            }
 
             // Memory sub-lattice
             (Type::Memory(ma), Type::Memory(mb)) => match (ma, mb) {
@@ -262,7 +265,7 @@ impl<'a> Types<'a> {
                 }
             },
             Type::Pointer(p) => {
-                let to = p.to.map(|to| self.dual(to));
+                let to = self.dual(p.to);
                 self.get_pointer(to, !p.nil)
             }
             Type::Memory(m) => match m {
@@ -295,12 +298,12 @@ impl<'a> Types<'a> {
                     self.get_struct(name, &fields)
                 }
             },
-            Type::Pointer(MemPtr { to: None, .. }) => self.ty_pointer_bot,
-            Type::Pointer(MemPtr { to: Some(to), .. }) => {
-                let to = self.glb(to);
-                self.get_pointer(Some(to), true)
-            }
+            Type::Pointer(MemPtr { to, .. }) => self.get_pointer(self.glb(to), true),
             Type::Memory(_) => self.ty_memory_bot,
         }
+    }
+
+    pub fn make_init(&self, t: Ty<'a>) -> Ty<'a> {
+        todo!("{t}")
     }
 }

@@ -1,7 +1,8 @@
 use crate::sea_of_nodes::graph_visualizer;
 use crate::sea_of_nodes::nodes::index::ScopeId;
 use crate::sea_of_nodes::nodes::{BoolOp, Node, NodeCreation, NodeId, Nodes, ScopeNode};
-use crate::sea_of_nodes::types::{Ty, Types};
+use crate::sea_of_nodes::types::{Struct, Ty, Type, Types};
+use std::collections::HashMap;
 
 /// Converts a Simple source program to the Sea of Nodes intermediate representation in one pass.
 pub struct Parser<'s, 't> {
@@ -26,6 +27,9 @@ pub struct Parser<'s, 't> {
 
     continue_scope: Option<ScopeId>,
     break_scope: Option<ScopeId>,
+
+    name_to_type: HashMap<&'t str, Ty<'t>>,
+
     pub disable_show_graph_println: bool,
 }
 
@@ -35,7 +39,18 @@ type PResult<T> = Result<T, ParseErr>;
 pub fn is_keyword(s: &str) -> bool {
     matches!(
         s,
-        "break" | "continue" | "else" | "false" | "if" | "int" | "return" | "true" | "while"
+        "break"
+            | "continue"
+            | "else"
+            | "false"
+            | "if"
+            | "int"
+            | "new"
+            | "null"
+            | "return"
+            | "struct"
+            | "true"
+            | "while"
     )
 }
 
@@ -54,7 +69,7 @@ impl<'s, 't> Parser<'s, 't> {
         let args = types.get_tuple_from_array([types.ty_ctrl, arg]);
         let start = nodes.create(Node::make_start(args));
         nodes.ty[start] = Some(args);
-        nodes.start = start;
+        nodes.start = nodes.to_start(start).unwrap();
 
         let stop = nodes.create(Node::make_stop());
         nodes.ty[stop] = Some(types.ty_bot); // differs from java; ensures that it isn't dead
@@ -71,6 +86,7 @@ impl<'s, 't> Parser<'s, 't> {
             x_scopes: vec![],
             continue_scope: None,
             break_scope: None,
+            name_to_type: HashMap::new(),
             disable_show_graph_println: false,
         }
     }
@@ -155,7 +171,7 @@ impl<'s, 't> Parser<'s, 't> {
         if self.matchx("return") {
             self.parse_return()
         } else if self.matchx("int") {
-            self.parse_decl()
+            self.parse_decl(self.types.ty_int_bot)
         } else if self.match_("{") {
             self.parse_block()?;
             self.require("}")
@@ -167,12 +183,67 @@ impl<'s, 't> Parser<'s, 't> {
             self.parse_break()
         } else if self.matchx("continue") {
             self.parse_continue()
+        } else if self.matchx("struct") {
+            self.parse_struct()
         } else if self.matchx("#showGraph") {
             self.show_graph();
             self.require(";")
+        } else if self.matchx(";") {
+            Ok(()) // Empty statement
         } else {
+            // declarations of vars with struct type are handled in parseExpressionStatement due
+            // to ambiguity
             self.parse_expression_statement()
         }
+    }
+
+    /// Parse a struct field.
+    /// <pre>
+    ///     int IDENTIFIER ;
+    /// </pre>
+    fn parse_field(&mut self) -> PResult<(&'t str, Ty<'t>)> {
+        if self.matchx("int") {
+            let name = self.types.get_str(self.require_id()?);
+            self.require(";")?;
+            return Ok((name, self.types.ty_int_bot));
+        }
+        Err("A field type is expected, only type 'int' is supported at present".to_string())
+    }
+
+    /// Parse a struct declaration, and return the following statement.
+    /// Only allowed in top level scope.
+    /// Structs cannot be redefined.
+    ///
+    /// @return The statement following the struct
+
+    fn parse_struct(&mut self) -> PResult<()> {
+        if self.x_scopes.len() > 1 {
+            return Err("struct declarations can only appear in top level scope".to_string());
+        }
+        let type_name = self.types.get_str(self.require_id()?);
+        if self.name_to_type.contains_key(type_name) {
+            return Err(format!("struct '{type_name}' cannot be redefined"));
+        }
+
+        let mut fields: Vec<(&str, Ty)> = vec![];
+        self.require("{")?;
+        while !self.peek('}') && !self.lexer.is_eof() {
+            let field = self.parse_field()?;
+            if fields.iter().find(|&&f| f.0 == field.0).is_some() {
+                return Err(format!(
+                    "Field '{}:{}' already defined in struct '{type_name}'",
+                    field.0, field.1
+                ));
+            }
+            fields.push(field);
+        }
+        self.require("}")?;
+
+        // Build and install the TypeStruct
+        let ts = self.types.get_struct(type_name, &fields);
+        self.name_to_type.insert(type_name, ts); // Insert the struct name in the collection of all struct names
+        self.nodes.add_mem_proj(self.nodes.start, ts, self.scope); // Insert memory edges
+        self.parse_statement()
     }
 
     /// <pre>
@@ -327,6 +398,7 @@ impl<'s, 't> Parser<'s, 't> {
         // Parse predicate
         let pred = self.parse_expression()?;
         self.require(")")?;
+        self.nodes.keep(pred);
 
         // IfNode takes current control and predicate
         let if_ctrl = self.ctrl();
@@ -349,6 +421,7 @@ impl<'s, 't> Parser<'s, 't> {
         // Parse the true side
         self.nodes.unkeep(if_true);
         self.set_ctrl(if_true);
+        self.nodes.scope_upcast(self.scope, if_true, pred, false); // Up-cast predicate
         self.parse_statement()?;
         let true_scope = self.scope;
 
@@ -357,9 +430,11 @@ impl<'s, 't> Parser<'s, 't> {
         self.nodes.unkeep(if_false);
         self.set_ctrl(if_false);
         if self.matchx("else") {
+            self.nodes.scope_upcast(self.scope, if_false, pred, true); // Up-cast predicate
             self.parse_statement()?;
             false_scope = self.scope;
         }
+        self.nodes.unkeep(pred);
 
         if self.nodes.inputs[true_scope].len() != n_defs
             || self.nodes.inputs[false_scope].len() != n_defs
@@ -387,6 +462,17 @@ impl<'s, 't> Parser<'s, 't> {
         self.require(";")?;
         let ctrl = self.ctrl();
         let ret = self.peephole(Node::make_return(ctrl, expr));
+
+        // We lookup memory slices by the naming convention that they start with $
+        // We could also use implicit knowledge that all memory projects are at offset >= 2
+        let names = self.nodes.scope_reverse_names(self.scope);
+        for name in names.into_iter().map(Option::unwrap) {
+            if name.starts_with("$") && name == "$ctrl" {
+                let v = self.nodes.scope_lookup(self.scope, &name).unwrap();
+                self.nodes.add_def(ret, Some(v));
+            }
+        }
+
         self.nodes.add_def(self.stop, Some(ret));
         let ctrl = self.peephole(Node::make_constant(self.nodes.start, self.types.ty_xctrl));
         self.set_ctrl(ctrl);
@@ -415,33 +501,111 @@ impl<'s, 't> Parser<'s, 't> {
         self.nodes.print(Some(node)).to_string()
     }
 
+    /// Parses an expression statement or a declaration statement where type is a struct
+    ///
     /// <pre>
-    ///      name '=' expression ';'
+    ///      name;         // Error
+    /// type name;         // Define name with default initial value
+    /// type name = expr;  // Define name with given   initial value
+    ///      name = expr;  // Reassign existing
+    ///             expr   // Something else
     /// </pre>
+    ////
     fn parse_expression_statement(&mut self) -> PResult<()> {
+        let old = self.lexer.remaining;
+        let t = self.parse_type();
         let name = self.require_id()?;
-        self.require("=")?;
-        let expr = self.parse_expression()?;
-        self.require(";")?;
 
-        match self.nodes.scope_update(self.scope, name, expr) {
-            Ok(_) => Ok(()),
-            Err(()) => Err(format!("Undefined name '{name}'")),
+        let expr: NodeId;
+        if self.match_(";") {
+            // Assign a default value
+            if let Some(t) = t {
+                let init = self.types.make_init(t);
+                expr = self.peephole(Node::make_constant(self.nodes.start, init))
+            } else {
+                // No type and no expr is an error
+                return Err("expression".to_string());
+            }
+        } else if self.match_("=") {
+            // Assign "= expr;"
+            expr = self.parse_expression()?;
+            self.require(";")?;
+        } else {
+            // Neither, so just a normal expression parse
+            self.lexer.remaining = old;
+            self.parse_expression()?;
+            return self.require(";");
+        };
+
+        // Defining a new variable vs updating an old one
+        let t = if let Some(t) = t {
+            if self
+                .nodes
+                .scope_define(self.scope, name.to_string(), t, expr)
+                .is_err()
+            {
+                return Err(format!("Redefining name '{name}'"));
+            }
+            t
+        } else if let Some((_, t)) = self.nodes[self.scope].lookup(name).copied() {
+            self.nodes.scope_update(self.scope, name, expr).unwrap();
+            t
+        } else {
+            return Err(format!("Undefined name '{name}'"));
+        };
+
+        let expr_ty = self.nodes.ty[expr].unwrap();
+        if !self.types.isa(expr_ty, t) {
+            return Err(format!(
+                "Type {} is not of declared type {}",
+                expr_ty.str(),
+                t.str()
+            ));
         }
+        Ok(())
     }
 
+    fn parse_type(&mut self) -> Option<Ty<'t>> {
+        let old = self.lexer.remaining;
+        let tname = self.lexer.match_id()?;
+        if tname == "int" {
+            Some(self.types.ty_int_bot)
+        } else if let Some(&obj) = self.name_to_type.get(tname) {
+            let nil = self.match_("?");
+            Some(self.types.get_pointer(obj, nil))
+        } else {
+            // Not a type; unwind the parse
+            self.lexer.remaining = old;
+            None
+        }
+    }
     /// <pre>
-    ///     'int' name = expression ';'
+    ///     type name = expression ';'
     /// </pre>
-    fn parse_decl(&mut self) -> PResult<()> {
-        // Type is 'int' for now
+    fn parse_decl(&mut self, t: Ty<'t>) -> PResult<()> {
         let name = self.require_id()?;
-        self.require("=")?;
-        let expr = self.parse_expression()?;
+        let expr = if self.peek(';') {
+            // Assign a null value
+            let v = self.types.make_init(t);
+            self.peephole(Node::make_constant(self.nodes.start, v))
+        } else {
+            // Assign "= expr;"
+            self.require("=")?;
+            self.parse_expression()?
+        };
         self.require(";")?;
 
+        let expr_ty = self.nodes.ty[expr].unwrap();
+        if !self.types.isa(expr_ty, t) {
+            return Err(format!(
+                "Type {} is not of declared type {}",
+                expr_ty.str(),
+                t.str()
+            ));
+        }
+
         self.nodes
-            .scope_define(self.scope, name.to_string(), todo!(), expr)
+            .scope_define(self.scope, name.to_string(), t, expr)
             .map_err(|()| format!("Redefining name '{name}'"))
     }
 
@@ -534,19 +698,23 @@ impl<'s, 't> Parser<'s, 't> {
     }
 
     /// <pre>
-    ///     unaryExpr : ('-') unaryExpr | primaryExpr
+    ///     unaryExpr : ('-') | '!') unaryExpr | postfixExpr | primaryExpr
     /// </pre>
     fn parse_unary(&mut self) -> PResult<NodeId> {
         if self.match_("-") {
             self.parse_unary()
                 .map(|expr| self.peephole(Node::make_minus(expr)))
+        } else if self.match_("!") {
+            self.parse_unary()
+                .map(|expr| self.peephole(Node::make_not(expr)))
         } else {
-            self.parse_primary()
+            let primary = self.parse_primary()?;
+            self.parse_postfix(primary)
         }
     }
 
     /// <pre>
-    ///     primaryExpr : integerLiteral | Identifier | true | false | '(' expression ')'
+    ///     primaryExpr : integerLiteral | Identifier | true | false | null | new Identifier | '(' expression ')'
     /// </pre>
     fn parse_primary(&mut self) -> PResult<NodeId> {
         if self.lexer.peek_number() {
@@ -556,9 +724,25 @@ impl<'s, 't> Parser<'s, 't> {
             self.require(")")?;
             Ok(e)
         } else if self.matchx("true") {
-            Ok(self.peephole(Node::make_constant(self.nodes.start, self.types.ty_one)))
+            Ok(self.peephole(Node::make_constant(self.nodes.start, self.types.ty_int_one)))
         } else if self.matchx("false") {
-            Ok(self.peephole(Node::make_constant(self.nodes.start, self.types.ty_zero)))
+            Ok(self.peephole(Node::make_constant(
+                self.nodes.start,
+                self.types.ty_int_zero,
+            )))
+        } else if self.matchx("null") {
+            Ok(self.peephole(Node::make_constant(
+                self.nodes.start,
+                self.types.ty_pointer_null,
+            )))
+        } else if self.matchx("new") {
+            let ty_name = self.require_id()?;
+            let ty = self.name_to_type.get(ty_name);
+            if let Some(ty) = ty {
+                Ok(self.new_struct(*ty))
+            } else {
+                Err(format!("Unknown struct type '{ty_name}'"))
+            }
         } else if let Some(name) = self.lexer.match_id() {
             self.nodes
                 .scope_lookup(self.scope, name)
@@ -566,6 +750,125 @@ impl<'s, 't> Parser<'s, 't> {
         } else {
             Err(self.error_syntax("an identifier or expression"))
         }
+    }
+
+    /// Return a NewNode but also generate instructions to initialize it.
+    fn new_struct(&mut self, obj: Ty<'t>) -> NodeId {
+        let ptr_ty = self.types.get_pointer(obj, false);
+        let ctrl = self.ctrl();
+        let n = self.peephole(Node::make_new(ptr_ty, ctrl));
+        self.nodes.keep(n);
+
+        let init_value = self.peephole(Node::make_constant(
+            self.nodes.start,
+            self.types.ty_int_zero,
+        ));
+
+        let Type::Struct(Struct::Struct { name, fields }) = *obj else {
+            unreachable!()
+        };
+
+        let mut alias = *self.nodes[self.nodes.start].alias_starts.get(name).unwrap();
+        for &(fname, _) in fields {
+            let mem_slice = self.mem_alias_lookup(alias).unwrap();
+            let store = self.peephole(Node::make_store(
+                fname.to_string(),
+                alias,
+                [mem_slice, n, init_value],
+            ));
+            self.mem_alias_update(alias, store).unwrap();
+            alias += 1;
+        }
+        self.nodes.unkeep(n);
+        n
+    }
+
+    /// We set up memory aliases by inserting special vars in the scope these
+    /// variables are prefixed by $ so they cannot be referenced in Simple code.
+    /// Using vars has the benefit that all the existing machinery of scoping
+    /// and phis work as expected
+    fn mem_alias_lookup(&mut self, alias: u32) -> Result<NodeId, ()> {
+        self.nodes.scope_lookup(self.scope, &Self::mem_name(alias))
+    }
+
+    fn mem_alias_update(&mut self, alias: u32, st: NodeId) -> Result<NodeId, ()> {
+        self.nodes
+            .scope_update(self.scope, &Self::mem_name(alias), st)
+    }
+
+    fn mem_name(alias: u32) -> String {
+        format!("${alias}")
+    }
+
+    /// Parse postfix expression. For now this is just a field
+    /// expression, but in future could be array index too.
+    ///
+    /// <pre>
+    ///     expr ('.' IDENTIFIER)* [ = expr ]
+    /// </pre>
+    fn parse_postfix(&mut self, expr: NodeId) -> PResult<NodeId> {
+        if !self.match_(".") {
+            return Ok(expr);
+        }
+
+        let expr_ty = self.nodes.ty[expr].unwrap();
+        let Type::Pointer(ptr) = *expr_ty else {
+            return Err(format!(
+                "Expected struct reference but got {}",
+                expr_ty.str()
+            ));
+        };
+        let Type::Struct(Struct::Struct {
+            name: sname,
+            fields,
+        }) = *ptr.to
+        else {
+            unreachable!()
+        };
+
+        let name = self.types.get_str(self.require_id()?);
+
+        let Some(idx) = fields.iter().position(|&f| f.0 == name) else {
+            return Err(format!(
+                "Accessing unknown field '{name}' from '{}'",
+                expr_ty.str()
+            ));
+        };
+
+        let alias = self.nodes[self.nodes.start]
+            .alias_starts
+            .get(sname)
+            .unwrap()
+            + idx as u32;
+
+        let old = self.lexer.remaining;
+        if self.match_("=") {
+            // Disambiguate "obj.fld==x" boolean test from "obj.fld=x" field assignment
+
+            if self.peek('=') {
+                self.lexer.remaining = old;
+            } else {
+                let val = self.parse_expression()?;
+                let mem_slice = self.mem_alias_lookup(alias).unwrap();
+                let store = self.peephole(Node::make_store(
+                    name.to_string(),
+                    alias,
+                    [mem_slice, expr, val],
+                ));
+                self.mem_alias_update(alias, store).unwrap();
+                return Ok(expr); // "obj.a = expr" returns the expression while updating memory
+            }
+        }
+
+        let declared_type = fields[idx].1;
+        let mem_slice = self.mem_alias_lookup(alias).unwrap();
+        let load = self.peephole(Node::make_load(
+            name.to_string(),
+            alias,
+            declared_type,
+            [mem_slice, expr],
+        ));
+        self.parse_postfix(load)
     }
 
     /// <pre>
@@ -586,7 +889,8 @@ impl<'s, 't> Parser<'s, 't> {
         self.lexer.match_(prefix)
     }
 
-    /// Match must be "exact", not be followed by more id letters
+    /// Match must be exact and not followed by more ID characters.
+    /// Prevents identifier "ifxy" from matching an "if" statement.
     fn matchx(&mut self, prefix: &str) -> bool {
         self.lexer.matchx(prefix)
     }
@@ -698,11 +1002,13 @@ impl<'a> Lexer<'a> {
         self.peek() == Some(c)
     }
 
-    fn match_id(&mut self) -> Option<&'a str> {
+    fn peek_is_id(&mut self) -> bool {
         self.skip_whitespace();
-        self.peek()
-            .is_some_and(is_id_start)
-            .then_some(self.parse_id())
+        self.peek().is_some_and(is_id_start)
+    }
+
+    fn match_id(&mut self) -> Option<&'a str> {
+        self.peek_is_id().then(|| self.parse_id())
     }
 
     // used for errors

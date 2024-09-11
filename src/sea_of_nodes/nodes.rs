@@ -2,12 +2,13 @@ use std::collections::HashMap;
 use std::num::NonZeroU32;
 
 pub use id::NodeId;
-pub use node::{BoolOp, Node, ProjNode};
+pub use node::{BoolOp, Node, ProjNode, StartNode};
 pub use scope::ScopeNode;
 
 use crate::datastructures::id_set::IdSet;
 use crate::datastructures::id_vec::IdVec;
 use crate::sea_of_nodes::nodes::gvn::GvnEntry;
+use crate::sea_of_nodes::nodes::index::{ScopeId, StartId};
 use crate::sea_of_nodes::types::{Ty, Types};
 use iter_peeps::IterPeeps;
 
@@ -68,7 +69,7 @@ pub struct Nodes<'t> {
     pub disable_peephole: bool,
 
     /// the start node to be used for creating constants.
-    pub start: NodeId,
+    pub start: StartId,
 
     /// Creating nodes such as constants and computing peepholes requires
     /// interning new types and operations such as meet and join.
@@ -107,7 +108,7 @@ impl<'t> Nodes<'t> {
             deps: IdVec::new(vec![vec![]]),
             idepth: IdVec::new(vec![0]),
             disable_peephole: false,
-            start: NodeId::DUMMY,
+            start: StartId::DUMMY,
             types,
             iter_peeps: IterPeeps::new(),
             iter_cnt: 0,
@@ -488,5 +489,9 @@ impl<'t> Nodes<'t> {
 
     pub fn instanceof_region(&self, node: Option<NodeId>) -> bool {
         node.is_some_and(|n| matches!(&self[n], Node::Region { .. } | Node::Loop))
+    }
+
+    pub fn add_mem_proj(&mut self, start: StartId, ty: Ty<'t>, scope: ScopeId) {
+        todo!("{} {ty} {}", start.0, scope.0)
     }
 }

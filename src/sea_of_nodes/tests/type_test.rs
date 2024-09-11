@@ -32,15 +32,15 @@ fn test_type_ad_hoc() {
     assert_eq!(m1, types.dual(m1));
     assert_eq!(types.ty_memory_top, types.dual(types.glb(m1)));
 
-    let ptr1 = types.get_pointer(Some(s1), false);
-    assert!(matches!(*ptr1, Type::Pointer(MemPtr {to: Some(to), nil: false}) if to == s1));
-    let ptr2 = types.get_pointer(Some(s2), false);
-    assert!(matches!(*ptr2, Type::Pointer(MemPtr {to: Some(to), nil: false}) if to == s2));
+    let ptr1 = types.get_pointer(s1, false);
+    assert!(matches!(*ptr1, Type::Pointer(MemPtr {to, nil: false}) if to == s1));
+    let ptr2 = types.get_pointer(s2, false);
+    assert!(matches!(*ptr2, Type::Pointer(MemPtr {to, nil: false}) if to == s2));
 
-    let ptr1nil = types.get_pointer(Some(s1), true);
-    assert!(matches!(*ptr1nil, Type::Pointer(MemPtr {to: Some(to), nil: true}) if to == s1));
-    let ptr2nil = types.get_pointer(Some(s2), true);
-    assert!(matches!(*ptr2nil, Type::Pointer(MemPtr {to: Some(to), nil: true}) if to == s2));
+    let ptr1nil = types.get_pointer(s1, true);
+    assert!(matches!(*ptr1nil, Type::Pointer(MemPtr {to, nil: true}) if to == s1));
+    let ptr2nil = types.get_pointer(s2, true);
+    assert!(matches!(*ptr2nil, Type::Pointer(MemPtr {to, nil: true}) if to == s2));
 
     assert_ne!(ptr1, ptr2);
     assert_ne!(ptr1, types.glb(ptr1));
@@ -151,13 +151,13 @@ impl<'t> Types<'t> {
     }
 
     fn gather(&self) -> Vec<Ty<'t>> {
-        let struct_test = self.get_struct("test", &[("test", self.ty_zero)]);
-        let pointer_test = self.get_pointer(Some(struct_test), false);
+        let struct_test = self.get_struct("test", &[("test", self.ty_int_zero)]);
+        let pointer_test = self.get_pointer(struct_test, false);
         let mut ts = vec![
             self.ty_bot,
             self.ty_ctrl,
             //
-            self.ty_zero,
+            self.ty_int_zero,
             self.ty_bot,
             //
             self.get_mem(1),

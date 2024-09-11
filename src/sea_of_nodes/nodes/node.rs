@@ -1,13 +1,14 @@
-use std::borrow::Cow;
-
+use crate::sea_of_nodes::nodes::index::StartId;
 use crate::sea_of_nodes::nodes::{NodeCreation, NodeId, ScopeNode};
 use crate::sea_of_nodes::types::{Ty, Type};
+use std::borrow::Cow;
+use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
 pub enum Node<'t> {
     Constant(Ty<'t>),
     Return,
-    Start { args: Ty<'t> },
+    Start(StartNode<'t>),
     Add,
     Sub,
     Mul,
@@ -25,6 +26,12 @@ pub enum Node<'t> {
     Cast(Ty<'t>),
     MemOp(MemOp<'t>),
     New(Ty<'t>),
+}
+
+#[derive(Clone, Debug)]
+pub struct StartNode<'t> {
+    pub args: Ty<'t>,
+    pub alias_starts: HashMap<&'t str, u32>,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -211,14 +218,20 @@ impl<'t> Node<'t> {
 
     pub fn make_start(args: Ty<'t>) -> NodeCreation<'t> {
         debug_assert!(matches!(&*args, Type::Tuple { .. }));
-        (Node::Start { args }, vec![])
+        (
+            Node::Start(StartNode {
+                args,
+                alias_starts: HashMap::new(),
+            }),
+            vec![],
+        )
     }
     pub fn make_return(ctrl: NodeId, data: NodeId) -> NodeCreation<'t> {
         (Node::Return, vec![Some(ctrl), Some(data)])
     }
 
-    pub fn make_constant(start: NodeId, ty: Ty<'t>) -> NodeCreation<'t> {
-        (Node::Constant(ty), vec![Some(start)])
+    pub fn make_constant(start: StartId, ty: Ty<'t>) -> NodeCreation<'t> {
+        (Node::Constant(ty), vec![Some(*start)])
     }
 
     pub fn make_add([left, right]: [NodeId; 2]) -> NodeCreation<'t> {
@@ -250,8 +263,11 @@ impl<'t> Node<'t> {
         (Node::Not, vec![None, Some(expr)])
     }
 
-    pub fn make_proj(ctrl: NodeId, index: usize, label: String) -> NodeCreation<'t> {
-        (Node::Proj(ProjNode { index, label }), vec![Some(ctrl)])
+    pub fn make_proj<N: Into<NodeId>>(ctrl: N, index: usize, label: String) -> NodeCreation<'t> {
+        (
+            Node::Proj(ProjNode { index, label }),
+            vec![Some(ctrl.into())],
+        )
     }
 
     pub fn make_if(ctrl: NodeId, pred: NodeId) -> NodeCreation<'t> {
@@ -303,5 +319,9 @@ impl<'t> Node<'t> {
             }),
             vec![None, Some(mem_slice), Some(mem_ptr), Some(value)],
         )
+    }
+
+    pub fn make_new(ptr: Ty<'t>, ctrl: NodeId) -> NodeCreation<'t> {
+        (Node::New(ptr), vec![Some(ctrl)])
     }
 }

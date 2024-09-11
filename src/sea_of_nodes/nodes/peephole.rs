@@ -118,7 +118,7 @@ impl<'t> Nodes<'t> {
                     .unwrap_or(types.ty_bot);
                 types.get_tuple_from_array([ctrl, expr])
             }
-            Node::Start { args } => *args,
+            Node::Start(s) => s.args,
             Node::Add => self.compute_binary_int(node, i64::wrapping_add),
             Node::Sub => self.compute_binary_int(node, i64::wrapping_sub),
             Node::Mul => self.compute_binary_int(node, i64::wrapping_mul),
@@ -141,8 +141,8 @@ impl<'t> Nodes<'t> {
                     return types.ty_bot;
                 };
                 match &*input {
-                    Type::Int(Int::Constant(0)) => types.ty_one,
-                    Type::Int(Int::Constant(_)) => types.ty_zero,
+                    Type::Int(Int::Constant(0)) => types.ty_int_one,
+                    Type::Int(Int::Constant(_)) => types.ty_int_zero,
                     Type::Int(_) => input,
                     _ => types.meet(types.ty_top, input),
                 }

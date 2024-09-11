@@ -147,7 +147,7 @@ impl Display for PrintNodes2<'_, '_, '_> {
                 let Type::Pointer(p) = &**t else {
                     unreachable!()
                 };
-                write!(f, "new {}", p.to.unwrap().str())
+                write!(f, "new {}", p.to.str())
             }
             Node::MemOp(m) => match m.kind {
                 MemOpKind::Load { .. } => write!(f, ".{}", m.name),

@@ -40,13 +40,13 @@ impl<'t> Nodes<'t> {
 
         // Add of 0.  We do not check for (0+x) because this will already
         // canonicalize to (x+0)
-        if t2 == self.types.ty_zero {
+        if t2 == self.types.ty_int_zero {
             return Some(lhs);
         }
 
         // Add of same to a multiply by 2
         if lhs == rhs {
-            let two = self.create_peepholed(Node::make_constant(self.start, self.types.ty_two));
+            let two = self.create_peepholed(Node::make_constant(self.start, self.types.ty_int_two));
             return Some(self.create(Node::make_mul([lhs, two])));
         }
 
@@ -136,7 +136,7 @@ impl<'t> Nodes<'t> {
 
     fn idealize_sub(&mut self, node: NodeId) -> Option<NodeId> {
         if self.inputs[node][1]? == self.inputs[node][2]? {
-            Some(self.create(Node::make_constant(self.start, self.types.ty_zero)))
+            Some(self.create(Node::make_constant(self.start, self.types.ty_int_zero)))
         } else {
             None
         }
@@ -164,9 +164,9 @@ impl<'t> Nodes<'t> {
     fn idealize_bool(&mut self, op: BoolOp, node: NodeId) -> Option<NodeId> {
         if self.inputs[node][1]? == self.inputs[node][2]? {
             let value = if op.compute(3, 3) {
-                self.types.ty_one
+                self.types.ty_int_one
             } else {
-                self.types.ty_zero
+                self.types.ty_int_zero
             };
             return Some(self.create(Node::make_constant(self.start, value)));
         }
@@ -339,9 +339,9 @@ impl<'t> Nodes<'t> {
                     if if_pred == pred {
                         if let Node::Proj(p) = &self[prior] {
                             let value = if p.index == 0 {
-                                self.types.ty_one
+                                self.types.ty_int_one
                             } else {
-                                self.types.ty_zero
+                                self.types.ty_int_zero
                             };
                             let new_constant =
                                 self.create_peepholed(Node::make_constant(self.start, value));

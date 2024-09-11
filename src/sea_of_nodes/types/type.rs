@@ -37,8 +37,8 @@ pub enum Struct<'t> {
 
 #[derive(Eq, PartialEq, Copy, Clone, Hash, Debug)]
 pub struct MemPtr<'t> {
-    /// points to Type::Struct, None is a generic pointer to non-existent memory
-    pub to: Option<Ty<'t>>,
+    /// points to Type::Struct
+    pub to: Ty<'t>,
     pub nil: bool,
 }
 
@@ -112,22 +112,11 @@ impl<'t> Display for Type<'t> {
                     return write!(f, "}}");
                 }
             },
-            Type::Pointer(p) => match p {
-                MemPtr { to, nil: true } if to.as_deref() == Some(&Type::Struct(Struct::Top)) => {
-                    "null"
-                }
-                MemPtr { to, nil: false } if to.as_deref() == Some(&Type::Struct(Struct::Bot)) => {
-                    "*void"
-                }
-                m => {
-                    write!(f, "*")?;
-                    if let Some(to) = m.to {
-                        write!(f, "{to}")?;
-                    }
-                    if m.nil {
-                        write!(f, "?")?;
-                    }
-                    return Ok(());
+            Type::Pointer(p) => match *p {
+                MemPtr { to, nil: true } if *to == Type::Struct(Struct::Top) => "null",
+                MemPtr { to, nil: false } if *to == Type::Struct(Struct::Bot) => "*void",
+                MemPtr { to, nil } => {
+                    return write!(f, "*{to}{}", if nil { "?" } else { "" });
                 }
             },
             Type::Memory(m) => match m {

@@ -13,7 +13,7 @@ impl<'t> ScopeNode<'t> {
     pub const CTRL: &'static str = "$ctrl";
     pub const ARG0: &'static str = "arg";
 
-    fn lookup(&self, name: &str) -> Option<&(usize, Ty<'t>)> {
+    pub fn lookup(&self, name: &str) -> Option<&(usize, Ty<'t>)> {
         self.scopes.iter().rev().flat_map(|x| x.get(name)).next()
     }
 }
@@ -224,5 +224,9 @@ impl<'t> Nodes<'t> {
                 }
             }
         }
+    }
+
+    pub fn scope_upcast(&mut self, scope: ScopeId, ctrl: NodeId, pred: NodeId, invert: bool) {
+        todo!("{} {ctrl} {pred} {invert}", scope.0);
     }
 }

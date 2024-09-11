@@ -1,5 +1,5 @@
 use crate::datastructures::id_vec::IdVec;
-use crate::sea_of_nodes::nodes::node::{MemOp, PhiNode};
+use crate::sea_of_nodes::nodes::node::{MemOp, PhiNode, StartNode};
 use crate::sea_of_nodes::nodes::{BoolOp, Node, NodeId, NodeVec, Nodes, ProjNode, ScopeNode};
 use crate::sea_of_nodes::types::Ty;
 use std::ops::{Deref, Index, IndexMut};
@@ -106,7 +106,7 @@ macro_rules! define_id {
 
 define_id!(Constant, ConstantId, to_constant, 't, Ty<'t>, Node::Constant(n) => n);
 define_id!(Return, ReturnId, to_return, 't, Node<'t>, n @ Node::Return => n);
-define_id!(Start, StartId, to_start, 't, Ty<'t>, Node::Start { args: n } => n);
+define_id!(Start, StartId, to_start, 't, StartNode<'t>, Node::Start(n) => n);
 define_id!(Add, AddId, to_add, 't, Node<'t>, n @ Node::Add => n);
 define_id!(Sub, SubId, to_sub, 't, Node<'t>, n @ Node::Sub => n);
 define_id!(Mul, MulId, to_mul, 't, Node<'t>, n @ Node::Mul => n);
@@ -179,4 +179,8 @@ impl<'t> Nodes<'t> {
     pub fn downcast(&self, node: NodeId) -> TypedNodeId {
         self.nodes.downcast(node)
     }
+}
+
+impl StartId {
+    pub const DUMMY: StartId = StartId(NodeId::DUMMY);
 }

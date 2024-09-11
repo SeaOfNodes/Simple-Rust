@@ -1,5 +1,5 @@
 use crate::datastructures::arena::DroplessArena;
-use crate::sea_of_nodes::nodes::Node;
+use crate::sea_of_nodes::nodes::{Node, StartNode};
 use crate::sea_of_nodes::parser::Parser;
 use crate::sea_of_nodes::tests::test_error;
 use crate::sea_of_nodes::types::{Int, Type, Types};
@@ -23,7 +23,7 @@ fn test_simple_program() {
         unreachable!("expect constant");
     };
 
-    assert_eq!(Some(parser.nodes.start), parser.nodes.inputs[expr][0]);
+    assert_eq!(Some(*parser.nodes.start), parser.nodes.inputs[expr][0]);
     assert_eq!(1, constant.unwrap_int());
 }
 
@@ -36,7 +36,7 @@ fn test_zero() {
 
     assert!(matches!(
         &parser.nodes[parser.nodes.start],
-        Node::Start { .. }
+        StartNode { .. }
     ));
     for output in &parser.nodes.outputs[parser.nodes.start] {
         if let Node::Constant(c) = &parser.nodes[*output] {

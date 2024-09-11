@@ -25,7 +25,10 @@ fn test_var_add() {
 fn test_var_scope() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new("int a=1; int b=2; int c=0; { int b=3; c=a+b; } return c;", &types);
+    let mut parser = Parser::new(
+        "int a=1; int b=2; int c=0; { int b=3; c=a+b; } return c;",
+        &types,
+    );
     let stop = parser.parse().unwrap();
     assert_eq!(parser.print(stop), "return 4;");
 }

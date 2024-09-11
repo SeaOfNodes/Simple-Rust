@@ -50,12 +50,15 @@ return c;",
 fn test_return2() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new("\
+    let mut parser = Parser::new(
+        "\
 if( arg==1 )
     return 3;
 else
     return 4;
-#showGraph;", &types);
+#showGraph;",
+        &types,
+    );
     let stop = parser.parse().unwrap();
     assert_eq!(parser.print(stop), "Stop[ return 3; return 4; ]");
 }
@@ -133,7 +136,8 @@ return a;
 fn test_merge4() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new("\
+    let mut parser = Parser::new(
+        "\
 int a=0;
 int b=0;
 if( arg )
@@ -141,9 +145,14 @@ if( arg )
 if( arg==0 )
     b=2;
 return arg+a+b;
-#showGraph;", &types);
+#showGraph;",
+        &types,
+    );
     let stop = parser.parse().unwrap();
-    assert_eq!(parser.print(stop), "return ((arg+Phi(Region13,1,0))+Phi(Region22,2,0));");
+    assert_eq!(
+        parser.print(stop),
+        "return ((arg+Phi(Region13,1,0))+Phi(Region22,2,0));"
+    );
 }
 #[test]
 fn test_merge5() {
