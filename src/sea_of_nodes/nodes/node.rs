@@ -20,7 +20,7 @@ pub enum Node<'t> {
     Proj(ProjNode),
     If,
     Phi(PhiNode<'t>),
-    Region { cached_idom: Option<NodeId> },
+    Region,
     Loop,
     Stop,
     Cast(Ty<'t>),
@@ -279,7 +279,7 @@ impl<'t> Node<'t> {
     }
 
     pub fn make_region(inputs: Vec<Option<NodeId>>) -> NodeCreation<'t> {
-        (Node::Region { cached_idom: None }, inputs)
+        (Node::Region, inputs)
     }
 
     pub fn make_stop() -> NodeCreation<'t> {

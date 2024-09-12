@@ -379,26 +379,18 @@ impl<'t> Nodes<'t> {
     /// Return the immediate dominator of this Node and compute dom tree depth.
     fn idom(&mut self, node: NodeId) -> Option<NodeId> {
         match &self[node] {
-            Node::Start { .. } => None,
+            Node::Start { .. } | Node::Stop => None,
             Node::Loop => self.inputs[node][1],
-            Node::Region { cached_idom } => {
-                if let Some(ci) = cached_idom {
-                    if self.is_dead(*ci) {
-                        self[node] = Node::Region { cached_idom: None };
-                    } else {
-                        return *cached_idom;
-                    }
-                }
-
+            Node::Region => {
                 if let &[_, i1] = self.inputs[node].as_slice() {
                     i1 // 1-input is that one input
-                } else if let &[_, Some(i1), Some(i2)] = self.inputs[node].as_slice() {
+                } else if let &[_, lhs, rhs] = self.inputs[node].as_slice() {
                     // Walk the LHS & RHS idom trees in parallel until they match, or either fails
-                    let mut lhs = self.idom(i1)?;
-                    let mut rhs = self.idom(i2)?;
-
+                    // Because this does not cache, it can be linear in the size of the program.
+                    let mut lhs = lhs?;
+                    let mut rhs = rhs?;
                     while lhs != rhs {
-                        let comp = self.idepth[lhs] as i32 - self.idepth[rhs] as i32;
+                        let comp = self.idepth(lhs) as i32 - self.idepth(rhs) as i32;
                         if comp >= 0 {
                             lhs = self.idom(lhs)?
                         }
@@ -406,32 +398,37 @@ impl<'t> Nodes<'t> {
                             rhs = self.idom(rhs)?
                         }
                     }
-                    self.idepth[node] = self.idepth[lhs] + 1;
-                    if !self.iter_peeps.mid_assert {
-                        self[node] = Node::Region {
-                            cached_idom: Some(lhs),
-                        };
-                    }
                     Some(lhs)
                 } else {
                     // Fails for anything other than 2-inputs
                     None
                 }
             }
-            _ => {
-                let idom = self.inputs[node][0].expect("don't ask");
-
-                if self.idepth[idom] == 0 {
-                    self.idom(idom); // Recursively set idepth
-                }
-
-                if self.idepth[node] == 0 {
-                    self.idepth[node] = self.idepth[idom] + 1;
-                }
-
-                Some(idom)
-            }
+            _ => Some(self.inputs[node][0].expect("don't ask")),
         }
+    }
+
+    fn idepth(&mut self, node: NodeId) -> u32 {
+        if self.idepth[node] != 0 {
+            return self.idepth[node];
+        }
+        let index = match self[node] {
+            Node::Start(_) => return 0, // uncached
+            Node::Region => {
+                let mut d = 0;
+                for n in 0..self.inputs[node].len() {
+                    if let Some(n) = self.inputs[node][n] {
+                        d = d.max(self.idepth(n));
+                    }
+                }
+                self.idepth[node] = d;
+                return d;
+            }
+            Node::Loop => 1,
+            _ => 0,
+        };
+        self.idepth[node] = self.idepth(self.inputs[node][index].unwrap()) + 1;
+        self.idepth[node]
     }
 
     fn in_progress(

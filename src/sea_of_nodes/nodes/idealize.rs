@@ -367,9 +367,6 @@ impl<'t> Nodes<'t> {
                         }
                     }
                 }
-                if let Node::Region { cached_idom } = &mut self[node] {
-                    *cached_idom = None; // Clear idom cache
-                }
 
                 return if self.is_dead(node) {
                     Some(self.create(Node::make_constant(self.start, self.types.ty_xctrl)))
@@ -382,9 +379,6 @@ impl<'t> Nodes<'t> {
 
         // If down to a single input, become that input - but also make all
         if self.inputs[node].len() == 2 && !self.has_phi(node) {
-            if let Node::Region { cached_idom } = &mut self[node] {
-                *cached_idom = None; // Clear idom cache
-            }
             self.inputs[node][1]
         } else {
             None
