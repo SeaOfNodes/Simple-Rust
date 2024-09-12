@@ -1,15 +1,21 @@
+use std::borrow::Cow;
 use std::fmt;
 use std::fmt::Write;
 
 use crate::datastructures::id_set::IdSet;
 use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
+use crate::sea_of_nodes::types::{Int, Ty, Type};
 
 pub fn pretty_print_llvm(nodes: &Nodes, node: NodeId, depth: usize) -> String {
-    todo!()
+    pretty_print_(nodes, node, depth, true)
 }
 
 /// Another bulk pretty-printer.  Makes more effort at basic-block grouping.
 pub fn pretty_print(nodes: &Nodes, node: NodeId, depth: usize) -> String {
+    pretty_print_(nodes, node, depth, false)
+}
+
+fn pretty_print_(nodes: &Nodes, node: NodeId, depth: usize, llvm_format: bool) -> String {
     // First, a Breadth First Search at a fixed depth.
     let bfs = BFS::run(nodes, node, depth);
 
@@ -31,28 +37,36 @@ pub fn pretty_print(nodes: &Nodes, node: NodeId, depth: usize) -> String {
             if !gap {
                 sb.push('\n'); // Blank before multihead
             };
-            print_line(nodes, n, &mut sb).unwrap(); // Print head
+            print_line(nodes, n, &mut sb, llvm_format).unwrap(); // Print head
             while let Some(&&t) = iter.peek() {
                 if nodes.is_multi_tail(t) {
                     break;
                 }
                 iter.next();
-                print_line(nodes, t, &mut sb).unwrap();
+                print_line(nodes, t, &mut sb, llvm_format).unwrap();
             }
             sb.push('\n'); // Blank after multitail
             gap = true;
         } else {
-            print_line(nodes, n, &mut sb).unwrap();
+            print_line(nodes, n, &mut sb, llvm_format).unwrap();
             gap = false;
         }
     }
     sb
 }
 
+fn print_line(nodes: &Nodes, n: NodeId, sb: &mut String, llvm_format: bool) -> fmt::Result {
+    if llvm_format {
+        print_line_llvm(nodes, n, sb)
+    } else {
+        print_line_(nodes, n, sb)
+    }
+}
+
 /// Print a node on 1 line, columnar aligned, as:
 /// NNID NNAME DDEF DDEF  [[  UUSE UUSE  ]]  TYPE
 /// 1234 sssss 1234 1234 1234 1234 1234 1234 tttttt
-fn print_line(nodes: &Nodes, n: NodeId, sb: &mut String) -> fmt::Result {
+fn print_line_(nodes: &Nodes, n: NodeId, sb: &mut String) -> fmt::Result {
     write!(sb, "{n:4} {: <7.7} ", nodes[n].label())?;
 
     if nodes.is_dead(n) {
@@ -87,9 +101,67 @@ fn print_line(nodes: &Nodes, n: NodeId, sb: &mut String) -> fmt::Result {
     sb.push_str(" ]]  ");
 
     if let Some(ty) = nodes.ty[n] {
-        write!(sb, "{ty}")?;
+        write!(sb, "{}", ty.str())?;
     }
     writeln!(sb)
+}
+
+fn node_id(nodes: &Nodes, n: NodeId, sb: &mut String) -> fmt::Result {
+    write!(sb, "%{n}")?;
+    if let Some(p) = nodes.to_proj(n) {
+        write!(sb, ".{}", nodes[p].index)?;
+    }
+    Ok(())
+}
+
+/// Display Type name in a format that's good for IR printer
+fn type_name(ty: Ty) -> Cow<str> {
+    use Cow::*;
+    match *ty {
+        Type::Int(i) => match i {
+            Int::Bot => Borrowed("IntBot"),
+            Int::Top => Borrowed("IntTop"),
+            Int::Constant(_) => Borrowed("Int"),
+        },
+        Type::Tuple { types } => {
+            let mut sb = "[".to_string();
+            for &t in types {
+                sb.push_str(type_name(t).as_ref());
+                sb.push(',');
+            }
+            sb.pop();
+            sb.push(']');
+            Owned(sb)
+        }
+        _ => Owned(ty.to_string()),
+    }
+}
+
+/// Print a node on 1 line, format is inspired by LLVM
+/// %id: TYPE = NODE(inputs ....)
+/// Nodes as referred to as %id
+fn print_line_llvm(nodes: &Nodes, n: NodeId, sb: &mut String) -> fmt::Result {
+    node_id(nodes, n, sb)?;
+    write!(sb, ": ")?;
+    if nodes.inputs[n].is_empty() {
+        return writeln!(sb, "DEAD");
+    }
+    if let Some(ty) = nodes.ty[n] {
+        write!(sb, "{}", type_name(ty))?;
+    }
+
+    write!(sb, " = {}(", nodes[n].label())?;
+    for (i, &def) in nodes.inputs[n].iter().enumerate() {
+        if i > 0 {
+            write!(sb, ", ")?;
+        }
+        if let Some(def) = def {
+            node_id(nodes, def, sb)?
+        } else {
+            write!(sb, "_")?;
+        }
+    }
+    writeln!(sb, ")")
 }
 
 impl<'t> Nodes<'t> {
