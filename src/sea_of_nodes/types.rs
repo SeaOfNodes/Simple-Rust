@@ -304,6 +304,10 @@ impl<'a> Types<'a> {
     }
 
     pub fn make_init(&self, t: Ty<'a>) -> Ty<'a> {
-        todo!("{t}")
+        match *t {
+            Type::Int(_) => self.ty_int_zero,
+            Type::Pointer(_) => self.ty_pointer_null,
+            _ => unreachable!(),
+        }
     }
 }
