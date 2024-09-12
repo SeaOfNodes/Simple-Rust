@@ -23,10 +23,10 @@ impl<'t> Nodes<'t> {
                 MemOpKind::Load { declared_type } => self.idealize_load(node, declared_type),
                 MemOpKind::Store => self.idealize_store(node),
             },
+            Node::Minus => self.idealize_minus(node),
             Node::Constant(_)
             | Node::Start { .. }
             | Node::Div
-            | Node::Minus
             | Node::Scope(_)
             | Node::New(_)
             | Node::Not => None,
@@ -451,6 +451,15 @@ impl<'t> Nodes<'t> {
             unreachable!()
         };
         todo!("{node}{mem_op:?}")
+    }
+
+    fn idealize_minus(&mut self, node: NodeId) -> Option<NodeId> {
+        // -(-x) is x
+        let in_1 = self.inputs[node][1]?;
+        if self.to_minus(in_1).is_some() {
+            return self.inputs[in_1][1];
+        }
+        None
     }
 
     fn find_dead_input(&self, node: NodeId) -> Option<usize> {
