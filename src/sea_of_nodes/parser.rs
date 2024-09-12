@@ -56,7 +56,7 @@ pub fn is_keyword(s: &str) -> bool {
 
 impl<'s, 't> Parser<'s, 't> {
     pub fn new(source: &'s str, types: &'t Types<'t>) -> Self {
-        Self::new_with_arg(source, types, types.ty_bot)
+        Self::new_with_arg(source, types, types.ty_int_bot)
     }
 
     pub fn new_with_arg(source: &'s str, types: &'t Types<'t>, arg: Ty<'t>) -> Self {
