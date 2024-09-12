@@ -135,11 +135,29 @@ impl<'t> Nodes<'t> {
     }
 
     fn idealize_sub(&mut self, node: NodeId) -> Option<NodeId> {
+        // Sub of same is 0
         if self.inputs[node][1]? == self.inputs[node][2]? {
-            Some(self.create(Node::make_constant(self.start, self.types.ty_int_zero)))
-        } else {
-            None
+            return Some(self.create(Node::make_constant(self.start, self.types.ty_int_zero)));
         }
+
+        // x - (-y) is x+y
+        if let Some(minus) = self.to_minus(self.inputs[node][2]) {
+            return Some(self.create(Node::make_add([
+                node.inputs(self)[1].unwrap(),
+                minus.inputs(self)[1].unwrap(),
+            ])));
+        }
+
+        // (-x) - y is -(x+y)
+        if let Some(minus) = self.to_minus(node.inputs(self)[1]) {
+            let add = self.create_peepholed(Node::make_add([
+                minus.inputs(self)[1].unwrap(),
+                node.inputs(self)[2].unwrap(),
+            ]));
+            return Some(self.create(Node::make_minus(add)));
+        }
+
+        None
     }
 
     fn idealize_mul(&mut self, node: NodeId) -> Option<NodeId> {
