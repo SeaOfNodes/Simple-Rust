@@ -221,8 +221,10 @@ impl<'t> Nodes<'t> {
                     self[self.to_phi(node).unwrap()].ty
                 } else {
                     // Set type to local top of the starting type
-                    let mut t = self.types.dual(self.types.glb(self[self.to_phi(node).unwrap()].ty));
-                    
+                    let mut t = self
+                        .types
+                        .dual(self.types.glb(self[self.to_phi(node).unwrap()].ty));
+
                     for i in 1..self.inputs[node].len() {
                         // If the region's control input is live, add this as a dependency
                         // to the control because we can be peeped should it become dead.

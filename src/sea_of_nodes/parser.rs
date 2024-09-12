@@ -520,7 +520,7 @@ impl<'s, 't> Parser<'s, 't> {
         if self.match_(";") {
             // Assign a default value
             if let Some(t) = t {
-                let init = self.types.make_init(t);
+                let init = self.types.make_init(t).unwrap();
                 expr = self.peephole(Node::make_constant(self.nodes.start, init))
             } else {
                 // No type and no expr is an error
@@ -586,7 +586,7 @@ impl<'s, 't> Parser<'s, 't> {
         let name = self.require_id()?;
         let expr = if self.peek(';') {
             // Assign a null value
-            let v = self.types.make_init(t);
+            let v = self.types.make_init(t).unwrap();
             self.peephole(Node::make_constant(self.nodes.start, v))
         } else {
             // Assign "= expr;"

@@ -227,6 +227,61 @@ impl<'t> Nodes<'t> {
 
             return Some(self.create((self[op].clone(), vec![None, Some(phi_lhs), Some(phi_rhs)])));
         }
+
+        // If merging Phi(N, cast(N)) - we are losing the cast JOIN effects, so just remove.
+        if self.inputs[node].len() == 3 {
+            if let Some(cast) = self.to_cast(self.inputs[node][1]) {
+                let in_1 = self.inputs[cast][1];
+                self.add_dep(in_1.unwrap(), *node);
+                if in_1 == self.inputs[node][2] {
+                    return self.inputs[node][2];
+                }
+            }
+            if let Some(cast) = self.to_cast(self.inputs[node][2]) {
+                let in_1 = self.inputs[cast][1];
+                self.add_dep(in_1.unwrap(), *node);
+                if in_1 == self.inputs[node][1] {
+                    return self.inputs[node][1];
+                }
+            }
+        }
+
+        // If merging a null-checked null and the checked value, just use the value.
+        // if( val ) ..; phi(Region,False=0/null,True=val);
+        // then replace with plain val.
+        if self.inputs[node].len() == 3 {
+            let mut nullx = 0;
+
+            let t1 = node.inputs(self)[1].unwrap().ty(self).unwrap();
+            if Some(t1) == self.types.make_init(t1) {
+                nullx = 1;
+            }
+            let t2 = node.inputs(self)[2].unwrap().ty(self).unwrap();
+            if Some(t2) == self.types.make_init(t2) {
+                nullx = 2;
+            }
+
+            if nullx != 0 {
+                let val = node.inputs(self)[3 - nullx].unwrap();
+                let region = node.inputs(self)[0].unwrap();
+                let idom = self.idom(region);
+                if let Some(iff) = self.to_if(idom) {
+                    let pred = iff.inputs(self)[1].unwrap();
+                    self.add_dep(pred, *node);
+                    if pred == val {
+                        // Must walk the idom on the null side to make sure we hit False.
+                        let mut idom = region.inputs(self)[nullx].unwrap();
+                        while idom.inputs(self)[0] != Some(*iff) {
+                            idom = self.idom(idom).unwrap();
+                        }
+                        if self.to_proj(idom).is_some_and(|p| self[p].index == 1) {
+                            return Some(val);
+                        }
+                    }
+                }
+            }
+        }
+
         None
     }
 

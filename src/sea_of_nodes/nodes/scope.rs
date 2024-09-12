@@ -274,7 +274,7 @@ impl<'t> Nodes<'t> {
             let not_in_1 = self.inputs[pred][1].unwrap();
             if self.inputs[scope].iter().any(|x| *x == Some(not_in_1)) {
                 let t = self.ty[not_in_1].unwrap();
-                let tinit = self.types.make_init(t);
+                let tinit = self.types.make_init(t).unwrap();
                 return if self.types.isa(t, tinit) {
                     None // Already zero/null, no reason to upcast
                 } else {

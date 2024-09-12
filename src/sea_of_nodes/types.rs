@@ -303,11 +303,11 @@ impl<'a> Types<'a> {
         }
     }
 
-    pub fn make_init(&self, t: Ty<'a>) -> Ty<'a> {
+    pub fn make_init(&self, t: Ty<'a>) -> Option<Ty<'a>> {
         match *t {
-            Type::Int(_) => self.ty_int_zero,
-            Type::Pointer(_) => self.ty_pointer_null,
-            _ => unreachable!(),
+            Type::Int(_) => Some(self.ty_int_zero),
+            Type::Pointer(_) => Some(self.ty_pointer_null),
+            _ => None,
         }
     }
 }

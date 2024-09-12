@@ -50,7 +50,8 @@ macro_rules! define_id {
 
         // downcast
         impl NodeVec<'_> {
-            pub fn $downcast(&self, node: NodeId) -> Option<$Id> {
+            pub fn $downcast<N: Into<Option<NodeId>>>(&self, node: N) -> Option<$Id> {
+                let node = node.into()?;
                 #[allow(unused_variables)]
                 match &self[node] {
                     $($pattern => Some($Id(node)),)*
@@ -61,7 +62,7 @@ macro_rules! define_id {
 
         // forward downcast
         impl Nodes<'_> {
-            pub fn $downcast(&self, node: NodeId) -> Option<$Id> { self.nodes.$downcast(node) }
+            pub fn $downcast<N: Into<Option<NodeId>>>(&self, node: N) -> Option<$Id> { self.nodes.$downcast(node) }
         }
 
         // generic index
