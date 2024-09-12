@@ -796,7 +796,7 @@ impl<'s, 't> Parser<'s, 't> {
             .scope_update(self.scope, &Self::mem_name(alias), st)
     }
 
-    fn mem_name(alias: u32) -> String {
+    pub(crate) fn mem_name(alias: u32) -> String {
         format!("${alias}")
     }
 

@@ -9,7 +9,8 @@ use crate::datastructures::id_set::IdSet;
 use crate::datastructures::id_vec::IdVec;
 use crate::sea_of_nodes::nodes::gvn::GvnEntry;
 use crate::sea_of_nodes::nodes::index::{ScopeId, StartId};
-use crate::sea_of_nodes::types::{Ty, Types};
+use crate::sea_of_nodes::parser::Parser;
+use crate::sea_of_nodes::types::{Struct, Ty, Type, Types};
 use iter_peeps::IterPeeps;
 
 mod gvn;
@@ -491,7 +492,39 @@ impl<'t> Nodes<'t> {
         node.is_some_and(|n| matches!(&self[n], Node::Region { .. } | Node::Loop))
     }
 
-    pub fn add_mem_proj(&mut self, start: StartId, ty: Ty<'t>, scope: ScopeId) {
-        todo!("{} {ty} {}", start.0, scope.0)
+    /// Creates a projection for each of the struct's fields, using the field alias
+    /// as the key.
+    pub fn add_mem_proj(&mut self, start: StartId, ts: Ty<'t>, scope: ScopeId) {
+        let Type::Struct(Struct::Struct { name, fields }) = *ts else {
+            unreachable!()
+        };
+        let Type::Tuple { types } = *self[start].args else {
+            unreachable!()
+        };
+
+        let len = types.len();
+        self[start].alias_starts.insert(name, len as u32);
+
+        // resize the tuple's type array to include all fields of the struct
+        let args = types
+            .iter()
+            .copied()
+            .chain(fields.iter().enumerate().map(|(i, _)| {
+                // The new members of the tuple get a mem type with an alias
+                self.types.get_mem((i + types.len()) as u32)
+            }))
+            .collect::<Vec<Ty>>();
+
+        let args_ty = self.types.get_tuple_from_slice(&args);
+        self.nodes[start].args = args_ty;
+        self.ty[start] = Some(args_ty);
+
+        // For each of the fields we now add a mem projection.  Note that the
+        // alias matches the slot of the field in the tuple
+        for (alias, &alias_ty) in args[len..].iter().enumerate() {
+            let name = Parser::mem_name(alias as u32);
+            let n = self.create_peepholed(Node::make_proj(start, alias, name.to_string()));
+            self.scope_define(scope, name, alias_ty, n).unwrap()
+        }
     }
 }
