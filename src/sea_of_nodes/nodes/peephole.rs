@@ -98,7 +98,7 @@ impl<'t> Nodes<'t> {
     }
 
     fn dead_code_elimination(&mut self, old: NodeId, new: NodeId) {
-        if new != old && self.is_unused(old) {
+        if new != old && self.is_unused(old) && !self.is_dead(old) {
             self.keep(new);
             self.kill(old);
             self.unkeep(new);

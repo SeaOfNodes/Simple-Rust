@@ -10,7 +10,7 @@ use crate::datastructures::id_vec::IdVec;
 use crate::sea_of_nodes::nodes::gvn::GvnEntry;
 use crate::sea_of_nodes::nodes::index::{ScopeId, StartId};
 use crate::sea_of_nodes::parser::Parser;
-use crate::sea_of_nodes::types::{Struct, Ty, Type, Types};
+use crate::sea_of_nodes::types::{MemPtr, Struct, Ty, Type, Types};
 use iter_peeps::IterPeeps;
 
 mod gvn;
@@ -223,6 +223,7 @@ impl<'t> Nodes<'t> {
         }
 
         self.inputs[this][index] = new_def;
+        self.move_deps_to_worklist(this);
     }
 
     pub fn add_def(&mut self, node: NodeId, new_def: Option<NodeId>) {
@@ -274,6 +275,20 @@ impl<'t> Nodes<'t> {
 
     pub fn unkeep(&mut self, node: NodeId) {
         self.del_use(node, NodeId::DUMMY);
+    }
+
+    pub fn is_keep(&self, node: NodeId) -> bool {
+        self.outputs[node].contains(&NodeId::DUMMY)
+    }
+
+    pub fn err(&self, node: NodeId) -> Option<String> {
+        if let Some(memop) = self.to_mem_op(node) {
+            let ptr = node.inputs(self)[2]?.ty(self)?;
+            if ptr == self.types.ty_bot || matches!(*ptr, Type::Pointer(MemPtr { nil: true, .. })) {
+                return Some(format!("Might be null accessing '{}'", self[memop].name));
+            }
+        }
+        None
     }
 
     pub fn is_cfg(&self, node: NodeId) -> bool {

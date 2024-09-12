@@ -45,7 +45,8 @@ impl<'t> Nodes<'t> {
         match &self[node] {
             Node::Constant(_) => format!("Con_{node}"),
             Node::Cast(_) => format!("Cast_{node}"),
-            _ => format!("{}{}", self[node].label(), node),
+            // Get rid of $ as graphviz doesn't like it
+            _ => format!("{}{}", self[node].label().replace('$', ""), node),
         }
     }
 }
