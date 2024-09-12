@@ -217,16 +217,19 @@ impl<'t> Nodes<'t> {
                         self.ty[node].unwrap()
                     }
                 } else if Self::in_progress(&self.nodes, &self.inputs, node) {
-                    types.ty_bot
+                    // During parsing Phis have to be computed type pessimistically.
+                    self[self.to_phi(node).unwrap()].ty
                 } else {
-                    let mut t = types.ty_top;
+                    // Set type to local top of the starting type
+                    let mut t = self.types.dual(self.types.glb(self[self.to_phi(node).unwrap()].ty));
+                    
                     for i in 1..self.inputs[node].len() {
                         // If the region's control input is live, add this as a dependency
                         // to the control because we can be peeped should it become dead.
                         let r_in_i = self.inputs[region][i].unwrap();
                         self.add_dep(r_in_i, node);
                         let in_i = self.inputs[node][i].unwrap();
-                        if self.ty[r_in_i] != Some(types.ty_xctrl) && in_i != node {
+                        if self.ty[r_in_i] != Some(types.ty_xctrl) {
                             t = types.meet(t, self.ty[in_i].unwrap())
                         }
                     }

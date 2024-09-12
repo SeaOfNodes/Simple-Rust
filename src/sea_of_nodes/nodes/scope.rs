@@ -252,7 +252,7 @@ impl<'t> Nodes<'t> {
         }
 
         // Direct use of a value as predicate.  This is a zero/null test.
-        if let Some(p) = self.inputs[scope].iter().position(|x| *x == Some(pred)) {
+        if self.inputs[scope].iter().any(|x| *x == Some(pred)) {
             let tmp = self.ty[pred].unwrap();
             let Type::Pointer(_) = *tmp else {
                 // Must be an `int`, since int and ptr are the only two value types
@@ -272,7 +272,7 @@ impl<'t> Nodes<'t> {
         if self.to_not(pred).is_some() {
             // Direct use of a !value as predicate.  This is a zero/null test.
             let not_in_1 = self.inputs[pred][1].unwrap();
-            if let Some(p) = self.inputs[scope].iter().position(|x| *x == Some(not_in_1)) {
+            if self.inputs[scope].iter().any(|x| *x == Some(not_in_1)) {
                 let t = self.ty[not_in_1].unwrap();
                 let tinit = self.types.make_init(t);
                 return if self.types.isa(t, tinit) {
