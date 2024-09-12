@@ -4,6 +4,10 @@ use std::fmt::Write;
 use crate::datastructures::id_set::IdSet;
 use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
 
+pub fn pretty_print_llvm(nodes: &Nodes, node: NodeId, depth: usize) -> String {
+    todo!()
+}
+
 /// Another bulk pretty-printer.  Makes more effort at basic-block grouping.
 pub fn pretty_print(nodes: &Nodes, node: NodeId, depth: usize) -> String {
     // First, a Breadth First Search at a fixed depth.

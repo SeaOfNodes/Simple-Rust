@@ -12,10 +12,18 @@ mod chapter06;
 mod chapter07;
 mod chapter08;
 mod chapter09;
+mod chapter10;
 mod fuzzing;
 mod type_test;
 
 fn test_error(source: &str, error: &str) {
+    let arena = DroplessArena::new();
+    let types = Types::new(&arena);
+
+    assert_eq!(Parser::new(source, &types).parse(), Err(error.to_string()),);
+}
+
+fn test_error_iterate(source: &str, error: &str) {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
 
