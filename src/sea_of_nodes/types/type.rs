@@ -76,8 +76,36 @@ impl<'t> Type<'t> {
         }
     }
 
+    // This is used by error messages, and is a shorted print.
     pub fn str(&self) -> Cow<str> {
-        todo!()
+        use Cow::*;
+        match self {
+            Type::Bot => Borrowed("Bot"),
+            Type::Top => Borrowed("Top"),
+            Type::Ctrl => Borrowed("Ctrl"),
+            Type::XCtrl => Borrowed("~Ctrl"),
+            Type::Int(i) => match i {
+                Int::Bot => Borrowed("int"),
+                Int::Top => Borrowed("~int"),
+                Int::Constant(c) => Owned(c.to_string()),
+            },
+            Type::Tuple { .. } => Owned(self.to_string()),
+            Type::Struct(s) => Borrowed(match s {
+                Struct::Bot => "$BOT",
+                Struct::Top => "$TOP",
+                Struct::Struct { name, .. } => name,
+            }),
+            Type::Pointer(p) => {
+                if *p.to == Type::Struct(Struct::Top) && p.nil {
+                    Borrowed("null")
+                } else if *p.to == Type::Struct(Struct::Bot) && !p.nil {
+                    Borrowed("*void")
+                } else {
+                    Owned(format!("*{}{}", p.to.str(), if p.nil { "?" } else { "" }))
+                }
+            }
+            Type::Memory(_) => Owned(self.to_string()),
+        }
     }
 }
 
