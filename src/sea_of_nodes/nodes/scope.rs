@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::sea_of_nodes::nodes::index::ScopeId;
 use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
-use crate::sea_of_nodes::types::Ty;
+use crate::sea_of_nodes::types::{Ty, Type};
 
 #[derive(Clone, Debug)]
 pub struct ScopeNode<'t> {
@@ -226,7 +226,79 @@ impl<'t> Nodes<'t> {
         }
     }
 
-    pub fn scope_upcast(&mut self, scope: ScopeId, ctrl: NodeId, pred: NodeId, invert: bool) {
-        todo!("{} {ctrl} {pred} {invert}", scope.0);
+    /// Up-casting: using the results of an If to improve a value.
+    /// E.g. "if( ptr ) ptr.field;" is legal because ptr is known not-null.
+    ///
+    /// This Scope looks for direct variable uses, or certain simple
+    /// combinations, and replaces the variable with the upcast variant.
+    pub fn scope_upcast(
+        &mut self,
+        scope: ScopeId,
+        ctrl: NodeId,
+        mut pred: NodeId,
+        invert: bool,
+    ) -> Option<NodeId> {
+        if self.ty[ctrl]? == self.types.ty_xctrl {
+            return None;
+        }
+        // Invert the If conditional
+        if invert {
+            if self.to_not(pred).is_some() {
+                pred = self.inputs[pred][1].unwrap()
+            } else {
+                pred = self.create_peepholed(Node::make_not(pred));
+                self.iter_peeps.add(pred);
+            }
+        }
+
+        // Direct use of a value as predicate.  This is a zero/null test.
+        if let Some(p) = self.inputs[scope].iter().position(|x| *x == Some(pred)) {
+            let tmp = self.ty[pred].unwrap();
+            let Type::Pointer(_) = *tmp else {
+                // Must be an `int`, since int and ptr are the only two value types
+                // being tested. No representation for a generic not-null int, so no upcast.
+                return None;
+            };
+            if self.types.isa(tmp, self.types.ty_pointer_void) {
+                return None; // Already not-null, no reason to upcast
+            }
+            // Upcast the ptr to not-null ptr, and replace in scope
+            let c = self.create_peepholed(Node::make_cast(self.types.ty_pointer_void, ctrl, pred));
+            let t = self.compute(c);
+            self.set_type(c, t);
+            self.replace(scope, pred, Some(c));
+        }
+
+        if self.to_not(pred).is_some() {
+            // Direct use of a !value as predicate.  This is a zero/null test.
+            let not_in_1 = self.inputs[pred][1].unwrap();
+            if let Some(p) = self.inputs[scope].iter().position(|x| *x == Some(not_in_1)) {
+                let t = self.ty[not_in_1].unwrap();
+                let tinit = self.types.make_init(t);
+                return if self.types.isa(t, tinit) {
+                    None // Already zero/null, no reason to upcast
+                } else {
+                    let c = self.create_peepholed(Node::make_constant(self.start, tinit));
+                    self.replace(scope, not_in_1, Some(c));
+                    Some(c)
+                };
+            }
+        }
+
+        // Apr/9/2024: Attempted to replace X with Y if guarded by a test of
+        // X==Y.  This didn't seem to help very much, or at least in the test
+        // cases seen so far was a very minor help.
+
+        // No upcast
+        None
+    }
+
+    fn replace(&mut self, this: ScopeId, old: NodeId, cast: Option<NodeId>) {
+        debug_assert_ne!(Some(old), cast);
+        for i in 0..self.inputs[this].len() {
+            if self.inputs[this][i] == Some(old) {
+                self.set_def(*this, i, cast);
+            }
+        }
     }
 }

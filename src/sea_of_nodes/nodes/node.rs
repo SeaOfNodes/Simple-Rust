@@ -290,6 +290,10 @@ impl<'t> Node<'t> {
         (Node::Loop, vec![None, Some(entry), None])
     }
 
+    pub fn make_cast(ty: Ty<'t>, ctrl: NodeId, i: NodeId) -> NodeCreation<'t> {
+        (Node::Cast(ty), vec![Some(ctrl), Some(i)])
+    }
+
     pub fn make_load(
         name: String,
         alias: u32,
