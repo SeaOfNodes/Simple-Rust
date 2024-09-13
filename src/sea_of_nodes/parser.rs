@@ -107,22 +107,27 @@ impl<'s, 't> Parser<'s, 't> {
         self.x_scopes.push(self.scope);
 
         // Enter a new scope for the initial control and arguments
-        self.nodes.scope_push(self.scope);
+        self.scope.push(&mut self.nodes);
 
         // project ctrl and arg0 from start
         let start = self.nodes.start;
         let ctrl = self.peephole(Node::make_proj(start, 0, ScopeNode::CTRL));
-        self.nodes
-            .scope_define(self.scope, ScopeNode::CTRL, self.types.ty_ctrl, ctrl)
+        self.scope
+            .define(ScopeNode::CTRL, self.types.ty_ctrl, ctrl, &mut self.nodes)
             .expect("not in scope");
         let arg0 = self.peephole(Node::make_proj(start, 1, ScopeNode::ARG0));
-        self.nodes
-            .scope_define(self.scope, ScopeNode::ARG0, self.types.ty_int_bot, arg0)
+        self.scope
+            .define(
+                ScopeNode::ARG0,
+                self.types.ty_int_bot,
+                arg0,
+                &mut self.nodes,
+            )
             .expect("not in scope");
 
         self.parse_block()?;
 
-        self.nodes.scope_pop(self.scope);
+        self.scope.pop(&mut self.nodes);
         self.x_scopes.pop();
 
         if !self.lexer.is_eof() {
@@ -147,11 +152,11 @@ impl<'s, 't> Parser<'s, 't> {
     ///
     /// Does not parse the opening or closing `{}`
     fn parse_block(&mut self) -> PResult<()> {
-        self.nodes.scope_push(self.scope);
+        self.scope.push(&mut self.nodes);
         while !self.peek('}') && !self.lexer.is_eof() {
             self.parse_statement()?;
         }
-        self.nodes.scope_pop(self.scope);
+        self.scope.pop(&mut self.nodes);
         Ok(())
     }
 
@@ -220,7 +225,7 @@ impl<'s, 't> Parser<'s, 't> {
         self.require("{")?;
         while !self.peek('}') && !self.lexer.is_eof() {
             let field = self.parse_field()?;
-            if fields.iter().find(|&&f| f.0 == field.0).is_some() {
+            if fields.iter().any(|&f| f.0 == field.0) {
                 return Err(format!(
                     "Field '{}:{}' already defined in struct '{type_name}'",
                     field.0, field.1
@@ -266,7 +271,7 @@ impl<'s, 't> Parser<'s, 't> {
 
         // Clone the head Scope to create a new Scope for the body.
         // Create phis eagerly as part of cloning
-        self.scope = self.nodes.scope_dup(self.scope, true); // The true argument triggers creating phis
+        self.scope = self.scope.dup(true, &mut self.nodes); // The true argument triggers creating phis
         self.x_scopes.push(self.scope);
 
         // Parse predicate
@@ -288,7 +293,7 @@ impl<'s, 't> Parser<'s, 't> {
         // scope after the loop, and its control input is the False branch of
         // the loop predicate.  Note that body Scope is still our current scope.
         self.set_ctrl(if_false);
-        let break_scope = self.nodes.scope_dup(self.scope, false);
+        let break_scope = self.scope.dup(false, &mut self.nodes);
         self.break_scope = Some(break_scope);
         self.x_scopes.push(break_scope);
 
@@ -314,7 +319,7 @@ impl<'s, 't> Parser<'s, 't> {
         // it sets the second input to the corresponding input from the back
         // edge.  If the phi is redundant, it is replaced by its sole input.
         let exit = self.break_scope.unwrap();
-        self.nodes.scope_end_loop(head, self.scope, exit);
+        head.end_loop(self.scope, exit, &mut self.nodes);
         self.nodes.unkeep(*head);
         self.nodes.kill(*head);
 
@@ -334,7 +339,7 @@ impl<'s, 't> Parser<'s, 't> {
     }
 
     fn jump_to(&mut self, to_scope: Option<ScopeId>) -> ScopeId {
-        let cur = self.nodes.scope_dup(self.scope, false);
+        let cur = self.scope.dup(false, &mut self.nodes);
 
         let ctrl = self.peephole(Node::make_constant(self.nodes.start, self.types.ty_xctrl));
         self.set_ctrl(ctrl); // Kill current scope
@@ -343,7 +348,7 @@ impl<'s, 't> Parser<'s, 't> {
         // We use _breakScope as a proxy for the loop head scope to obtain the depth
         let break_scopes_len = self.nodes[self.break_scope.unwrap()].scopes.len();
         while self.nodes[cur].scopes.len() > break_scopes_len {
-            self.nodes.scope_pop(cur);
+            cur.pop(&mut self.nodes);
         }
 
         // If this is a continue then first time the target is null
@@ -355,7 +360,7 @@ impl<'s, 't> Parser<'s, 't> {
 
         // toScope is either the break scope, or a scope that was created here
         debug_assert!(self.nodes[to_scope].scopes.len() <= break_scopes_len);
-        let region = self.nodes.scope_merge(to_scope, cur);
+        let region = to_scope.merge(cur, &mut self.nodes);
         self.nodes.set_def(*to_scope, 0, Some(region)); // set ctrl
         to_scope
     }
@@ -406,13 +411,13 @@ impl<'s, 't> Parser<'s, 't> {
         // In if true branch, the ifT proj node becomes the ctrl
         // But first clone the scope and set it as current
         let n_defs = self.nodes.inputs[self.scope].len();
-        let mut false_scope = self.nodes.scope_dup(self.scope, false);
+        let mut false_scope = self.scope.dup(false, &mut self.nodes);
         self.x_scopes.push(false_scope);
 
         // Parse the true side
         self.nodes.unkeep(if_true);
         self.set_ctrl(if_true);
-        self.nodes.scope_upcast(self.scope, if_true, pred, false); // Up-cast predicate
+        self.scope.upcast(if_true, pred, false, &mut self.nodes); // Up-cast predicate
         self.parse_statement()?;
         let true_scope = self.scope;
 
@@ -421,7 +426,7 @@ impl<'s, 't> Parser<'s, 't> {
         self.nodes.unkeep(if_false);
         self.set_ctrl(if_false);
         if self.matchx("else") {
-            self.nodes.scope_upcast(self.scope, if_false, pred, true); // Up-cast predicate
+            self.scope.upcast(if_false, pred, true, &mut self.nodes); // Up-cast predicate
             self.parse_statement()?;
             false_scope = self.scope;
         }
@@ -437,7 +442,7 @@ impl<'s, 't> Parser<'s, 't> {
         self.scope = true_scope;
         self.x_scopes.pop();
 
-        let region = self.nodes.scope_merge(true_scope, false_scope);
+        let region = true_scope.merge(false_scope, &mut self.nodes);
         self.set_ctrl(region);
         Ok(())
     }
@@ -456,10 +461,10 @@ impl<'s, 't> Parser<'s, 't> {
 
         // We lookup memory slices by the naming convention that they start with $
         // We could also use implicit knowledge that all memory projects are at offset >= 2
-        let names = self.nodes.scope_reverse_names(self.scope);
+        let names = self.scope.reverse_names(&self.nodes);
         for name in names.into_iter().map(Option::unwrap) {
             if name.starts_with("$") && name == "$ctrl" {
-                let v = self.nodes.scope_lookup(self.scope, name).unwrap();
+                let v = self.scope.lookup(name, &mut self.nodes).unwrap();
                 self.nodes.add_def(ret, Some(v));
             }
         }
@@ -531,12 +536,12 @@ impl<'s, 't> Parser<'s, 't> {
         // Defining a new variable vs updating an old one
         let name = self.types.get_str(name);
         let t = if let Some(t) = t {
-            if self.nodes.scope_define(self.scope, name, t, expr).is_err() {
+            if self.scope.define(name, t, expr, &mut self.nodes).is_err() {
                 return Err(format!("Redefining name '{name}'"));
             }
             t
         } else if let Some((_, t)) = self.nodes[self.scope].lookup(name).copied() {
-            self.nodes.scope_update(self.scope, name, expr).unwrap();
+            self.scope.update(name, expr, &mut self.nodes).unwrap();
             t
         } else {
             return Err(format!("Undefined name '{name}'"));
@@ -593,8 +598,8 @@ impl<'s, 't> Parser<'s, 't> {
         }
 
         let name = self.types.get_str(name);
-        self.nodes
-            .scope_define(self.scope, name, t, expr)
+        self.scope
+            .define(name, t, expr, &mut self.nodes)
             .map_err(|()| format!("Redefining name '{name}'"))
     }
 
@@ -733,8 +738,8 @@ impl<'s, 't> Parser<'s, 't> {
                 Err(format!("Unknown struct type '{ty_name}'"))
             }
         } else if let Some(name) = self.lexer.match_id() {
-            self.nodes
-                .scope_lookup(self.scope, name)
+            self.scope
+                .lookup(name, &mut self.nodes)
                 .map_err(|()| format!("Undefined name '{name}'"))
         } else {
             Err(self.error_syntax("an identifier or expression"))
@@ -774,12 +779,12 @@ impl<'s, 't> Parser<'s, 't> {
     /// and phis work as expected
     fn mem_alias_lookup(&mut self, alias: u32) -> Result<NodeId, ()> {
         let name = self.types.get_str(&Self::mem_name(alias));
-        self.nodes.scope_lookup(self.scope, name)
+        self.scope.lookup(name, &mut self.nodes)
     }
 
     fn mem_alias_update(&mut self, alias: u32, st: NodeId) -> Result<NodeId, ()> {
         let name = self.types.get_str(&Self::mem_name(alias));
-        self.nodes.scope_update(self.scope, name, st)
+        self.scope.update(name, st, &mut self.nodes)
     }
 
     pub(crate) fn mem_name(alias: u32) -> String {

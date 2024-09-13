@@ -86,8 +86,7 @@ impl Display for PrintNodes2<'_, '_, '_> {
             Node::Minus => write!(f, "(-{})", input(1)),
             Node::Scope(_) => {
                 write!(f, "Scope[ ")?;
-                let node = nodes.to_scope(node).unwrap();
-                let names = nodes.scope_reverse_names(node);
+                let names = nodes.to_scope(node).unwrap().reverse_names(nodes);
 
                 for (i, &n) in names.iter().enumerate() {
                     if i > 0 {

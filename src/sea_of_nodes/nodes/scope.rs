@@ -18,67 +18,60 @@ impl<'t> ScopeNode<'t> {
     }
 }
 
-impl<'t> Nodes<'t> {
-    pub fn scope_push(&mut self, scope: ScopeId) {
-        self[scope].scopes.push(HashMap::new());
+impl<'t> ScopeId {
+    pub fn push(self, sea: &mut Nodes<'t>) {
+        sea[self].scopes.push(HashMap::new());
     }
 
-    pub fn scope_pop(&mut self, scope: ScopeId) {
-        let last = self[scope].scopes.pop().unwrap();
-        self.pop_n(*scope, last.len());
+    pub fn pop(self, sea: &mut Nodes<'t>) {
+        let last = sea[self].scopes.pop().unwrap();
+        sea.pop_n(*self, last.len());
     }
 
-    pub fn scope_define(
-        &mut self,
-        scope: ScopeId,
+    pub fn define(
+        self,
         name: &'t str,
         declared_ty: Ty<'t>,
         value: NodeId,
+        sea: &mut Nodes<'t>,
     ) -> Result<(), ()> {
-        let len = self.inputs[scope].len();
-        let syms = self[scope].scopes.last_mut().unwrap();
+        let len = self.inputs(sea).len();
+        let syms = sea[self].scopes.last_mut().unwrap();
         if let Some(_old) = syms.insert(name, (len, declared_ty)) {
             return Err(());
         }
-        self.add_def(*scope, Some(value));
+        sea.add_def(*self, Some(value));
         Ok(())
     }
 
-    pub fn scope_lookup(&mut self, scope: ScopeId, name: &str) -> Result<NodeId, ()> {
-        let nesting_level = self[scope].scopes.len() - 1;
-        self.scope_lookup_update(scope, name, None, nesting_level)
+    pub fn lookup(self, name: &str, sea: &mut Nodes<'t>) -> Result<NodeId, ()> {
+        let nesting_level = sea[self].scopes.len() - 1;
+        self.lookup_update(name, None, nesting_level, sea).ok_or(())
+    }
+
+    pub fn update(self, name: &str, value: NodeId, sea: &mut Nodes<'t>) -> Result<NodeId, ()> {
+        let nesting_level = sea[self].scopes.len() - 1;
+        self.lookup_update(name, Some(value), nesting_level, sea)
             .ok_or(())
     }
 
-    pub fn scope_update(
-        &mut self,
-        scope: ScopeId,
-        name: &str,
-        value: NodeId,
-    ) -> Result<NodeId, ()> {
-        let nesting_level = self[scope].scopes.len() - 1;
-        self.scope_lookup_update(scope, name, Some(value), nesting_level)
-            .ok_or(())
-    }
-
-    fn scope_lookup_update(
-        &mut self,
-        scope: ScopeId,
+    fn lookup_update(
+        self,
         name: &str,
         value: Option<NodeId>,
         nesting_level: usize,
+        sea: &mut Nodes<'t>,
     ) -> Option<NodeId> {
-        let syms = &mut self[scope].scopes[nesting_level];
+        let syms = &sea[self].scopes[nesting_level];
         if let Some((index, declared_ty)) = syms.get(name).copied() {
-            let mut old = self.inputs[scope][index];
+            let mut old = self.inputs(sea)[index];
 
             if let Some(loop_) = old {
-                if let Some(loop_) = self.to_scope(loop_) {
+                if let Some(loop_) = sea.to_scope(loop_) {
                     // Lazy Phi!
-                    let loop_phi = self.inputs[loop_][index];
+                    let loop_phi = loop_.inputs(sea)[index];
                     old = if loop_phi.is_some_and(|p| {
-                        matches!(&self[p], Node::Phi(_))
-                            && self.inputs[loop_][0] == self.inputs[p][0]
+                        sea.to_phi(p).is_some() && loop_.inputs(sea)[0] == p.inputs(sea)[0]
                     }) {
                         // Loop already has a real Phi, use it
                         loop_phi
@@ -87,59 +80,59 @@ impl<'t> Nodes<'t> {
                         // The phi takes its one input (no backedge yet) from a recursive
                         // lookup, which might have insert a Phi in every loop nest.
 
-                        let name = self.types.get_str(name);
-                        let recursive = self.scope_lookup_update(loop_, name, None, nesting_level);
-                        let new_phi = self.create_peepholed(Node::make_phi(
+                        let name = sea.types.get_str(name);
+                        let recursive = loop_.lookup_update(name, None, nesting_level, sea);
+                        let new_phi = sea.create_peepholed(Node::make_phi(
                             name,
                             declared_ty,
-                            vec![self.inputs[loop_][0], recursive, None],
+                            vec![loop_.inputs(sea)[0], recursive, None],
                         ));
 
-                        self.set_def(*loop_, index, Some(new_phi));
+                        sea.set_def(*loop_, index, Some(new_phi));
                         Some(new_phi)
                     };
-                    self.set_def(*scope, index, old);
+                    sea.set_def(*self, index, old);
                 }
             }
 
             // Not lazy, so this is the answer
             if value.is_some() {
-                self.set_def(*scope, index, value);
+                sea.set_def(*self, index, value);
                 value
             } else {
                 old
             }
         } else if nesting_level > 0 {
-            self.scope_lookup_update(scope, name, value, nesting_level - 1)
+            self.lookup_update(name, value, nesting_level - 1, sea)
         } else {
             None
         }
     }
 
-    pub fn scope_dup(&mut self, scope: ScopeId, lazy_loop_phis: bool) -> ScopeId {
-        let clone = self[scope].clone();
-        let dup = self.create((Node::Scope(clone), vec![]));
-        let dup = self.to_scope(dup).unwrap();
+    pub fn dup(self, lazy_loop_phis: bool, sea: &mut Nodes<'t>) -> ScopeId {
+        let clone = sea[self].clone();
+        let dup = sea.create((Node::Scope(clone), vec![]));
+        let dup = sea.to_scope(dup).unwrap();
 
-        self.add_def(*dup, self.inputs[scope][0]); // ctrl
-        for i in 1..self.inputs[scope].len() {
+        sea.add_def(*dup, self.inputs(sea)[0]); // ctrl
+        for i in 1..self.inputs(sea).len() {
             // For lazy phis on loops we use a sentinel
             // that will trigger phi creation on update
-            self.add_def(
+            sea.add_def(
                 *dup,
                 if lazy_loop_phis {
-                    Some(*scope)
+                    Some(*self)
                 } else {
-                    self.inputs[scope][i]
+                    self.inputs(sea)[i]
                 },
             );
         }
         dup
     }
 
-    pub fn scope_reverse_names(&self, scope: ScopeId) -> Vec<Option<&'t str>> {
-        let mut names = vec![None; self.inputs[scope].len()];
-        for syms in &self[scope].scopes {
+    pub fn reverse_names(self, sea: &Nodes<'t>) -> Vec<Option<&'t str>> {
+        let mut names = vec![None; self.inputs(sea).len()];
+        for syms in &sea[self].scopes {
             for (&name, &(index, _)) in syms {
                 debug_assert!(names[index].is_none());
                 names[index] = Some(name);
@@ -148,79 +141,79 @@ impl<'t> Nodes<'t> {
         names
     }
 
-    pub fn scope_merge(&mut self, this: ScopeId, that: ScopeId) -> NodeId {
-        let c1 = self.inputs[this][0];
-        let c2 = self.inputs[that][0];
-        let region = self.create(Node::make_region(vec![None, c1, c2]));
-        self.keep(region);
-        self.set_def(*this, 0, Some(region)); // set ctrl
+    pub fn merge(self, that: ScopeId, sea: &mut Nodes<'t>) -> NodeId {
+        let c1 = self.inputs(sea)[0];
+        let c2 = that.inputs(sea)[0];
+        let region = sea.create(Node::make_region(vec![None, c1, c2]));
+        sea.keep(region);
+        sea.set_def(*self, 0, Some(region)); // set ctrl
 
-        let names = self.scope_reverse_names(this);
+        let names = self.reverse_names(sea);
 
         // Note that we skip i==0, which is bound to '$ctrl'
         for (i, name) in names.into_iter().enumerate().skip(1) {
-            let this_in = self.inputs[this][i];
-            let that_in = self.inputs[that][i];
+            let this_in = self.inputs(sea)[i];
+            let that_in = that.inputs(sea)[i];
             if this_in != that_in {
                 // If we are in lazy phi mode we need to a lookup
                 // by name as it will trigger a phi creation
                 let name = name.unwrap();
-                let this_l = self.scope_lookup(this, name).unwrap();
-                let that_l = self.scope_lookup(that, name).unwrap();
+                let this_l = self.lookup(name, sea).unwrap();
+                let that_l = that.lookup(name, sea).unwrap();
 
-                let declared_ty = self[this].lookup(name).unwrap().1;
-                let phi = self.create_peepholed(Node::make_phi(
+                let declared_ty = sea[self].lookup(name).unwrap().1;
+                let phi = sea.create_peepholed(Node::make_phi(
                     name,
                     declared_ty,
                     vec![Some(region), Some(this_l), Some(that_l)],
                 ));
-                self.set_def(*this, i, Some(phi));
+                sea.set_def(*self, i, Some(phi));
             }
         }
 
-        self.kill(*that);
+        sea.kill(*that);
 
-        self.unkeep(region);
-        self.peephole(region)
+        sea.unkeep(region);
+        sea.peephole(region)
     }
 
     /// Merge the backedge scope into this loop head scope
     /// We set the second input to the phi from the back edge (i.e. loop body)
-    pub fn scope_end_loop(&mut self, head: ScopeId, back: ScopeId, exit: ScopeId) {
-        let ctrl = self.inputs[head][0].unwrap();
-        assert!(matches!(&self[ctrl], Node::Loop));
-        assert!(Self::in_progress(&self.nodes, &self.inputs, ctrl));
+    pub fn end_loop(self, back: ScopeId, exit: ScopeId, sea: &mut Nodes<'t>) {
+        let ctrl = self.inputs(sea)[0].unwrap();
+        assert!(matches!(&sea[ctrl], Node::Loop));
+        assert!(Nodes::in_progress(&sea.nodes, &sea.inputs, ctrl));
 
-        self.set_def(ctrl, 2, self.inputs[back][0]);
+        sea.set_def(ctrl, 2, back.inputs(sea)[0]);
 
-        for i in 1..self.inputs[head].len() {
-            if self.inputs[back][i] != Some(*head) {
-                let phi = self.inputs[head][i].unwrap();
-                assert_eq!(self.inputs[phi][0], Some(ctrl));
-                assert_eq!(self.inputs[phi][2], None);
-                self.set_def(phi, 2, self.inputs[back][i]);
+        for i in 1..self.inputs(sea).len() {
+            if back.inputs(sea)[i] != Some(*self) {
+                let phi = self.inputs(sea)[i].unwrap();
+                assert_eq!(phi.inputs(sea)[0], Some(ctrl));
+                assert_eq!(phi.inputs(sea)[2], None);
+                sea.set_def(phi, 2, back.inputs(sea)[i]);
             }
-            if self.inputs[exit][i] == Some(*head) {
+            if exit.inputs(sea)[i] == Some(*self) {
                 // Replace a lazy-phi on the exit path also
-                self.set_def(*exit, i, self.inputs[head][i])
+                sea.set_def(*exit, i, self.inputs(sea)[i])
             }
         }
 
-        self.kill(*back); // Loop backedge is dead
+        sea.kill(*back); // Loop backedge is dead
 
         // Now one-time do a useless-phi removal
-        for i in 1..self.inputs[head].len() {
-            if let Some(phi) = self.inputs[head][i] {
-                if let Node::Phi(_) = &self[phi] {
+        for i in 1..self.inputs(sea).len() {
+            if let Some(phi) = self.inputs(sea)[i] {
+                if let Node::Phi(_) = &sea[phi] {
                     // Do an eager useless-phi removal
-                    let in_ = self.peephole(phi);
-                    for &o in &self.outputs[phi] {
-                        self.iter_peeps.add(o);
+                    let in_ = sea.peephole(phi);
+                    for &o in &sea.outputs[phi] {
+                        sea.iter_peeps.add(o);
                     }
-                    self.move_deps_to_worklist(phi);
+                    sea.move_deps_to_worklist(phi);
                     if in_ != phi {
-                        self.subsume(phi, in_);
-                        self.set_def(*head, i, Some(in_)); // Set the update back into Scope
+                        sea.subsume(phi, in_);
+                        sea.set_def(*self, i, Some(in_)); // Set the update back into Scope
                     }
                 }
             }
@@ -232,55 +225,55 @@ impl<'t> Nodes<'t> {
     ///
     /// This Scope looks for direct variable uses, or certain simple
     /// combinations, and replaces the variable with the upcast variant.
-    pub fn scope_upcast(
-        &mut self,
-        scope: ScopeId,
+    pub fn upcast(
+        self,
         ctrl: NodeId,
         mut pred: NodeId,
         invert: bool,
+        sea: &mut Nodes<'t>,
     ) -> Option<NodeId> {
-        if self.ty[ctrl]? == self.types.ty_xctrl {
+        if ctrl.ty(sea)? == sea.types.ty_xctrl {
             return None;
         }
         // Invert the If conditional
         if invert {
-            if self.to_not(pred).is_some() {
-                pred = self.inputs[pred][1].unwrap()
+            if sea.to_not(pred).is_some() {
+                pred = pred.inputs(sea)[1].unwrap()
             } else {
-                pred = self.create_peepholed(Node::make_not(pred));
-                self.iter_peeps.add(pred);
+                pred = sea.create_peepholed(Node::make_not(pred));
+                sea.iter_peeps.add(pred);
             }
         }
 
         // Direct use of a value as predicate.  This is a zero/null test.
-        if self.inputs[scope].iter().any(|x| *x == Some(pred)) {
-            let tmp = self.ty[pred].unwrap();
+        if self.inputs(sea).iter().any(|x| *x == Some(pred)) {
+            let tmp = pred.ty(sea).unwrap();
             let Type::Pointer(_) = *tmp else {
                 // Must be an `int`, since int and ptr are the only two value types
                 // being tested. No representation for a generic not-null int, so no upcast.
                 return None;
             };
-            if self.types.isa(tmp, self.types.ty_pointer_void) {
+            if sea.types.isa(tmp, sea.types.ty_pointer_void) {
                 return None; // Already not-null, no reason to upcast
             }
             // Upcast the ptr to not-null ptr, and replace in scope
-            let c = self.create_peepholed(Node::make_cast(self.types.ty_pointer_void, ctrl, pred));
-            let t = self.compute(c);
-            self.set_type(c, t);
-            self.replace(scope, pred, Some(c));
+            let c = sea.create_peepholed(Node::make_cast(sea.types.ty_pointer_void, ctrl, pred));
+            let t = sea.compute(c);
+            sea.set_type(c, t);
+            self.replace(pred, Some(c), sea);
         }
 
-        if self.to_not(pred).is_some() {
+        if sea.to_not(pred).is_some() {
             // Direct use of a !value as predicate.  This is a zero/null test.
-            let not_in_1 = self.inputs[pred][1].unwrap();
-            if self.inputs[scope].iter().any(|x| *x == Some(not_in_1)) {
-                let t = self.ty[not_in_1].unwrap();
-                let tinit = self.types.make_init(t).unwrap();
-                return if self.types.isa(t, tinit) {
+            let not_in_1 = pred.inputs(sea)[1].unwrap();
+            if self.inputs(sea).iter().any(|x| *x == Some(not_in_1)) {
+                let t = not_in_1.ty(sea).unwrap();
+                let tinit = sea.types.make_init(t).unwrap();
+                return if sea.types.isa(t, tinit) {
                     None // Already zero/null, no reason to upcast
                 } else {
-                    let c = self.create_peepholed(Node::make_constant(self.start, tinit));
-                    self.replace(scope, not_in_1, Some(c));
+                    let c = sea.create_peepholed(Node::make_constant(sea.start, tinit));
+                    self.replace(not_in_1, Some(c), sea);
                     Some(c)
                 };
             }
@@ -294,11 +287,11 @@ impl<'t> Nodes<'t> {
         None
     }
 
-    fn replace(&mut self, this: ScopeId, old: NodeId, cast: Option<NodeId>) {
+    fn replace(self, old: NodeId, cast: Option<NodeId>, sea: &mut Nodes<'t>) {
         debug_assert_ne!(Some(old), cast);
-        for i in 0..self.inputs[this].len() {
-            if self.inputs[this][i] == Some(old) {
-                self.set_def(*this, i, cast);
+        for i in 0..self.inputs(sea).len() {
+            if self.inputs(sea)[i] == Some(old) {
+                sea.set_def(*self, i, cast);
             }
         }
     }

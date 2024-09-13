@@ -536,7 +536,7 @@ impl<'t> Nodes<'t> {
         for (alias, &alias_ty) in args[len..].iter().enumerate() {
             let name = self.types.get_str(&Parser::mem_name(alias as u32));
             let n = self.create_peepholed(Node::make_proj(start, alias, name));
-            self.scope_define(scope, name, alias_ty, n).unwrap()
+            scope.define(name, alias_ty, n, self).unwrap()
         }
     }
 }
