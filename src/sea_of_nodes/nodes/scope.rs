@@ -6,7 +6,7 @@ use crate::sea_of_nodes::types::{Ty, Type};
 
 #[derive(Clone, Debug)]
 pub struct ScopeNode<'t> {
-    pub scopes: Vec<HashMap<String, (usize, Ty<'t>)>>,
+    pub scopes: Vec<HashMap<&'t str, (usize, Ty<'t>)>>,
 }
 
 impl<'t> ScopeNode<'t> {
@@ -31,7 +31,7 @@ impl<'t> Nodes<'t> {
     pub fn scope_define(
         &mut self,
         scope: ScopeId,
-        name: String,
+        name: &'t str,
         declared_ty: Ty<'t>,
         value: NodeId,
     ) -> Result<(), ()> {
@@ -87,9 +87,10 @@ impl<'t> Nodes<'t> {
                         // The phi takes its one input (no backedge yet) from a recursive
                         // lookup, which might have insert a Phi in every loop nest.
 
+                        let name = self.types.get_str(name);
                         let recursive = self.scope_lookup_update(loop_, name, None, nesting_level);
                         let new_phi = self.create_peepholed(Node::make_phi(
-                            name.to_string(),
+                            name,
                             declared_ty,
                             vec![self.inputs[loop_][0], recursive, None],
                         ));
@@ -136,12 +137,12 @@ impl<'t> Nodes<'t> {
         dup
     }
 
-    pub fn scope_reverse_names(&self, scope: ScopeId) -> Vec<Option<String>> {
+    pub fn scope_reverse_names(&self, scope: ScopeId) -> Vec<Option<&'t str>> {
         let mut names = vec![None; self.inputs[scope].len()];
         for syms in &self[scope].scopes {
-            for (name, &(index, _)) in syms {
+            for (&name, &(index, _)) in syms {
                 debug_assert!(names[index].is_none());
-                names[index] = Some(name.clone());
+                names[index] = Some(name);
             }
         }
         names
@@ -164,10 +165,10 @@ impl<'t> Nodes<'t> {
                 // If we are in lazy phi mode we need to a lookup
                 // by name as it will trigger a phi creation
                 let name = name.unwrap();
-                let this_l = self.scope_lookup(this, &name).unwrap();
-                let that_l = self.scope_lookup(that, &name).unwrap();
+                let this_l = self.scope_lookup(this, name).unwrap();
+                let that_l = self.scope_lookup(that, name).unwrap();
 
-                let declared_ty = self[this].lookup(&name).unwrap().1;
+                let declared_ty = self[this].lookup(name).unwrap().1;
                 let phi = self.create_peepholed(Node::make_phi(
                     name,
                     declared_ty,

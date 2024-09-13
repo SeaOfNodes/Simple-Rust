@@ -111,23 +111,13 @@ impl<'s, 't> Parser<'s, 't> {
 
         // project ctrl and arg0 from start
         let start = self.nodes.start;
-        let ctrl = self.peephole(Node::make_proj(start, 0, ScopeNode::CTRL.to_string()));
+        let ctrl = self.peephole(Node::make_proj(start, 0, ScopeNode::CTRL));
         self.nodes
-            .scope_define(
-                self.scope,
-                ScopeNode::CTRL.to_string(),
-                self.types.ty_ctrl,
-                ctrl,
-            )
+            .scope_define(self.scope, ScopeNode::CTRL, self.types.ty_ctrl, ctrl)
             .expect("not in scope");
-        let arg0 = self.peephole(Node::make_proj(start, 1, ScopeNode::ARG0.to_string()));
+        let arg0 = self.peephole(Node::make_proj(start, 1, ScopeNode::ARG0));
         self.nodes
-            .scope_define(
-                self.scope,
-                ScopeNode::ARG0.to_string(),
-                self.types.ty_int_bot,
-                arg0,
-            )
+            .scope_define(self.scope, ScopeNode::ARG0, self.types.ty_int_bot, arg0)
             .expect("not in scope");
 
         self.parse_block()?;
@@ -288,10 +278,10 @@ impl<'s, 't> Parser<'s, 't> {
 
         // Setup projection nodes
         self.nodes.keep(if_node);
-        let if_true = self.peephole(Node::make_proj(if_node, 0, "True".to_string()));
+        let if_true = self.peephole(Node::make_proj(if_node, 0, "True"));
         self.nodes.unkeep(if_node);
         self.nodes.keep(if_true);
-        let if_false = self.peephole(Node::make_proj(if_node, 1, "False".to_string()));
+        let if_false = self.peephole(Node::make_proj(if_node, 1, "False"));
 
         // Clone the body Scope to create the break/exit Scope which accounts for any
         // side effects in the predicate.  The break/exit Scope will be the final
@@ -407,10 +397,10 @@ impl<'s, 't> Parser<'s, 't> {
 
         // Setup projection nodes
         self.nodes.keep(if_node);
-        let if_true = self.peephole(Node::make_proj(if_node, 0, "True".to_string()));
+        let if_true = self.peephole(Node::make_proj(if_node, 0, "True"));
         self.nodes.unkeep(if_node);
         self.nodes.keep(if_true);
-        let if_false = self.peephole(Node::make_proj(if_node, 1, "False".to_string()));
+        let if_false = self.peephole(Node::make_proj(if_node, 1, "False"));
         self.nodes.keep(if_false);
 
         // In if true branch, the ifT proj node becomes the ctrl
@@ -469,7 +459,7 @@ impl<'s, 't> Parser<'s, 't> {
         let names = self.nodes.scope_reverse_names(self.scope);
         for name in names.into_iter().map(Option::unwrap) {
             if name.starts_with("$") && name == "$ctrl" {
-                let v = self.nodes.scope_lookup(self.scope, &name).unwrap();
+                let v = self.nodes.scope_lookup(self.scope, name).unwrap();
                 self.nodes.add_def(ret, Some(v));
             }
         }
@@ -539,12 +529,9 @@ impl<'s, 't> Parser<'s, 't> {
         };
 
         // Defining a new variable vs updating an old one
+        let name = self.types.get_str(name);
         let t = if let Some(t) = t {
-            if self
-                .nodes
-                .scope_define(self.scope, name.to_string(), t, expr)
-                .is_err()
-            {
+            if self.nodes.scope_define(self.scope, name, t, expr).is_err() {
                 return Err(format!("Redefining name '{name}'"));
             }
             t
@@ -605,8 +592,9 @@ impl<'s, 't> Parser<'s, 't> {
             ));
         }
 
+        let name = self.types.get_str(name);
         self.nodes
-            .scope_define(self.scope, name.to_string(), t, expr)
+            .scope_define(self.scope, name, t, expr)
             .map_err(|()| format!("Redefining name '{name}'"))
     }
 
@@ -772,11 +760,7 @@ impl<'s, 't> Parser<'s, 't> {
         let mut alias = *self.nodes[self.nodes.start].alias_starts.get(name).unwrap();
         for &(fname, _) in fields {
             let mem_slice = self.mem_alias_lookup(alias).unwrap();
-            let store = self.peephole(Node::make_store(
-                fname.to_string(),
-                alias,
-                [mem_slice, n, init_value],
-            ));
+            let store = self.peephole(Node::make_store(fname, alias, [mem_slice, n, init_value]));
             self.mem_alias_update(alias, store).unwrap();
             alias += 1;
         }
@@ -789,12 +773,13 @@ impl<'s, 't> Parser<'s, 't> {
     /// Using vars has the benefit that all the existing machinery of scoping
     /// and phis work as expected
     fn mem_alias_lookup(&mut self, alias: u32) -> Result<NodeId, ()> {
-        self.nodes.scope_lookup(self.scope, &Self::mem_name(alias))
+        let name = self.types.get_str(&Self::mem_name(alias));
+        self.nodes.scope_lookup(self.scope, name)
     }
 
     fn mem_alias_update(&mut self, alias: u32, st: NodeId) -> Result<NodeId, ()> {
-        self.nodes
-            .scope_update(self.scope, &Self::mem_name(alias), st)
+        let name = self.types.get_str(&Self::mem_name(alias));
+        self.nodes.scope_update(self.scope, name, st)
     }
 
     pub(crate) fn mem_name(alias: u32) -> String {
@@ -851,11 +836,7 @@ impl<'s, 't> Parser<'s, 't> {
             } else {
                 let val = self.parse_expression()?;
                 let mem_slice = self.mem_alias_lookup(alias).unwrap();
-                let store = self.peephole(Node::make_store(
-                    name.to_string(),
-                    alias,
-                    [mem_slice, expr, val],
-                ));
+                let store = self.peephole(Node::make_store(name, alias, [mem_slice, expr, val]));
                 self.mem_alias_update(alias, store).unwrap();
                 return Ok(expr); // "obj.a = expr" returns the expression while updating memory
             }
@@ -864,7 +845,7 @@ impl<'s, 't> Parser<'s, 't> {
         let declared_type = fields[idx].1;
         let mem_slice = self.mem_alias_lookup(alias).unwrap();
         let load = self.peephole(Node::make_load(
-            name.to_string(),
+            name,
             alias,
             declared_type,
             [mem_slice, expr],

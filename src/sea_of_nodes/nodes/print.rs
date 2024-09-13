@@ -89,11 +89,11 @@ impl Display for PrintNodes2<'_, '_, '_> {
                 let node = nodes.to_scope(node).unwrap();
                 let names = nodes.scope_reverse_names(node);
 
-                for (i, n) in names.iter().enumerate() {
+                for (i, &n) in names.iter().enumerate() {
                     if i > 0 {
                         write!(f, " ")?;
                     }
-                    write!(f, "{}:", n.as_ref().unwrap())?;
+                    write!(f, "{}:", n.unwrap())?;
                     let mut node = inputs[i];
                     while node.is_some_and(|n| matches!(&nodes[n], Node::Scope(_))) {
                         write!(f, "Lazy_")?;

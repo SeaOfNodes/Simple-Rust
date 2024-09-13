@@ -534,8 +534,8 @@ impl<'t> Nodes<'t> {
         // For each of the fields we now add a mem projection.  Note that the
         // alias matches the slot of the field in the tuple
         for (alias, &alias_ty) in args[len..].iter().enumerate() {
-            let name = Parser::mem_name(alias as u32);
-            let n = self.create_peepholed(Node::make_proj(start, alias, name.to_string()));
+            let name = self.types.get_str(&Parser::mem_name(alias as u32));
+            let n = self.create_peepholed(Node::make_proj(start, alias, name));
             self.scope_define(scope, name, alias_ty, n).unwrap()
         }
     }

@@ -236,12 +236,9 @@ impl<'t> Nodes<'t> {
                 rhss[i] = self.inputs[n_in[i].unwrap()][2];
             }
 
-            let label = &self[node].label;
-            let phi_lhs = Node::make_phi(label.to_string(), declared_ty, lhss);
-            let phi_rhs = Node::make_phi(label.to_string(), declared_ty, rhss);
-
-            let phi_lhs = self.create_peepholed(phi_lhs);
-            let phi_rhs = self.create_peepholed(phi_rhs);
+            let label = self[node].label;
+            let phi_lhs = self.create_peepholed(Node::make_phi(label, declared_ty, lhss));
+            let phi_rhs = self.create_peepholed(Node::make_phi(label, declared_ty, rhss));
 
             return Some(self.create((self[op].clone(), vec![None, Some(phi_lhs), Some(phi_rhs)])));
         }
@@ -469,17 +466,17 @@ impl<'t> Nodes<'t> {
                 let Node::MemOp(mem_op) = &self[node] else {
                     unreachable!()
                 };
-                let name = mem_op.name.clone();
+                let name = mem_op.name;
                 let alias = mem_op.alias;
 
                 let ld1 = self.create_peepholed(Node::make_load(
-                    name.clone(),
+                    name,
                     alias,
                     declared_ty,
                     [self.inputs[mem][1].unwrap(), ptr],
                 ));
                 let ld2 = self.create_peepholed(Node::make_load(
-                    name.clone(),
+                    name,
                     alias,
                     declared_ty,
                     [self.inputs[mem][2].unwrap(), ptr],
@@ -631,10 +628,9 @@ impl<'t> Nodes<'t> {
         let label = format!(
             "{}{}",
             self[lphi].label,
-            self.to_phi(rhs)
-                .map(|p| self[p].label.as_str())
-                .unwrap_or("")
+            self.to_phi(rhs).map(|p| self[p].label).unwrap_or("")
         );
+        let label = self.types.get_str(&label);
         let ty = self[lphi].ty;
         let phi = self.create_peepholed(Node::make_phi(label, ty, ns));
 

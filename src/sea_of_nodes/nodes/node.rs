@@ -17,7 +17,7 @@ pub enum Node<'t> {
     Scope(ScopeNode<'t>),
     Bool(BoolOp),
     Not,
-    Proj(ProjNode),
+    Proj(ProjNode<'t>),
     If,
     Phi(PhiNode<'t>),
     Region,
@@ -59,20 +59,20 @@ impl BoolOp {
 }
 
 #[derive(Clone, Debug)]
-pub struct ProjNode {
+pub struct ProjNode<'t> {
     pub index: usize,
-    pub label: String,
+    pub label: &'t str,
 }
 
 #[derive(Clone, Debug)]
 pub struct PhiNode<'t> {
-    pub label: String,
+    pub label: &'t str,
     pub ty: Ty<'t>,
 }
 
 #[derive(Clone, Debug)]
 pub struct MemOp<'t> {
-    pub name: String,
+    pub name: &'t str,
     pub alias: u32,
     pub kind: MemOpKind<'t>,
 }
@@ -102,7 +102,7 @@ impl<'t> Node<'t> {
                 BoolOp::LE => "LE",
             },
             Node::Not => "Not",
-            Node::Proj(p) => return Cow::Owned(p.label.clone()), // clone to keep static lifetime for others
+            Node::Proj(p) => return Cow::Borrowed(p.label),
             Node::If => "If",
             Node::Phi(p) => return Cow::Owned(format!("Phi_{}", p.label)),
             Node::Region { .. } => "Region",
@@ -263,7 +263,7 @@ impl<'t> Node<'t> {
         (Node::Not, vec![None, Some(expr)])
     }
 
-    pub fn make_proj<N: Into<NodeId>>(ctrl: N, index: usize, label: String) -> NodeCreation<'t> {
+    pub fn make_proj<N: Into<NodeId>>(ctrl: N, index: usize, label: &'t str) -> NodeCreation<'t> {
         (
             Node::Proj(ProjNode { index, label }),
             vec![Some(ctrl.into())],
@@ -274,7 +274,7 @@ impl<'t> Node<'t> {
         (Node::If, vec![Some(ctrl), Some(pred)])
     }
 
-    pub fn make_phi(label: String, ty: Ty<'t>, inputs: Vec<Option<NodeId>>) -> NodeCreation<'t> {
+    pub fn make_phi(label: &'t str, ty: Ty<'t>, inputs: Vec<Option<NodeId>>) -> NodeCreation<'t> {
         (Node::Phi(PhiNode { label, ty }), inputs)
     }
 
@@ -295,7 +295,7 @@ impl<'t> Node<'t> {
     }
 
     pub fn make_load(
-        name: String,
+        name: &'t str,
         alias: u32,
         declared_type: Ty<'t>,
         [mem_slice, mem_ptr]: [NodeId; 2],
@@ -311,7 +311,7 @@ impl<'t> Node<'t> {
     }
 
     pub fn make_store(
-        name: String,
+        name: &'t str,
         alias: u32,
         [mem_slice, mem_ptr, value]: [NodeId; 3],
     ) -> NodeCreation<'t> {
