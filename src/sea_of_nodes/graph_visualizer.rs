@@ -5,7 +5,7 @@ use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::time::Duration;
 
-use crate::sea_of_nodes::nodes::index::ScopeId;
+use crate::sea_of_nodes::nodes::index::{ScopeId, StopId};
 use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
 
 pub fn run_graphviz_and_chromium(input: String) {
@@ -56,13 +56,13 @@ pub fn run_graphviz_and_chromium(input: String) {
 
 pub fn generate_dot_output(
     nodes: &Nodes,
-    stop: NodeId,
+    stop: StopId,
     scope: Option<ScopeId>,
     x_scopes: &[ScopeId],
     source: &str,
     separate_control_cluster: bool,
 ) -> Result<String, fmt::Error> {
-    let all = find_all(nodes, &[Some(stop), scope.as_deref().copied()]);
+    let all = find_all(nodes, &[Some(*stop), scope.as_deref().copied()]);
 
     let mut sb = String::new();
     writeln!(sb, "digraph \"{}\" {{", source.replace("\"", "\\\""))?;

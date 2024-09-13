@@ -2,6 +2,7 @@ use crate::datastructures::id_vec::IdVec;
 use crate::sea_of_nodes::nodes::node::{MemOp, PhiNode, StartNode};
 use crate::sea_of_nodes::nodes::{BoolOp, Node, NodeId, NodeVec, Nodes, ProjNode, ScopeNode};
 use crate::sea_of_nodes::types::Ty;
+use std::fmt;
 use std::ops::{Deref, Index, IndexMut};
 
 // generic index
@@ -33,7 +34,7 @@ impl<'t> IndexMut<NodeId> for Nodes<'t> {
 macro_rules! define_id {
     ($TyId:ident, $Id:ident, $downcast:ident, $t:lifetime, $Out:ty, $($pattern:pat => $result:expr),*) => {
 
-        #[derive(Copy, Clone, Eq, PartialEq, Hash)]
+        #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
         pub struct $Id(NodeId);
 
         // conversions
@@ -46,6 +47,9 @@ macro_rules! define_id {
         }
         impl From<$Id> for TypedNodeId {
             fn from(value: $Id) -> Self { Self::$TyId(value) }
+        }
+        impl fmt::Display for $Id {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { self.0.fmt(f) }
         }
 
         // downcast

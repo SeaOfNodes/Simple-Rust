@@ -9,11 +9,16 @@ pub enum EResult {
     Timeout,
 }
 
-pub fn evaluate(nodes: &Nodes, graph: NodeId, parameter: Option<i64>, loops: Option<usize>) -> i64 {
+pub fn evaluate(
+    nodes: &Nodes,
+    graph: impl Into<NodeId>,
+    parameter: Option<i64>,
+    loops: Option<usize>,
+) -> i64 {
     let parameter = parameter.unwrap_or(0);
     let loops = loops.unwrap_or(1000);
 
-    let res = evaluate_with_result(nodes, graph, parameter, loops);
+    let res = evaluate_with_result(nodes, graph.into(), parameter, loops);
 
     match res {
         EResult::Value(v) => v,

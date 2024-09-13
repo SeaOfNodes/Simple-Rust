@@ -67,7 +67,7 @@ fn test_var_arg() {
     let stop = parser.parse().unwrap();
 
     assert!(matches!(&parser.nodes[stop], Node::Stop));
-    let ret = parser.nodes.unique_input(stop).expect("has one ret");
+    let ret = parser.nodes.unique_input(*stop).expect("has one ret");
     assert!(matches!(&parser.nodes[ret], Node::Return));
 
     assert!(matches!(

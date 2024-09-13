@@ -19,7 +19,7 @@ return 1;
     parser.show_graph();
     assert_eq!("return 2;", parser.print(stop));
 
-    let ret = parser.nodes.unique_input(stop).unwrap();
+    let ret = parser.nodes.unique_input(*stop).unwrap();
     assert!(matches!(parser.nodes[ret], Node::Return));
     let ret_ctrl = parser.nodes.inputs[ret][0].unwrap();
     assert!(matches!(parser.nodes[ret_ctrl], Node::Proj(_)));
@@ -63,7 +63,7 @@ return a;
     parser.show_graph();
     assert_eq!("return 2;", parser.print(stop));
 
-    let ret = parser.nodes.unique_input(stop).unwrap();
+    let ret = parser.nodes.unique_input(*stop).unwrap();
     assert!(matches!(parser.nodes[ret], Node::Return));
     let ret_ctrl = parser.nodes.inputs[ret][0].unwrap();
     assert!(matches!(parser.nodes[ret_ctrl], Node::Proj(_)));

@@ -12,7 +12,7 @@ fn test_simple_program() {
     let stop = parser.parse().unwrap();
 
     assert!(matches!(&parser.nodes[stop], Node::Stop));
-    let ret = parser.nodes.unique_input(stop).unwrap();
+    let ret = parser.nodes.unique_input(*stop).unwrap();
     assert!(matches!(&parser.nodes[ret], Node::Return));
 
     let ctrl = parser.nodes.inputs[ret][0].expect("has ctrl");

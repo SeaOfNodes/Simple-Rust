@@ -34,6 +34,7 @@
 
 use crate::datastructures::id_set::IdSet;
 use crate::datastructures::random::Random;
+use crate::sea_of_nodes::nodes::index::StopId;
 use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
 
 pub struct IterPeeps {
@@ -80,8 +81,8 @@ impl<'t> Nodes<'t> {
     }
 
     /// Iterate peepholes to a fixed point
-    pub fn iterate(&mut self, stop: NodeId) {
-        debug_assert!(self.progress_on_list(stop));
+    pub fn iterate(&mut self, stop: StopId) {
+        debug_assert!(self.progress_on_list(*stop));
         while let Some(n) = self.iter_peeps.work.pop() {
             if self.is_dead(n) {
                 continue;
@@ -121,9 +122,9 @@ impl<'t> Nodes<'t> {
 
                 // If there are distant neighbors, move to worklist
                 self.move_deps_to_worklist(n);
-                debug_assert!(self.progress_on_list(stop)); // Very expensive assert
+                debug_assert!(self.progress_on_list(*stop)); // Very expensive assert
             }
-            if self.is_unused(n) && !matches!(&self[n], Node::Stop) {
+            if self.is_unused(n) && self.to_stop(n).is_some() {
                 self.kill(n); // just plain dead
             }
         }

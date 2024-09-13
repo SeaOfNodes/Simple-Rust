@@ -1,5 +1,5 @@
 use crate::sea_of_nodes::graph_visualizer;
-use crate::sea_of_nodes::nodes::index::ScopeId;
+use crate::sea_of_nodes::nodes::index::{ScopeId, StopId};
 use crate::sea_of_nodes::nodes::{BoolOp, Node, NodeCreation, NodeId, Nodes, ScopeNode};
 use crate::sea_of_nodes::types::{Struct, Ty, Type, Types};
 use std::collections::HashMap;
@@ -17,7 +17,7 @@ pub struct Parser<'s, 't> {
     pub nodes: Nodes<'t>,
 
     /// returned after parsing
-    pub(crate) stop: NodeId,
+    pub(crate) stop: StopId,
 
     /// The current scope changes as we parse.
     pub(crate) scope: ScopeId,
@@ -72,6 +72,7 @@ impl<'s, 't> Parser<'s, 't> {
         nodes.start = nodes.to_start(start).unwrap();
 
         let stop = nodes.create(Node::make_stop());
+        let stop = nodes.to_stop(stop).unwrap();
         nodes.ty[stop] = Some(types.ty_bot); // differs from java; ensures that it isn't dead
 
         Self {
@@ -102,7 +103,7 @@ impl<'s, 't> Parser<'s, 't> {
         self.nodes.create_peepholed(c)
     }
 
-    pub fn parse(&mut self) -> PResult<NodeId> {
+    pub fn parse(&mut self) -> PResult<StopId> {
         self.x_scopes.push(self.scope);
 
         // Enter a new scope for the initial control and arguments
@@ -140,13 +141,13 @@ impl<'s, 't> Parser<'s, 't> {
                 self.lexer.get_any_next_token()
             ))
         } else {
-            let p = self.nodes.peephole(self.stop);
-            assert_eq!(self.stop, p);
+            let p = self.nodes.peephole(*self.stop);
+            assert_eq!(*self.stop, p);
             Ok(self.stop)
         }
     }
 
-    pub fn iterate(&mut self, stop: NodeId) {
+    pub fn iterate(&mut self, stop: StopId) {
         self.nodes.iterate(stop)
     }
 
@@ -473,7 +474,7 @@ impl<'s, 't> Parser<'s, 't> {
             }
         }
 
-        self.nodes.add_def(self.stop, Some(ret));
+        self.nodes.add_def(*self.stop, Some(ret));
         let ctrl = self.peephole(Node::make_constant(self.nodes.start, self.types.ty_xctrl));
         self.set_ctrl(ctrl);
         Ok(())
@@ -497,8 +498,8 @@ impl<'s, 't> Parser<'s, 't> {
         }
     }
 
-    pub fn print(&mut self, node: NodeId) -> String {
-        self.nodes.print(Some(node)).to_string()
+    pub fn print(&mut self, node: impl Into<NodeId>) -> String {
+        self.nodes.print(Some(node.into())).to_string()
     }
 
     /// Parses an expression statement or a declaration statement where type is a struct

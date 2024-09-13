@@ -6,13 +6,13 @@ use crate::datastructures::id_set::IdSet;
 use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
 use crate::sea_of_nodes::types::{Int, Ty, Type};
 
-pub fn pretty_print_llvm(nodes: &Nodes, node: NodeId, depth: usize) -> String {
-    pretty_print_(nodes, node, depth, true)
+pub fn pretty_print_llvm(nodes: &Nodes, node: impl Into<NodeId>, depth: usize) -> String {
+    pretty_print_(nodes, node.into(), depth, true)
 }
 
 /// Another bulk pretty-printer.  Makes more effort at basic-block grouping.
-pub fn pretty_print(nodes: &Nodes, node: NodeId, depth: usize) -> String {
-    pretty_print_(nodes, node, depth, false)
+pub fn pretty_print(nodes: &Nodes, node: impl Into<NodeId>, depth: usize) -> String {
+    pretty_print_(nodes, node.into(), depth, false)
 }
 
 fn pretty_print_(nodes: &Nodes, node: NodeId, depth: usize, llvm_format: bool) -> String {
