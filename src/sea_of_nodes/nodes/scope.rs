@@ -174,7 +174,7 @@ impl<'t> ScopeId {
         sea.kill(*that);
 
         sea.unkeep(region);
-        sea.peephole(region)
+        region.peephole(sea)
     }
 
     /// Merge the backedge scope into this loop head scope
@@ -206,7 +206,7 @@ impl<'t> ScopeId {
             if let Some(phi) = self.inputs(sea)[i] {
                 if let Node::Phi(_) = &sea[phi] {
                     // Do an eager useless-phi removal
-                    let in_ = sea.peephole(phi);
+                    let in_ = phi.peephole(sea);
                     for &o in &sea.outputs[phi] {
                         sea.iter_peeps.add(o);
                     }

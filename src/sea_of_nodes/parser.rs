@@ -136,7 +136,7 @@ impl<'s, 't> Parser<'s, 't> {
                 self.lexer.get_any_next_token()
             ))
         } else {
-            let p = self.nodes.peephole(*self.stop);
+            let p = self.stop.peephole(&mut self.nodes);
             assert_eq!(*self.stop, p);
             Ok(self.stop)
         }
@@ -644,7 +644,7 @@ impl<'s, 't> Parser<'s, 't> {
             ));
             let rhs = self.parse_addition()?;
             self.nodes.set_def(lhs, idx, Some(rhs));
-            lhs = self.nodes.peephole(lhs);
+            lhs = lhs.peephole(&mut self.nodes);
             if negate {
                 lhs = self.peephole(Node::make_not(lhs));
             }
@@ -667,7 +667,7 @@ impl<'s, 't> Parser<'s, 't> {
             lhs = self.nodes.create((op, vec![None, Some(lhs), None]));
             let rhs = self.parse_multiplication()?;
             self.nodes.set_def(lhs, 2, Some(rhs));
-            lhs = self.nodes.peephole(lhs);
+            lhs = lhs.peephole(&mut self.nodes);
         }
     }
 
@@ -687,7 +687,7 @@ impl<'s, 't> Parser<'s, 't> {
             lhs = self.nodes.create((op, vec![None, Some(lhs), None]));
             let rhs = self.parse_unary()?;
             self.nodes.set_def(lhs, 2, Some(rhs));
-            lhs = self.nodes.peephole(lhs);
+            lhs = lhs.peephole(&mut self.nodes);
         }
     }
 

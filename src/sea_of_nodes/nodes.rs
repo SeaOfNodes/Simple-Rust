@@ -148,8 +148,7 @@ impl<'t> Nodes<'t> {
     }
 
     pub fn create_peepholed(&mut self, c: NodeCreation<'t>) -> NodeId {
-        let id = self.create(c);
-        self.peephole(id)
+        self.create(c).peephole(self)
     }
 
     pub fn is_dead(&self, node: NodeId) -> bool {

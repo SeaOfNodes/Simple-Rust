@@ -2,23 +2,25 @@ use crate::sea_of_nodes::nodes::node::MemOpKind;
 use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
 use crate::sea_of_nodes::types::{Int, Ty, Type};
 
-impl<'t> Nodes<'t> {
+impl<'t> NodeId {
     /// Try to peephole at this node and return a better replacement Node.
     /// Always returns some not-null Node (often this).
     #[must_use]
-    pub fn peephole(&mut self, node: NodeId) -> NodeId {
-        if self.disable_peephole {
-            self.ty[node] = Some(self.compute(node));
-            node // Peephole optimizations turned off
-        } else if let Some(n) = self.peephole_opt(node) {
-            let n = self.peephole(n);
-            self.dead_code_elimination(node, n);
+    pub fn peephole(self, sea: &mut Nodes<'t>) -> NodeId {
+        if sea.disable_peephole {
+            sea.ty[self] = Some(sea.compute(self));
+            self // Peephole optimizations turned off
+        } else if let Some(n) = sea.peephole_opt(self) {
+            let n = n.peephole(sea);
+            sea.dead_code_elimination(self, n);
             n
         } else {
-            node // Cannot return null for no-progress
+            self // Cannot return null for no-progress
         }
     }
+}
 
+impl<'t> Nodes<'t> {
     /// Try to peephole at this node and return a better replacement Node if
     /// possible.  We compute a {@link Type} and then check and replace:
     /// <ul>
