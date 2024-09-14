@@ -17,22 +17,22 @@ impl Hash for GvnEntry {
     }
 }
 
-impl<'t> Nodes<'t> {
+impl Node {
     /// Returns a different semantically equal node, if one is present in the gvn table
     /// or inserts this one if not already present.
-    pub fn global_value_numbering(&mut self, node: Node) -> Option<Node> {
-        if self.hash[node].is_none() {
+    pub fn global_value_numbering(self, sea: &mut Nodes) -> Option<Node> {
+        if sea.hash[self].is_none() {
             let entry = GvnEntry {
-                hash: self.hash_code(node),
-                node,
+                hash: self.hash_code(sea),
+                node: self,
             };
-            let h = self.gvn.hasher().hash_one(entry);
-            match self.gvn.raw_entry_mut().from_hash(h, |o| {
-                entry.hash == o.hash && Self::equals(&self.ops, &self.inputs, entry.node, o.node)
+            let h = sea.gvn.hasher().hash_one(entry);
+            match sea.gvn.raw_entry_mut().from_hash(h, |o| {
+                entry.hash == o.hash && entry.node.equals(o.node, &sea.ops, &sea.inputs)
             }) {
                 RawEntryMut::Vacant(v) => {
                     v.insert(entry, ()); // Put in table now
-                    self.hash[node] = Some(entry.hash); // hash is set iff in table
+                    sea.hash[self] = Some(entry.hash); // hash is set iff in table
                 }
                 RawEntryMut::Occupied(o) => {
                     return Some(o.key().node);
@@ -43,56 +43,53 @@ impl<'t> Nodes<'t> {
     }
 
     /// If the _hash is set, then the Node is in the GVN table; remove it.
-    pub fn unlock(&mut self, node: Node) {
-        if let Some(hash) = self.hash[node].take() {
-            self.gvn
-                .remove(&GvnEntry { hash, node })
+    pub fn unlock(self, sea: &mut Nodes) {
+        if let Some(hash) = sea.hash[self].take() {
+            sea.gvn
+                .remove(&GvnEntry { hash, node: self })
                 .expect("hash is set iff in table");
         }
     }
 
     /// Two nodes are equal if they have the same inputs and the same "opcode"
     /// which means the same Java class, plus same internal parts.
-    fn equals(
-        ops: &OpVec<'t>,
-        inputs: &IdVec<Node, Vec<Option<Node>>>,
-        this: Node,
-        that: Node,
-    ) -> bool {
-        if this == that {
+    fn equals(self, that: Node, ops: &OpVec, inputs: &IdVec<Node, Vec<Option<Node>>>) -> bool {
+        if self == that {
             return true;
         }
 
-        if ops[this].operation() != ops[that].operation() {
+        if ops[self].operation() != ops[that].operation() {
             return false;
         }
 
-        if inputs[this] != inputs[that] {
+        if inputs[self] != inputs[that] {
             return false;
         }
 
-        match (&ops[this], &ops[that]) {
+        match (&ops[self], &ops[that]) {
             (Op::Constant(c1), Op::Constant(c2)) => c1 == c2,
-            (Op::Phi(_) | Op::Region { .. } | Op::Loop, _) => !Self::in_progress(ops, inputs, this),
+            (Op::Phi(_) | Op::Region { .. } | Op::Loop, _) => {
+                !Nodes::in_progress(ops, inputs, self)
+            }
             (Op::Proj(p1), Op::Proj(p2)) => p1.index == p2.index,
             _ => true,
         }
     }
 
     /// Hash of opcode and inputs
-    fn hash_code(&mut self, node: Node) -> NonZeroU32 {
-        if let Some(hash) = self.hash[node] {
+    fn hash_code(self, sea: &mut Nodes) -> NonZeroU32 {
+        if let Some(hash) = sea.hash[self] {
             return hash;
         }
 
         let h = &mut DefaultHasher::new();
-        self[node].operation().hash(h);
-        match &self[node] {
+        sea[self].operation().hash(h);
+        match &sea[self] {
             Op::Constant(c) => c.hash(h),
             Op::Proj(p) => p.index.hash(h),
             _ => {}
         };
-        self.inputs[node].hash(h);
+        self.inputs(sea).hash(h);
 
         let hash = h.finish();
         let mut hash = (hash >> 32) as u32 ^ hash as u32;
@@ -100,7 +97,6 @@ impl<'t> Nodes<'t> {
             hash = 0xDEADBEEF; // Bad hash, so use some junky thing
         }
 
-        let hash = NonZeroU32::new(hash).unwrap();
-        hash
+        NonZeroU32::new(hash).unwrap()
     }
 }

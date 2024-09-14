@@ -53,7 +53,7 @@ impl<'t> Node {
         }
 
         // Global Value Numbering
-        if let Some(replacement) = sea.global_value_numbering(self) {
+        if let Some(replacement) = self.global_value_numbering(sea) {
             // Because of random worklist ordering, the two equal nodes
             // might have different types.  Because of monotonicity, both
             // types are valid.  To preserve monotonicity, the resulting
