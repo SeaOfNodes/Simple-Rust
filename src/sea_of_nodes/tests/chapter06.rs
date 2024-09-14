@@ -1,5 +1,5 @@
 use crate::datastructures::arena::DroplessArena;
-use crate::sea_of_nodes::nodes::Node;
+use crate::sea_of_nodes::nodes::Op;
 use crate::sea_of_nodes::parser::Parser;
 use crate::sea_of_nodes::types::Types;
 
@@ -20,9 +20,9 @@ return 1;
     assert_eq!("return 2;", parser.print(stop));
 
     let ret = parser.nodes.unique_input(*stop).unwrap();
-    assert!(matches!(parser.nodes[ret], Node::Return));
+    assert!(matches!(parser.nodes[ret], Op::Return));
     let ret_ctrl = parser.nodes.inputs[ret][0].unwrap();
-    assert!(matches!(parser.nodes[ret_ctrl], Node::Proj(_)));
+    assert!(matches!(parser.nodes[ret_ctrl], Op::Proj(_)));
 }
 
 #[test]
@@ -64,9 +64,9 @@ return a;
     assert_eq!("return 2;", parser.print(stop));
 
     let ret = parser.nodes.unique_input(*stop).unwrap();
-    assert!(matches!(parser.nodes[ret], Node::Return));
+    assert!(matches!(parser.nodes[ret], Op::Return));
     let ret_ctrl = parser.nodes.inputs[ret][0].unwrap();
-    assert!(matches!(parser.nodes[ret_ctrl], Node::Proj(_)));
+    assert!(matches!(parser.nodes[ret_ctrl], Op::Proj(_)));
 }
 
 #[test]

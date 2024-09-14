@@ -4,7 +4,7 @@
 //! It is guaranteed to terminate.
 
 use arbitrary::{Arbitrary, Unstructured};
-use simple_rust::sea_of_nodes::nodes::ScopeNode;
+use simple_rust::sea_of_nodes::nodes::ScopeOp;
 use simple_rust::sea_of_nodes::parser::is_keyword;
 
 #[derive(Debug)]
@@ -152,7 +152,7 @@ impl<'a, 'b> ScriptGenerator<'a, 'b> {
     /// Generates a program and writes it into the string builder supplied in the constructor.
     /// @return If the program is allowed to be invalid returns if something potentially invalid was generated.
     fn gen_program(&mut self) -> arbitrary::Result<()> {
-        self.variables.push(ScopeNode::ARG0.to_string());
+        self.variables.push(ScopeOp::ARG0.to_string());
         self.curr_scope_start = self.variables.len();
         if (self.gen_statements()? & FLAG_STOP) == 0 {
             if self.generate_valid || self.random.int_in_range(0..=9)? > 7 {

@@ -1,13 +1,13 @@
 use crate::datastructures::id_vec::IdVec;
-use crate::sea_of_nodes::nodes::node::{MemOp, PhiNode, StartNode};
-use crate::sea_of_nodes::nodes::{BoolOp, Node, NodeId, NodeVec, Nodes, ProjNode, ScopeNode};
+use crate::sea_of_nodes::nodes::node::{MemOp, PhiOp, StartOp};
+use crate::sea_of_nodes::nodes::{BoolOp, NodeId, NodeVec, Nodes, Op, ProjOp, ScopeOp};
 use crate::sea_of_nodes::types::Ty;
 use std::fmt;
 use std::ops::{Deref, Index, IndexMut};
 
 // generic index
 impl<'t> Index<NodeId> for NodeVec<'t> {
-    type Output = Node<'t>;
+    type Output = Op<'t>;
     fn index(&self, index: NodeId) -> &Self::Output {
         &self.0[index]
     }
@@ -20,7 +20,7 @@ impl<'t> IndexMut<NodeId> for NodeVec<'t> {
 
 // forward generic index
 impl<'t> Index<NodeId> for Nodes<'t> {
-    type Output = Node<'t>;
+    type Output = Op<'t>;
     fn index(&self, index: NodeId) -> &Self::Output {
         &self.nodes[index]
     }
@@ -109,26 +109,26 @@ macro_rules! define_id {
     };
 }
 
-define_id!(Constant, ConstantId, to_constant, 't, Ty<'t>, Node::Constant(n) => n);
-define_id!(Return, ReturnId, to_return, 't, Node<'t>, n @ Node::Return => n);
-define_id!(Start, StartId, to_start, 't, StartNode<'t>, Node::Start(n) => n);
-define_id!(Add, AddId, to_add, 't, Node<'t>, n @ Node::Add => n);
-define_id!(Sub, SubId, to_sub, 't, Node<'t>, n @ Node::Sub => n);
-define_id!(Mul, MulId, to_mul, 't, Node<'t>, n @ Node::Mul => n);
-define_id!(Div, DivId, to_div, 't, Node<'t>, n @ Node::Div => n);
-define_id!(Minus, MinusId, to_minus, 't, Node<'t>, n @ Node::Minus => n);
-define_id!(Scope, ScopeId, to_scope, 't, ScopeNode<'t>, Node::Scope(n) => n);
-define_id!(Bool, BoolId, to_bool, 't, BoolOp, Node::Bool(n) => n);
-define_id!(Not, NotId, to_not, 't, Node<'t>, n @ Node::Not => n);
-define_id!(Proj, ProjId, to_proj, 't, ProjNode<'t>, Node::Proj(n) => n);
-define_id!(If, IfId, to_if, 't, Node<'t>, n @ Node::If => n);
-define_id!(Phi, PhiId, to_phi, 't, PhiNode<'t>, Node::Phi(n) => n);
-define_id!(Region, RegionId, to_region, 't, Node<'t>, n @ Node::Region => n);
-define_id!(Loop, LoopId, to_loop, 't, Node<'t>, n @ Node::Loop => n);
-define_id!(Stop, StopId, to_stop, 't, Node<'t>, n @ Node::Stop => n);
-define_id!(Cast, CastId, to_cast, 't, Ty<'t>, Node::Cast(n) => n);
-define_id!(MemOp, MemOpId, to_mem_op, 't, MemOp<'t>, Node::MemOp(n) => n);
-define_id!(New, NewId, to_new, 't, Ty<'t>, Node::New(n) => n);
+define_id!(Constant, ConstantId, to_constant, 't, Ty<'t>, Op::Constant(n) => n);
+define_id!(Return, ReturnId, to_return, 't, Op<'t>, n @ Op::Return => n);
+define_id!(Start, StartId, to_start, 't, StartOp<'t>, Op::Start(n) => n);
+define_id!(Add, AddId, to_add, 't, Op<'t>, n @ Op::Add => n);
+define_id!(Sub, SubId, to_sub, 't, Op<'t>, n @ Op::Sub => n);
+define_id!(Mul, MulId, to_mul, 't, Op<'t>, n @ Op::Mul => n);
+define_id!(Div, DivId, to_div, 't, Op<'t>, n @ Op::Div => n);
+define_id!(Minus, MinusId, to_minus, 't, Op<'t>, n @ Op::Minus => n);
+define_id!(Scope, ScopeId, to_scope, 't, ScopeOp<'t>, Op::Scope(n) => n);
+define_id!(Bool, BoolId, to_bool, 't, BoolOp, Op::Bool(n) => n);
+define_id!(Not, NotId, to_not, 't, Op<'t>, n @ Op::Not => n);
+define_id!(Proj, ProjId, to_proj, 't, ProjOp<'t>, Op::Proj(n) => n);
+define_id!(If, IfId, to_if, 't, Op<'t>, n @ Op::If => n);
+define_id!(Phi, PhiId, to_phi, 't, PhiOp<'t>, Op::Phi(n) => n);
+define_id!(Region, RegionId, to_region, 't, Op<'t>, n @ Op::Region => n);
+define_id!(Loop, LoopId, to_loop, 't, Op<'t>, n @ Op::Loop => n);
+define_id!(Stop, StopId, to_stop, 't, Op<'t>, n @ Op::Stop => n);
+define_id!(Cast, CastId, to_cast, 't, Ty<'t>, Op::Cast(n) => n);
+define_id!(MemOp, MemOpId, to_mem_op, 't, MemOp<'t>, Op::MemOp(n) => n);
+define_id!(New, NewId, to_new, 't, Ty<'t>, Op::New(n) => n);
 
 pub enum TypedNodeId {
     Constant(ConstantId),
@@ -156,26 +156,26 @@ pub enum TypedNodeId {
 impl<'t> NodeVec<'t> {
     pub fn downcast(&self, node: NodeId) -> TypedNodeId {
         match &self[node] {
-            Node::Constant(_) => ConstantId(node).into(),
-            Node::Return => ReturnId(node).into(),
-            Node::Start { .. } => StartId(node).into(),
-            Node::Add => AddId(node).into(),
-            Node::Sub => SubId(node).into(),
-            Node::Mul => MulId(node).into(),
-            Node::Div => DivId(node).into(),
-            Node::Minus => MinusId(node).into(),
-            Node::Scope(_) => ScopeId(node).into(),
-            Node::Bool(_) => BoolId(node).into(),
-            Node::Not => NotId(node).into(),
-            Node::Proj(_) => ProjId(node).into(),
-            Node::If => IfId(node).into(),
-            Node::Phi(_) => PhiId(node).into(),
-            Node::Region { .. } => RegionId(node).into(),
-            Node::Loop => LoopId(node).into(),
-            Node::Stop => StopId(node).into(),
-            Node::Cast(_) => CastId(node).into(),
-            Node::MemOp(_) => MemOpId(node).into(),
-            Node::New(_) => NewId(node).into(),
+            Op::Constant(_) => ConstantId(node).into(),
+            Op::Return => ReturnId(node).into(),
+            Op::Start { .. } => StartId(node).into(),
+            Op::Add => AddId(node).into(),
+            Op::Sub => SubId(node).into(),
+            Op::Mul => MulId(node).into(),
+            Op::Div => DivId(node).into(),
+            Op::Minus => MinusId(node).into(),
+            Op::Scope(_) => ScopeId(node).into(),
+            Op::Bool(_) => BoolId(node).into(),
+            Op::Not => NotId(node).into(),
+            Op::Proj(_) => ProjId(node).into(),
+            Op::If => IfId(node).into(),
+            Op::Phi(_) => PhiId(node).into(),
+            Op::Region { .. } => RegionId(node).into(),
+            Op::Loop => LoopId(node).into(),
+            Op::Stop => StopId(node).into(),
+            Op::Cast(_) => CastId(node).into(),
+            Op::MemOp(_) => MemOpId(node).into(),
+            Op::New(_) => NewId(node).into(),
         }
     }
 }

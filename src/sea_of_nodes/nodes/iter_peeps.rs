@@ -35,7 +35,7 @@
 use crate::datastructures::id_set::IdSet;
 use crate::datastructures::random::Random;
 use crate::sea_of_nodes::nodes::index::StopId;
-use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
+use crate::sea_of_nodes::nodes::{NodeId, Nodes, Op};
 
 pub struct IterPeeps {
     work: WorkList,
@@ -100,7 +100,7 @@ impl<'t> Nodes<'t> {
                 }
 
                 // Changes require neighbors onto the worklist
-                if x != n || !(matches!(&self[x], Node::Constant(_))) {
+                if x != n || !(matches!(&self[x], Op::Constant(_))) {
                     // All outputs of n (changing node) not x (prior existing node).
                     for &z in &self.outputs[n] {
                         self.iter_peeps.add(z);

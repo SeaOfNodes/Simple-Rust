@@ -1,25 +1,26 @@
 use crate::sea_of_nodes::nodes::index::StartId;
-use crate::sea_of_nodes::nodes::{NodeCreation, NodeId, ScopeNode};
+use crate::sea_of_nodes::nodes::{NodeCreation, NodeId, ScopeOp};
 use crate::sea_of_nodes::types::{Ty, Type};
 use std::borrow::Cow;
 use std::collections::HashMap;
 
+/// Node specific operation
 #[derive(Clone, Debug)]
-pub enum Node<'t> {
+pub enum Op<'t> {
     Constant(Ty<'t>),
     Return,
-    Start(StartNode<'t>),
+    Start(StartOp<'t>),
     Add,
     Sub,
     Mul,
     Div,
     Minus,
-    Scope(ScopeNode<'t>),
+    Scope(ScopeOp<'t>),
     Bool(BoolOp),
     Not,
-    Proj(ProjNode<'t>),
+    Proj(ProjOp<'t>),
     If,
-    Phi(PhiNode<'t>),
+    Phi(PhiOp<'t>),
     Region,
     Loop,
     Stop,
@@ -29,7 +30,7 @@ pub enum Node<'t> {
 }
 
 #[derive(Clone, Debug)]
-pub struct StartNode<'t> {
+pub struct StartOp<'t> {
     pub args: Ty<'t>,
     pub alias_starts: HashMap<&'t str, u32>,
 }
@@ -59,13 +60,13 @@ impl BoolOp {
 }
 
 #[derive(Clone, Debug)]
-pub struct ProjNode<'t> {
+pub struct ProjOp<'t> {
     pub index: usize,
     pub label: &'t str,
 }
 
 #[derive(Clone, Debug)]
-pub struct PhiNode<'t> {
+pub struct PhiOp<'t> {
     pub label: &'t str,
     pub ty: Ty<'t>,
 }
@@ -83,38 +84,38 @@ pub enum MemOpKind<'t> {
     Store,
 }
 
-impl<'t> Node<'t> {
+impl<'t> Op<'t> {
     /// Easy reading label for debugger
     pub fn label(&self) -> Cow<str> {
         Cow::Borrowed(match self {
-            Node::Constant(ty) => return Cow::Owned(format!("#{ty}")),
-            Node::Return => "Return",
-            Node::Start { .. } => "Start",
-            Node::Add => "Add",
-            Node::Sub => "Sub",
-            Node::Mul => "Mul",
-            Node::Div => "Div",
-            Node::Minus => "Minus",
-            Node::Scope(_) => "Scope",
-            Node::Bool(op) => match op {
+            Op::Constant(ty) => return Cow::Owned(format!("#{ty}")),
+            Op::Return => "Return",
+            Op::Start { .. } => "Start",
+            Op::Add => "Add",
+            Op::Sub => "Sub",
+            Op::Mul => "Mul",
+            Op::Div => "Div",
+            Op::Minus => "Minus",
+            Op::Scope(_) => "Scope",
+            Op::Bool(op) => match op {
                 BoolOp::EQ => "EQ",
                 BoolOp::LT => "LT",
                 BoolOp::LE => "LE",
             },
-            Node::Not => "Not",
-            Node::Proj(p) => return Cow::Borrowed(p.label),
-            Node::If => "If",
-            Node::Phi(p) => return Cow::Owned(format!("Phi_{}", p.label)),
-            Node::Region { .. } => "Region",
-            Node::Loop => "Loop",
-            Node::Stop => "Stop",
-            Node::Cast(t) => return Cow::Owned(format!("({})", t.str())),
-            Node::New(_) => "new",
-            Node::MemOp(MemOp {
+            Op::Not => "Not",
+            Op::Proj(p) => return Cow::Borrowed(p.label),
+            Op::If => "If",
+            Op::Phi(p) => return Cow::Owned(format!("Phi_{}", p.label)),
+            Op::Region { .. } => "Region",
+            Op::Loop => "Loop",
+            Op::Stop => "Stop",
+            Op::Cast(t) => return Cow::Owned(format!("({})", t.str())),
+            Op::New(_) => "new",
+            Op::MemOp(MemOp {
                 kind: MemOpKind::Load { .. },
                 ..
             }) => "Load",
-            Node::MemOp(MemOp {
+            Op::MemOp(MemOp {
                 kind: MemOpKind::Store,
                 ..
             }) => "Store",
@@ -124,26 +125,26 @@ impl<'t> Node<'t> {
     // Graphical label, e.g. "+" or "Region" or "=="
     pub fn glabel(&self) -> Cow<str> {
         match self {
-            Node::Constant(_) => self.label(),
-            Node::Return => self.label(),
-            Node::Start { .. } => self.label(),
-            Node::Add => Cow::Borrowed("+"),
-            Node::Sub => Cow::Borrowed("-"),
-            Node::Mul => Cow::Borrowed("*"),
-            Node::Div => Cow::Borrowed("//"),
-            Node::Minus => Cow::Borrowed("-"),
-            Node::Scope(_) => self.label(),
-            Node::Bool(op) => Cow::Borrowed(op.str()),
-            Node::Not => Cow::Borrowed("!"),
-            Node::Proj(_) => self.label(),
-            Node::If => self.label(),
-            Node::Phi(p) => Cow::Owned(format!("&phi;_{}", p.label)),
-            Node::Region { .. } => self.label(),
-            Node::Loop => self.label(),
-            Node::Stop => self.label(),
-            Node::Cast(t) => Cow::Owned(format!("({})", t.str())),
-            Node::New(_) => Cow::Borrowed("new"),
-            Node::MemOp(m) => match m.kind {
+            Op::Constant(_) => self.label(),
+            Op::Return => self.label(),
+            Op::Start { .. } => self.label(),
+            Op::Add => Cow::Borrowed("+"),
+            Op::Sub => Cow::Borrowed("-"),
+            Op::Mul => Cow::Borrowed("*"),
+            Op::Div => Cow::Borrowed("//"),
+            Op::Minus => Cow::Borrowed("-"),
+            Op::Scope(_) => self.label(),
+            Op::Bool(op) => Cow::Borrowed(op.str()),
+            Op::Not => Cow::Borrowed("!"),
+            Op::Proj(_) => self.label(),
+            Op::If => self.label(),
+            Op::Phi(p) => Cow::Owned(format!("&phi;_{}", p.label)),
+            Op::Region { .. } => self.label(),
+            Op::Loop => self.label(),
+            Op::Stop => self.label(),
+            Op::Cast(t) => Cow::Owned(format!("({})", t.str())),
+            Op::New(_) => Cow::Borrowed("new"),
+            Op::MemOp(m) => match m.kind {
                 MemOpKind::Load { .. } => Cow::Borrowed("Load"),
                 MemOpKind::Store => Cow::Borrowed("Store"),
             },
@@ -152,30 +153,30 @@ impl<'t> Node<'t> {
 
     pub fn is_multi_node(&self) -> bool {
         match self {
-            Node::Start { .. } | Node::If => true,
-            Node::Constant(_)
-            | Node::Return
-            | Node::Add
-            | Node::Sub
-            | Node::Mul
-            | Node::Div
-            | Node::Minus
-            | Node::Scope(_)
-            | Node::Bool(_)
-            | Node::Not
-            | Node::Proj(_)
-            | Node::Phi(_)
-            | Node::Region { .. }
-            | Node::Loop
-            | Node::Cast(_)
-            | Node::New(_)
-            | Node::MemOp(_)
-            | Node::Stop => false,
+            Op::Start { .. } | Op::If => true,
+            Op::Constant(_)
+            | Op::Return
+            | Op::Add
+            | Op::Sub
+            | Op::Mul
+            | Op::Div
+            | Op::Minus
+            | Op::Scope(_)
+            | Op::Bool(_)
+            | Op::Not
+            | Op::Proj(_)
+            | Op::Phi(_)
+            | Op::Region { .. }
+            | Op::Loop
+            | Op::Cast(_)
+            | Op::New(_)
+            | Op::MemOp(_)
+            | Op::Stop => false,
         }
     }
 
     pub fn phi_label(&self) -> Option<&str> {
-        if let Node::Phi(p) = self {
+        if let Op::Phi(p) = self {
             Some(&p.label)
         } else {
             None
@@ -184,32 +185,32 @@ impl<'t> Node<'t> {
 
     pub fn operation(&self) -> usize {
         match self {
-            Node::Constant(_) => 0,
-            Node::Return => 1,
-            Node::Start { .. } => 2,
-            Node::Add => 3,
-            Node::Sub => 4,
-            Node::Mul => 5,
-            Node::Div => 6,
-            Node::Minus => 7,
-            Node::Scope(_) => 8,
-            Node::Bool(BoolOp::EQ) => 9,
-            Node::Bool(BoolOp::LT) => 10,
-            Node::Bool(BoolOp::LE) => 11,
-            Node::Not => 12,
-            Node::Proj(_) => 13,
-            Node::If => 14,
-            Node::Phi(_) => 15,
-            Node::Region { .. } => 16,
-            Node::Loop => 17,
-            Node::Stop => 18,
-            Node::Cast(_) => 19,
-            Node::New(_) => 20,
-            Node::MemOp(MemOp {
+            Op::Constant(_) => 0,
+            Op::Return => 1,
+            Op::Start { .. } => 2,
+            Op::Add => 3,
+            Op::Sub => 4,
+            Op::Mul => 5,
+            Op::Div => 6,
+            Op::Minus => 7,
+            Op::Scope(_) => 8,
+            Op::Bool(BoolOp::EQ) => 9,
+            Op::Bool(BoolOp::LT) => 10,
+            Op::Bool(BoolOp::LE) => 11,
+            Op::Not => 12,
+            Op::Proj(_) => 13,
+            Op::If => 14,
+            Op::Phi(_) => 15,
+            Op::Region { .. } => 16,
+            Op::Loop => 17,
+            Op::Stop => 18,
+            Op::Cast(_) => 19,
+            Op::New(_) => 20,
+            Op::MemOp(MemOp {
                 kind: MemOpKind::Load { .. },
                 ..
             }) => 21,
-            Node::MemOp(MemOp {
+            Op::MemOp(MemOp {
                 kind: MemOpKind::Store,
                 ..
             }) => 22,
@@ -219,7 +220,7 @@ impl<'t> Node<'t> {
     pub fn make_start(args: Ty<'t>) -> NodeCreation<'t> {
         debug_assert!(matches!(&*args, Type::Tuple { .. }));
         (
-            Node::Start(StartNode {
+            Op::Start(StartOp {
                 args,
                 alias_starts: HashMap::new(),
             }),
@@ -227,71 +228,68 @@ impl<'t> Node<'t> {
         )
     }
     pub fn make_return(ctrl: NodeId, data: NodeId) -> NodeCreation<'t> {
-        (Node::Return, vec![Some(ctrl), Some(data)])
+        (Op::Return, vec![Some(ctrl), Some(data)])
     }
 
     pub fn make_constant(start: StartId, ty: Ty<'t>) -> NodeCreation<'t> {
-        (Node::Constant(ty), vec![Some(*start)])
+        (Op::Constant(ty), vec![Some(*start)])
     }
 
     pub fn make_add([left, right]: [NodeId; 2]) -> NodeCreation<'t> {
-        (Node::Add, vec![None, Some(left), Some(right)])
+        (Op::Add, vec![None, Some(left), Some(right)])
     }
     pub fn make_sub([left, right]: [NodeId; 2]) -> NodeCreation<'t> {
-        (Node::Sub, vec![None, Some(left), Some(right)])
+        (Op::Sub, vec![None, Some(left), Some(right)])
     }
     pub fn make_mul([left, right]: [NodeId; 2]) -> NodeCreation<'t> {
-        (Node::Mul, vec![None, Some(left), Some(right)])
+        (Op::Mul, vec![None, Some(left), Some(right)])
     }
     pub fn make_div([left, right]: [NodeId; 2]) -> NodeCreation<'t> {
-        (Node::Div, vec![None, Some(left), Some(right)])
+        (Op::Div, vec![None, Some(left), Some(right)])
     }
 
     pub fn make_minus(expr: NodeId) -> NodeCreation<'t> {
-        (Node::Minus, vec![None, Some(expr)])
+        (Op::Minus, vec![None, Some(expr)])
     }
 
     pub fn make_scope() -> NodeCreation<'t> {
-        (Node::Scope(ScopeNode { scopes: vec![] }), vec![])
+        (Op::Scope(ScopeOp { scopes: vec![] }), vec![])
     }
 
     pub fn make_bool([left, right]: [NodeId; 2], op: BoolOp) -> NodeCreation<'t> {
-        (Node::Bool(op), vec![None, Some(left), Some(right)])
+        (Op::Bool(op), vec![None, Some(left), Some(right)])
     }
 
     pub fn make_not(expr: NodeId) -> NodeCreation<'t> {
-        (Node::Not, vec![None, Some(expr)])
+        (Op::Not, vec![None, Some(expr)])
     }
 
     pub fn make_proj<N: Into<NodeId>>(ctrl: N, index: usize, label: &'t str) -> NodeCreation<'t> {
-        (
-            Node::Proj(ProjNode { index, label }),
-            vec![Some(ctrl.into())],
-        )
+        (Op::Proj(ProjOp { index, label }), vec![Some(ctrl.into())])
     }
 
     pub fn make_if(ctrl: NodeId, pred: NodeId) -> NodeCreation<'t> {
-        (Node::If, vec![Some(ctrl), Some(pred)])
+        (Op::If, vec![Some(ctrl), Some(pred)])
     }
 
     pub fn make_phi(label: &'t str, ty: Ty<'t>, inputs: Vec<Option<NodeId>>) -> NodeCreation<'t> {
-        (Node::Phi(PhiNode { label, ty }), inputs)
+        (Op::Phi(PhiOp { label, ty }), inputs)
     }
 
     pub fn make_region(inputs: Vec<Option<NodeId>>) -> NodeCreation<'t> {
-        (Node::Region, inputs)
+        (Op::Region, inputs)
     }
 
     pub fn make_stop() -> NodeCreation<'t> {
-        (Node::Stop, vec![])
+        (Op::Stop, vec![])
     }
 
     pub fn make_loop(entry: NodeId) -> NodeCreation<'t> {
-        (Node::Loop, vec![None, Some(entry), None])
+        (Op::Loop, vec![None, Some(entry), None])
     }
 
     pub fn make_cast(ty: Ty<'t>, ctrl: NodeId, i: NodeId) -> NodeCreation<'t> {
-        (Node::Cast(ty), vec![Some(ctrl), Some(i)])
+        (Op::Cast(ty), vec![Some(ctrl), Some(i)])
     }
 
     pub fn make_load(
@@ -301,7 +299,7 @@ impl<'t> Node<'t> {
         [mem_slice, mem_ptr]: [NodeId; 2],
     ) -> NodeCreation<'t> {
         (
-            Node::MemOp(MemOp {
+            Op::MemOp(MemOp {
                 name,
                 alias,
                 kind: MemOpKind::Load { declared_type },
@@ -316,7 +314,7 @@ impl<'t> Node<'t> {
         [mem_slice, mem_ptr, value]: [NodeId; 3],
     ) -> NodeCreation<'t> {
         (
-            Node::MemOp(MemOp {
+            Op::MemOp(MemOp {
                 name,
                 alias,
                 kind: MemOpKind::Store,
@@ -326,6 +324,6 @@ impl<'t> Node<'t> {
     }
 
     pub fn make_new(ptr: Ty<'t>, ctrl: NodeId) -> NodeCreation<'t> {
-        (Node::New(ptr), vec![Some(ctrl)])
+        (Op::New(ptr), vec![Some(ctrl)])
     }
 }

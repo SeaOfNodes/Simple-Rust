@@ -6,7 +6,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use crate::sea_of_nodes::nodes::index::{ScopeId, StopId};
-use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
+use crate::sea_of_nodes::nodes::{NodeId, Nodes, Op};
 
 pub fn run_graphviz_and_chromium(input: String) {
     let child = Command::new(&"bash")
@@ -104,7 +104,7 @@ fn nodes_by_cluster(
     }
 
     for &n in all.iter() {
-        if matches!(&nodes[n], Node::Proj(_) | Node::Scope(_)) {
+        if matches!(&nodes[n], Op::Proj(_) | Op::Scope(_)) {
             continue;
         }
         if separate_control_cluster && do_ctrl && !nodes.is_cfg(n) {
@@ -127,7 +127,7 @@ fn nodes_by_cluster(
 
             let mut do_proj_table = false;
             for use_ in &nodes.outputs[n] {
-                if let proj @ Node::Proj(p) = &nodes[*use_] {
+                if let proj @ Op::Proj(p) = &nodes[*use_] {
                     if !do_proj_table {
                         do_proj_table = true;
                         writeln!(sb, "<TD>")?;
@@ -154,7 +154,7 @@ fn nodes_by_cluster(
         } else {
             if nodes.is_cfg(n) {
                 write!(sb, "shape=box style=filled fillcolor=yellow ")?;
-            } else if matches!(&nodes[n], Node::Phi(_)) {
+            } else if matches!(&nodes[n], Op::Phi(_)) {
                 write!(sb, "style=filled fillcolor=lightyellow ")?;
             }
             write!(sb, "label=\"{lab}\" ")?;
@@ -165,10 +165,10 @@ fn nodes_by_cluster(
     if !separate_control_cluster {
         // Force Region & Phis to line up
         for &n in all {
-            if let Node::Region { .. } | Node::Loop = &nodes[n] {
+            if let Op::Region { .. } | Op::Loop = &nodes[n] {
                 write!(sb, "\t\t{{ rank=same; {};", nodes.print(Some(n)))?;
                 for &phi in &nodes.outputs[n] {
-                    if let Node::Phi(_) = &nodes[phi] {
+                    if let Op::Phi(_) = &nodes[phi] {
                         write!(sb, "{};", nodes.unique_name(phi))?;
                     }
                 }
@@ -231,16 +231,13 @@ fn make_port_name(scope_name: &str, var_name: &str) -> String {
 fn node_edges(sb: &mut String, nodes: &Nodes, all: &HashSet<NodeId>) -> fmt::Result {
     writeln!(sb, "\tedge [ fontname=Helvetica, fontsize=8 ];")?;
     for &n in all.iter() {
-        if matches!(
-            &nodes[n],
-            Node::Constant(_) | Node::Proj(_) | Node::Scope(_)
-        ) {
+        if matches!(&nodes[n], Op::Constant(_) | Op::Proj(_) | Op::Scope(_)) {
             continue;
         }
         for (i, def) in nodes.inputs[n].iter().enumerate() {
             let Some(def) = *def else { continue };
 
-            if let (Node::Phi(_), Node::Region { .. } | Node::Loop) = (&nodes[n], &nodes[def]) {
+            if let (Op::Phi(_), Op::Region { .. } | Op::Loop) = (&nodes[n], &nodes[def]) {
                 writeln!(
                     sb,
                     "\t{} -> {} [style=dotted taillabel={i}];",
@@ -254,13 +251,13 @@ fn node_edges(sb: &mut String, nodes: &Nodes, all: &HashSet<NodeId>) -> fmt::Res
 
             write!(sb, "[taillabel={i}")?;
 
-            if matches!(nodes[n], Node::Constant(_)) && matches!(nodes[def], Node::Start { .. }) {
+            if matches!(nodes[n], Op::Constant(_)) && matches!(nodes[def], Op::Start { .. }) {
                 write!(sb, " style=dotted")?;
             } else if nodes.is_cfg(def) {
                 write!(sb, " color=red")?;
             }
 
-            if i == 2 && matches!(&nodes[n], Node::Phi(_) | Node::Loop) {
+            if i == 2 && matches!(&nodes[n], Op::Phi(_) | Op::Loop) {
                 write!(sb, " constraint=false")?;
             }
 
@@ -277,7 +274,7 @@ fn scope_edges(sb: &mut String, nodes: &Nodes, scope: ScopeId) -> fmt::Result {
 
         for (name, (index, _ty)) in s {
             let mut def = nodes.inputs[scope][*index];
-            while def.is_some() && matches!(&nodes[def.unwrap()], Node::Scope(_)) {
+            while def.is_some() && matches!(&nodes[def.unwrap()], Op::Scope(_)) {
                 def = nodes.inputs[def.unwrap()][*index]; // lazy
             }
             if let Some(def) = def {
@@ -292,7 +289,7 @@ fn scope_edges(sb: &mut String, nodes: &Nodes, scope: ScopeId) -> fmt::Result {
 
 fn def_name(nodes: &Nodes, def: NodeId) -> String {
     match &nodes[def] {
-        Node::Proj(p) => {
+        Op::Proj(p) => {
             let mname = nodes.unique_name(nodes.inputs[def][0].unwrap());
             format!("{mname}:p{}", p.index)
         }

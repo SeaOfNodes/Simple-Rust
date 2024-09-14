@@ -1,5 +1,5 @@
 use crate::datastructures::arena::DroplessArena;
-use crate::sea_of_nodes::nodes::{Node, StartNode};
+use crate::sea_of_nodes::nodes::{Op, StartOp};
 use crate::sea_of_nodes::parser::Parser;
 use crate::sea_of_nodes::tests::test_error;
 use crate::sea_of_nodes::types::{Int, Type, Types};
@@ -11,15 +11,15 @@ fn test_simple_program() {
     let mut parser = Parser::new("return 1;", &types);
     let stop = parser.parse().unwrap();
 
-    assert!(matches!(&parser.nodes[stop], Node::Stop));
+    assert!(matches!(&parser.nodes[stop], Op::Stop));
     let ret = parser.nodes.unique_input(*stop).unwrap();
-    assert!(matches!(&parser.nodes[ret], Node::Return));
+    assert!(matches!(&parser.nodes[ret], Op::Return));
 
     let ctrl = parser.nodes.inputs[ret][0].expect("has ctrl");
-    assert!(matches!(parser.nodes[ctrl], Node::Proj(_)));
+    assert!(matches!(parser.nodes[ctrl], Op::Proj(_)));
 
     let expr = parser.nodes.inputs[ret][1].expect("has expr");
-    let Node::Constant(constant) = &parser.nodes[expr] else {
+    let Op::Constant(constant) = &parser.nodes[expr] else {
         unreachable!("expect constant");
     };
 
@@ -34,12 +34,9 @@ fn test_zero() {
     let mut parser = Parser::new("return 0;", &types);
     let _stop = parser.parse().unwrap();
 
-    assert!(matches!(
-        &parser.nodes[parser.nodes.start],
-        StartNode { .. }
-    ));
+    assert!(matches!(&parser.nodes[parser.nodes.start], StartOp { .. }));
     for output in &parser.nodes.outputs[parser.nodes.start] {
-        if let Node::Constant(c) = &parser.nodes[*output] {
+        if let Op::Constant(c) = &parser.nodes[*output] {
             if let Type::Int(value) = c.inner() {
                 assert_eq!(Int::Constant(0), *value);
             }

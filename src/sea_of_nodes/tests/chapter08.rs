@@ -1,5 +1,5 @@
 use crate::datastructures::arena::DroplessArena;
-use crate::sea_of_nodes::nodes::{Node, ProjNode};
+use crate::sea_of_nodes::nodes::{Op, ProjOp};
 use crate::sea_of_nodes::parser::Parser;
 use crate::sea_of_nodes::tests::test_error;
 use crate::sea_of_nodes::types::Types;
@@ -30,7 +30,7 @@ return arg;
         "return Phi(Region36,Phi(Region25,Phi(Loop6,arg,(Phi_arg+1)),Add),Add);",
         parser.print(stop)
     );
-    assert!(matches!(parser.nodes.ret_ctrl(stop), Node::Region { .. }));
+    assert!(matches!(parser.nodes.ret_ctrl(stop), Op::Region { .. }));
 
     let nodes = parser.nodes;
     assert_eq!(5, graph_evaluator::evaluate(&nodes, stop, Some(1), None));
@@ -64,7 +64,7 @@ return a;
         "return Phi(Loop7,1,Phi(Region42,Phi_a,(Phi_a+1)));",
         parser.print(stop)
     );
-    assert!(matches!(parser.nodes.ret_ctrl(stop), Node::Proj(_)));
+    assert!(matches!(parser.nodes.ret_ctrl(stop), Op::Proj(_)));
     println!("{}", ir_printer::pretty_print(&parser.nodes, stop, 99));
 }
 
@@ -93,7 +93,7 @@ return arg;
         "return Phi(Region34,Phi(Loop6,arg,(Phi_arg+1)),Add);",
         parser.print(stop)
     );
-    assert!(matches!(parser.nodes.ret_ctrl(stop), Node::Region { .. }));
+    assert!(matches!(parser.nodes.ret_ctrl(stop), Op::Region { .. }));
 }
 
 #[test]
@@ -119,7 +119,7 @@ return arg;
         "return Phi(Region25,Phi(Loop6,arg,(Phi_arg+1)),Add);",
         parser.print(stop)
     );
-    assert!(matches!(parser.nodes.ret_ctrl(stop), Node::Region { .. }));
+    assert!(matches!(parser.nodes.ret_ctrl(stop), Op::Region { .. }));
 }
 
 #[test]
@@ -144,7 +144,7 @@ return arg;
     parser.show_graph();
 
     assert_eq!("return Phi(Loop6,arg,(Phi_arg+1));", parser.print(stop));
-    assert!(matches!(parser.nodes.ret_ctrl(stop), Node::Proj(_)));
+    assert!(matches!(parser.nodes.ret_ctrl(stop), Op::Proj(_)));
 }
 
 #[test]
@@ -167,7 +167,7 @@ return arg;
     parser.show_graph();
 
     assert_eq!("return Phi(Loop6,arg,(Phi_arg+1));", parser.print(stop));
-    assert!(matches!(parser.nodes.ret_ctrl(stop), Node::Proj(_)));
+    assert!(matches!(parser.nodes.ret_ctrl(stop), Op::Proj(_)));
 }
 
 #[test]
@@ -270,7 +270,7 @@ return a;
         "return Phi(Region28,Phi(Loop7,1,(Phi_a+1)),Add);",
         parser.print(stop)
     );
-    assert!(matches!(parser.nodes.ret_ctrl(stop), Node::Region { .. }));
+    assert!(matches!(parser.nodes.ret_ctrl(stop), Op::Region { .. }));
 }
 
 #[test]
@@ -296,6 +296,6 @@ return a;
     assert_eq!("return (Phi(Loop7,1,Add)+1);", parser.print(stop));
     assert!(matches!(
         parser.nodes.ret_ctrl(stop),
-        Node::Proj(ProjNode { index: 1, .. })
+        Op::Proj(ProjOp { index: 1, .. })
     ));
 }

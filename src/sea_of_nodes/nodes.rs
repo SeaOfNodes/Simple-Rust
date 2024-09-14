@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::num::NonZeroU32;
 
 pub use id::NodeId;
-pub use node::{BoolOp, Node, ProjNode, StartNode};
-pub use scope::ScopeNode;
+pub use node::{BoolOp, Op, ProjOp, StartOp};
+pub use scope::ScopeOp;
 
 use crate::datastructures::id_set::IdSet;
 use crate::datastructures::id_vec::IdVec;
@@ -23,7 +23,7 @@ mod peephole;
 mod print;
 mod scope;
 
-pub struct NodeVec<'t>(IdVec<NodeId, Node<'t>>);
+pub struct NodeVec<'t>(IdVec<NodeId, Op<'t>>);
 
 /// Using `IdVec` has two advantages over `Vec`+helper methods:
 /// 1) `self.inputs[x]` and `self.outputs[x]` can be borrowed simultaneously
@@ -96,11 +96,11 @@ pub struct Nodes<'t> {
     hash: IdVec<NodeId, Option<NonZeroU32>>,
 }
 
-pub type NodeCreation<'t> = (Node<'t>, Vec<Option<NodeId>>);
+pub type NodeCreation<'t> = (Op<'t>, Vec<Option<NodeId>>);
 
 impl<'t> Nodes<'t> {
     pub fn new(types: &'t Types<'t>) -> Self {
-        let dummy = Node::Stop;
+        let dummy = Op::Stop;
         Nodes {
             nodes: NodeVec(IdVec::new(vec![dummy])),
             inputs: IdVec::new(vec![vec![]]),
@@ -292,24 +292,24 @@ impl<'t> Nodes<'t> {
 
     pub fn is_cfg(&self, node: NodeId) -> bool {
         match &self[node] {
-            Node::Start { .. } | Node::Return | Node::Stop => true,
-            Node::If | Node::Region { .. } | Node::Loop => true,
-            Node::Proj(p) => {
-                p.index == 0 || self.inputs[node][0].is_some_and(|n| matches!(&self[n], Node::If))
+            Op::Start { .. } | Op::Return | Op::Stop => true,
+            Op::If | Op::Region { .. } | Op::Loop => true,
+            Op::Proj(p) => {
+                p.index == 0 || self.inputs[node][0].is_some_and(|n| matches!(&self[n], Op::If))
             }
-            Node::Constant(_)
-            | Node::Add
-            | Node::Sub
-            | Node::Mul
-            | Node::Div
-            | Node::Minus
-            | Node::Scope(_)
-            | Node::Bool(_)
-            | Node::Phi(_)
-            | Node::Cast(_)
-            | Node::MemOp(_)
-            | Node::New(_)
-            | Node::Not => false,
+            Op::Constant(_)
+            | Op::Add
+            | Op::Sub
+            | Op::Mul
+            | Op::Div
+            | Op::Minus
+            | Op::Scope(_)
+            | Op::Bool(_)
+            | Op::Phi(_)
+            | Op::Cast(_)
+            | Op::MemOp(_)
+            | Op::New(_)
+            | Op::Not => false,
         }
     }
 
@@ -330,7 +330,7 @@ impl<'t> Nodes<'t> {
     /// inputs to have the dependency so we don't bother
     /// checking the rest.
     pub fn all_cons(&mut self, node: NodeId, dep: NodeId) -> bool {
-        if matches!(&self[node], Node::Phi(_)) {
+        if matches!(&self[node], Op::Phi(_)) {
             let region = self.inputs[node][0];
             if !self.instanceof_region(region) {
                 return false;
@@ -366,7 +366,7 @@ impl<'t> Nodes<'t> {
     }
     fn single_unique_input(&mut self, phi: NodeId) -> Option<NodeId> {
         let region = self.inputs[phi][0].unwrap();
-        if matches!(&self[region], Node::Loop)
+        if matches!(&self[region], Op::Loop)
             && self.ty[self.inputs[region][1].unwrap()] == Some(self.types.ty_xctrl)
         {
             return None; // Dead entry loops just ignore and let the loop collapse
@@ -393,9 +393,9 @@ impl<'t> Nodes<'t> {
     /// Return the immediate dominator of this Node and compute dom tree depth.
     fn idom(&mut self, node: NodeId) -> Option<NodeId> {
         match &self[node] {
-            Node::Start { .. } | Node::Stop => None,
-            Node::Loop => self.inputs[node][1],
-            Node::Region => {
+            Op::Start { .. } | Op::Stop => None,
+            Op::Loop => self.inputs[node][1],
+            Op::Region => {
                 if let &[_, i1] = self.inputs[node].as_slice() {
                     i1 // 1-input is that one input
                 } else if let &[_, lhs, rhs] = self.inputs[node].as_slice() {
@@ -427,8 +427,8 @@ impl<'t> Nodes<'t> {
             return self.idepth[node];
         }
         let index = match self[node] {
-            Node::Start(_) => return 0, // uncached
-            Node::Region => {
+            Op::Start(_) => return 0, // uncached
+            Op::Region => {
                 let mut d = 0;
                 for n in 0..self.inputs[node].len() {
                     if let Some(n) = self.inputs[node][n] {
@@ -438,7 +438,7 @@ impl<'t> Nodes<'t> {
                 self.idepth[node] = d;
                 return d;
             }
-            Node::Loop => 1,
+            Op::Loop => 1,
             _ => 0,
         };
         self.idepth[node] = self.idepth(self.inputs[node][index].unwrap()) + 1;
@@ -452,9 +452,9 @@ impl<'t> Nodes<'t> {
     ) -> bool {
         debug_assert!(matches!(
             nodes[region],
-            Node::Region { .. } | Node::Loop | Node::Phi(_)
+            Op::Region { .. } | Op::Loop | Op::Phi(_)
         ));
-        (matches!(&nodes[region], Node::Phi(_)) || !inputs[region].is_empty())
+        (matches!(&nodes[region], Op::Phi(_)) || !inputs[region].is_empty())
             && inputs[region].last().unwrap().is_none()
     }
 
@@ -500,7 +500,7 @@ impl<'t> Nodes<'t> {
     }
 
     pub fn instanceof_region(&self, node: Option<NodeId>) -> bool {
-        node.is_some_and(|n| matches!(&self[n], Node::Region { .. } | Node::Loop))
+        node.is_some_and(|n| matches!(&self[n], Op::Region { .. } | Op::Loop))
     }
 
     /// Creates a projection for each of the struct's fields, using the field alias
@@ -534,7 +534,7 @@ impl<'t> Nodes<'t> {
         // alias matches the slot of the field in the tuple
         for (alias, &alias_ty) in args[len..].iter().enumerate() {
             let name = self.types.get_str(&Parser::mem_name(alias as u32));
-            let n = self.create_peepholed(Node::make_proj(start, alias, name));
+            let n = self.create_peepholed(Op::make_proj(start, alias, name));
             scope.define(name, alias_ty, n, self).unwrap()
         }
     }

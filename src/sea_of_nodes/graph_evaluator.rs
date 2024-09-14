@@ -1,5 +1,5 @@
 use crate::datastructures::id_set::IdSet;
-use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes, ProjNode};
+use crate::sea_of_nodes::nodes::{NodeId, Nodes, Op, ProjOp};
 use std::collections::HashMap;
 
 #[derive(Debug, Eq, PartialEq)]
@@ -40,7 +40,7 @@ pub fn evaluate_with_result(nodes: &Nodes, graph: NodeId, parameter: i64, loops:
 impl<'t> Nodes<'t> {
     fn find_start(&self, visit: &mut IdSet<NodeId>, node: Option<NodeId>) -> Option<NodeId> {
         let node = node?;
-        if let Node::Start { .. } = &self[node] {
+        if let Op::Start { .. } = &self[node] {
             return Some(node);
         }
         if visit.get(node) {
@@ -72,9 +72,7 @@ impl<'t> Nodes<'t> {
     fn find_projection(&self, node: NodeId, idx: usize) -> Option<NodeId> {
         self.outputs[node]
             .iter()
-            .find(
-                |&&use_| matches!(&self[use_], Node::Proj(ProjNode {index, .. }) if *index == idx),
-            )
+            .find(|&&use_| matches!(&self[use_], Op::Proj(ProjOp {index, .. }) if *index == idx))
             .copied()
     }
 }
@@ -121,14 +119,14 @@ impl<'a, 't> GraphEvaluator<'a, 't> {
             return cache;
         }
         match &self.nodes[node] {
-            Node::Constant(c) => c.unwrap_int(),
-            Node::Add => self.binary(node, i64::wrapping_add),
-            Node::Sub => self.binary(node, i64::wrapping_sub),
-            Node::Mul => self.binary(node, i64::wrapping_mul),
-            Node::Div => self.div(node),
-            Node::Minus => self.get_value(self.nodes.inputs[node][1]).wrapping_neg(),
-            Node::Bool(op) => self.binary(node, |a, b| op.compute(a, b) as i64),
-            Node::Not => {
+            Op::Constant(c) => c.unwrap_int(),
+            Op::Add => self.binary(node, i64::wrapping_add),
+            Op::Sub => self.binary(node, i64::wrapping_sub),
+            Op::Mul => self.binary(node, i64::wrapping_mul),
+            Op::Div => self.div(node),
+            Op::Minus => self.get_value(self.nodes.inputs[node][1]).wrapping_neg(),
+            Op::Bool(op) => self.binary(node, |a, b| op.compute(a, b) as i64),
+            Op::Not => {
                 if self.get_value(self.nodes.inputs[node][1]) == 0 {
                     1
                 } else {
@@ -148,14 +146,14 @@ impl<'a, 't> GraphEvaluator<'a, 't> {
         debug_assert!(idx > 0);
         self.loop_phi_cache.clear();
         for &use_ in &self.nodes.outputs[region] {
-            if let Node::Phi(_) = &self.nodes[use_] {
+            if let Op::Phi(_) = &self.nodes[use_] {
                 let value = self.get_value(self.nodes.inputs[use_][idx]);
                 self.loop_phi_cache.push(value);
             }
         }
         let mut d = self.loop_phi_cache.drain(..);
         for &use_ in &self.nodes.outputs[region] {
-            if let Node::Phi(_) = &self.nodes[use_] {
+            if let Op::Phi(_) = &self.nodes[use_] {
                 self.cache_values.insert(use_, d.next().unwrap());
             }
         }
@@ -170,7 +168,7 @@ impl<'a, 't> GraphEvaluator<'a, 't> {
             .unwrap();
         debug_assert!(idx > 0);
         for &use_ in &self.nodes.outputs[region] {
-            if let Node::Phi(_) = &self.nodes[use_] {
+            if let Op::Phi(_) = &self.nodes[use_] {
                 let value = self.get_value(self.nodes.inputs[use_][idx]);
                 self.cache_values.insert(use_, value);
             }
@@ -179,7 +177,7 @@ impl<'a, 't> GraphEvaluator<'a, 't> {
 
     /// Run the graph until either a return is found or the number of loop iterations are done.
     fn evaluate(&mut self, start: NodeId, parameter: i64, mut loops: usize) -> EResult {
-        assert!(matches!(&self.nodes[start], Node::Start { .. }));
+        assert!(matches!(&self.nodes[start], Op::Start { .. }));
 
         if let Some(parameter1) = self.nodes.find_projection(start, 1) {
             self.cache_values.insert(parameter1, parameter);
@@ -189,9 +187,8 @@ impl<'a, 't> GraphEvaluator<'a, 't> {
         let mut prev = start;
         while let Some(c) = control {
             let next = match &self.nodes[c] {
-                Node::Region { .. } | Node::Loop => {
-                    if matches!(&self.nodes[c], Node::Loop) && self.nodes.inputs[c][1] != Some(prev)
-                    {
+                Op::Region { .. } | Op::Loop => {
+                    if matches!(&self.nodes[c], Op::Loop) && self.nodes.inputs[c][1] != Some(prev) {
                         if loops == 0 {
                             return EResult::Timeout;
                         }
@@ -202,7 +199,7 @@ impl<'a, 't> GraphEvaluator<'a, 't> {
                     }
                     self.nodes.find_control(c)
                 }
-                Node::If => self.nodes.find_projection(
+                Op::If => self.nodes.find_projection(
                     c,
                     if self.get_value(self.nodes.inputs[c][1]) != 0 {
                         0
@@ -210,8 +207,8 @@ impl<'a, 't> GraphEvaluator<'a, 't> {
                         1
                     },
                 ),
-                Node::Return => return EResult::Value(self.get_value(self.nodes.inputs[c][1])),
-                Node::Proj(_) => self.nodes.find_control(c),
+                Op::Return => return EResult::Value(self.get_value(self.nodes.inputs[c][1])),
+                Op::Proj(_) => self.nodes.find_control(c),
                 n => todo!("unexpected control node {}", n.label()),
             };
             prev = c;

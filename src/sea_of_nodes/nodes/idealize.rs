@@ -1,35 +1,32 @@
 use crate::datastructures::id::Id;
 use crate::sea_of_nodes::nodes::index::PhiId;
-use crate::sea_of_nodes::nodes::node::{MemOp, MemOpKind, PhiNode};
-use crate::sea_of_nodes::nodes::{BoolOp, Node, NodeId, Nodes};
+use crate::sea_of_nodes::nodes::node::{MemOp, MemOpKind, PhiOp};
+use crate::sea_of_nodes::nodes::{BoolOp, NodeId, Nodes, Op};
 use crate::sea_of_nodes::types::{Int, Ty, Type};
 
 impl<'t> Nodes<'t> {
     /// do not peephole directly returned values!
     pub(super) fn idealize(&mut self, node: NodeId) -> Option<NodeId> {
         match &self[node] {
-            Node::Add => self.idealize_add(node),
-            Node::Sub => self.idealize_sub(node),
-            Node::Mul => self.idealize_mul(node),
-            Node::Bool(op) => self.idealize_bool(*op, node),
-            Node::Phi(PhiNode { ty, .. }) => self.idealize_phi(self.to_phi(node).unwrap(), *ty),
-            Node::Stop => self.idealize_stop(node),
-            Node::Return => self.idealize_return(node),
-            Node::Proj(p) => self.idealize_proj(node, p.index),
-            Node::Region { .. } | Node::Loop => self.idealize_region(node),
-            Node::If => self.idealize_if(node),
-            Node::Cast(t) => self.idealize_cast(node, *t),
-            Node::MemOp(m) => match m.kind {
+            Op::Add => self.idealize_add(node),
+            Op::Sub => self.idealize_sub(node),
+            Op::Mul => self.idealize_mul(node),
+            Op::Bool(op) => self.idealize_bool(*op, node),
+            Op::Phi(PhiOp { ty, .. }) => self.idealize_phi(self.to_phi(node).unwrap(), *ty),
+            Op::Stop => self.idealize_stop(node),
+            Op::Return => self.idealize_return(node),
+            Op::Proj(p) => self.idealize_proj(node, p.index),
+            Op::Region { .. } | Op::Loop => self.idealize_region(node),
+            Op::If => self.idealize_if(node),
+            Op::Cast(t) => self.idealize_cast(node, *t),
+            Op::MemOp(m) => match m.kind {
                 MemOpKind::Load { declared_type } => self.idealize_load(node, declared_type),
                 MemOpKind::Store => self.idealize_store(node),
             },
-            Node::Minus => self.idealize_minus(node),
-            Node::Constant(_)
-            | Node::Start { .. }
-            | Node::Div
-            | Node::Scope(_)
-            | Node::New(_)
-            | Node::Not => None,
+            Op::Minus => self.idealize_minus(node),
+            Op::Constant(_) | Op::Start { .. } | Op::Div | Op::Scope(_) | Op::New(_) | Op::Not => {
+                None
+            }
         }
     }
 
@@ -46,21 +43,21 @@ impl<'t> Nodes<'t> {
 
         // Add of same to a multiply by 2
         if lhs == rhs {
-            let two = self.create_peepholed(Node::make_constant(self.start, self.types.ty_int_two));
-            return Some(self.create(Node::make_mul([lhs, two])));
+            let two = self.create_peepholed(Op::make_constant(self.start, self.types.ty_int_two));
+            return Some(self.create(Op::make_mul([lhs, two])));
         }
 
         // Goal: a left-spine set of adds, with constants on the rhs (which then fold).
 
         // Move non-adds to RHS
-        if !matches!(self[lhs], Node::Add) && matches!(self[rhs], Node::Add) {
+        if !matches!(self[lhs], Op::Add) && matches!(self[rhs], Op::Add) {
             return Some(self.swap_12(node));
         }
 
         // x+(-y) becomes x-y
-        if matches!(&self[rhs], Node::Minus) {
+        if matches!(&self[rhs], Op::Minus) {
             let y = self.inputs[rhs][1].unwrap();
-            return Some(self.create(Node::make_sub([lhs, y])));
+            return Some(self.create(Op::make_sub([lhs, y])));
         }
 
         // Now we might see (add add non) or (add non non) or (add add add) but never (add non add)
@@ -68,16 +65,16 @@ impl<'t> Nodes<'t> {
         // Do we have  x + (y + z) ?
         // Swap to    (x + y) + z
         // Rotate (add add add) to remove the add on RHS
-        if let Node::Add = &self[rhs] {
+        if let Op::Add = &self[rhs] {
             let x = lhs;
             let y = self.inputs[rhs][1]?;
             let z = self.inputs[rhs][2]?;
-            let new_lhs = self.create_peepholed(Node::make_add([x, y]));
-            return Some(self.create(Node::make_add([new_lhs, z])));
+            let new_lhs = self.create_peepholed(Op::make_add([x, y]));
+            return Some(self.create(Op::make_add([new_lhs, z])));
         }
 
         // Now we might see (add add non) or (add non non) but never (add non add) nor (add add add)
-        if !matches!(self[lhs], Node::Add) {
+        if !matches!(self[lhs], Op::Add) {
             return if self.spine_cmp(lhs, rhs, node) {
                 Some(self.swap_12(node))
             } else {
@@ -105,8 +102,8 @@ impl<'t> Nodes<'t> {
             let con1 = self.inputs[lhs][2]?;
             let con2 = rhs;
 
-            let new_rhs = self.create_peepholed(Node::make_add([con1, con2]));
-            return Some(self.create(Node::make_add([x, new_rhs])));
+            let new_rhs = self.create_peepholed(Op::make_add([con1, con2]));
+            return Some(self.create(Op::make_add([x, new_rhs])));
         }
 
         // Do we have ((x + (phi cons)) + con) ?
@@ -127,8 +124,8 @@ impl<'t> Nodes<'t> {
             let y = self.inputs[lhs][2]?;
             let z = rhs;
 
-            let new_lhs = self.create_peepholed(Node::make_add([x, z]));
-            return Some(self.create(Node::make_add([new_lhs, y])));
+            let new_lhs = self.create_peepholed(Op::make_add([x, z]));
+            return Some(self.create(Op::make_add([new_lhs, y])));
         }
 
         None
@@ -137,12 +134,12 @@ impl<'t> Nodes<'t> {
     fn idealize_sub(&mut self, node: NodeId) -> Option<NodeId> {
         // Sub of same is 0
         if self.inputs[node][1]? == self.inputs[node][2]? {
-            return Some(self.create(Node::make_constant(self.start, self.types.ty_int_zero)));
+            return Some(self.create(Op::make_constant(self.start, self.types.ty_int_zero)));
         }
 
         // x - (-y) is x+y
         if let Some(minus) = self.to_minus(self.inputs[node][2]) {
-            return Some(self.create(Node::make_add([
+            return Some(self.create(Op::make_add([
                 node.inputs(self)[1].unwrap(),
                 minus.inputs(self)[1].unwrap(),
             ])));
@@ -150,11 +147,11 @@ impl<'t> Nodes<'t> {
 
         // (-x) - y is -(x+y)
         if let Some(minus) = self.to_minus(node.inputs(self)[1]) {
-            let add = self.create_peepholed(Node::make_add([
+            let add = self.create_peepholed(Op::make_add([
                 minus.inputs(self)[1].unwrap(),
                 node.inputs(self)[2].unwrap(),
             ]));
-            return Some(self.create(Node::make_minus(add)));
+            return Some(self.create(Op::make_minus(add)));
         }
 
         None
@@ -186,7 +183,7 @@ impl<'t> Nodes<'t> {
             } else {
                 self.types.ty_int_zero
             };
-            return Some(self.create(Node::make_constant(self.start, value)));
+            return Some(self.create(Op::make_constant(self.start, value)));
         }
 
         // Do we have ((x * (phi cons)) * con) ?
@@ -237,8 +234,8 @@ impl<'t> Nodes<'t> {
             }
 
             let label = self[node].label;
-            let phi_lhs = self.create_peepholed(Node::make_phi(label, declared_ty, lhss));
-            let phi_rhs = self.create_peepholed(Node::make_phi(label, declared_ty, rhss));
+            let phi_lhs = self.create_peepholed(Op::make_phi(label, declared_ty, lhss));
+            let phi_rhs = self.create_peepholed(Op::make_phi(label, declared_ty, rhss));
 
             return Some(self.create((self[op].clone(), vec![None, Some(phi_lhs), Some(phi_rhs)])));
         }
@@ -322,7 +319,7 @@ impl<'t> Nodes<'t> {
         if let Some(Type::Tuple { types: ts }) = self.ty[self.inputs[node][0]?].as_deref() {
             if ts[index] == self.types.ty_xctrl {
                 return Some(
-                    self.create_peepholed(Node::make_constant(self.start, self.types.ty_xctrl)),
+                    self.create_peepholed(Op::make_constant(self.start, self.types.ty_xctrl)),
                 ); // We are dead
             }
             // Only true for IfNodes
@@ -343,8 +340,7 @@ impl<'t> Nodes<'t> {
             //             // edge and make the loop a single-entry Region which folds away
             //             // the Loop).  Folding the entry path confused the loop structure,
             //             // moving the backedge to the entry point.
-            if !(matches!(&self[node], Node::Loop)
-                && self.inputs[node][1] == self.inputs[node][path])
+            if !(matches!(&self[node], Op::Loop) && self.inputs[node][1] == self.inputs[node][path])
             {
                 // Cannot use the obvious output iterator here, because a Phi
                 // deleting an input might recursively delete *itself*.  This
@@ -357,7 +353,7 @@ impl<'t> Nodes<'t> {
 
                     for i in 0..nouts {
                         let phi = self.outputs[node][i];
-                        if matches!(&self[phi], Node::Phi(_))
+                        if matches!(&self[phi], Op::Phi(_))
                             && self.inputs[node].len() == self.inputs[phi].len()
                         {
                             self.del_def(phi, path);
@@ -366,7 +362,7 @@ impl<'t> Nodes<'t> {
                 }
 
                 return if self.is_dead(node) {
-                    Some(self.create(Node::make_constant(self.start, self.types.ty_xctrl)))
+                    Some(self.create(Op::make_constant(self.start, self.types.ty_xctrl)))
                 } else {
                     self.del_def(node, path);
                     Some(node)
@@ -385,7 +381,7 @@ impl<'t> Nodes<'t> {
     fn has_phi(&self, node: NodeId) -> bool {
         self.outputs[node]
             .iter()
-            .any(|phi| matches!(&self[*phi], Node::Phi(_)))
+            .any(|phi| matches!(&self[*phi], Op::Phi(_)))
     }
 
     fn idealize_if(&mut self, node: NodeId) -> Option<NodeId> {
@@ -397,18 +393,18 @@ impl<'t> Nodes<'t> {
             let mut dom = self.idom(node);
             while let Some(d) = dom {
                 self.add_dep(d, node);
-                if matches!(&self[d], Node::If) {
+                if matches!(&self[d], Op::If) {
                     let if_pred = self.inputs[d][1]?;
                     self.add_dep(if_pred, node);
                     if if_pred == pred {
-                        if let Node::Proj(p) = &self[prior] {
+                        if let Op::Proj(p) = &self[prior] {
                             let value = if p.index == 0 {
                                 self.types.ty_int_one
                             } else {
                                 self.types.ty_int_zero
                             };
                             let new_constant =
-                                self.create_peepholed(Node::make_constant(self.start, value));
+                                self.create_peepholed(Op::make_constant(self.start, value));
                             self.set_def(node, 1, Some(new_constant));
                             return Some(node);
                         }
@@ -430,7 +426,7 @@ impl<'t> Nodes<'t> {
         let ptr = self.inputs[node][2]?;
 
         // Simple Load-after-Store on same address.
-        if let Node::MemOp(MemOp {
+        if let Op::MemOp(MemOp {
             kind: MemOpKind::Store,
             name,
             ..
@@ -439,7 +435,7 @@ impl<'t> Nodes<'t> {
             let store_ptr = self.inputs[mem][2]?;
             // Must check same object
             if ptr == store_ptr {
-                let Node::MemOp(mem_op) = &self[node] else {
+                let Op::MemOp(mem_op) = &self[node] else {
                     unreachable!()
                 };
                 debug_assert_eq!(name, &mem_op.name); // Equiv class aliasing is perfect
@@ -454,35 +450,35 @@ impl<'t> Nodes<'t> {
         //   if( pred ) ptr.x = e0;         val = pred ? e0
         //   else       ptr.x = e1;                    : e1;
         //   val = ptr.x;                   ptr.x = val;
-        if matches!(&self[mem], Node::Phi(_))
+        if matches!(&self[mem], Op::Phi(_))
             && self.ty[self.inputs[mem][0]?] == Some(self.types.ty_ctrl)
             && self.inputs[mem].len() == 3
         {
             // Profit on RHS/Loop backedge
             if self.profit(node, mem, 2) ||
                 // Else must not be a loop to count profit on LHS.
-                (!matches!(self[self.inputs[mem][0].unwrap()], Node::Loop) && self.profit(node, mem, 1))
+                (!matches!(self[self.inputs[mem][0].unwrap()], Op::Loop) && self.profit(node, mem, 1))
             {
-                let Node::MemOp(mem_op) = &self[node] else {
+                let Op::MemOp(mem_op) = &self[node] else {
                     unreachable!()
                 };
                 let name = mem_op.name;
                 let alias = mem_op.alias;
 
-                let ld1 = self.create_peepholed(Node::make_load(
+                let ld1 = self.create_peepholed(Op::make_load(
                     name,
                     alias,
                     declared_ty,
                     [self.inputs[mem][1].unwrap(), ptr],
                 ));
-                let ld2 = self.create_peepholed(Node::make_load(
+                let ld2 = self.create_peepholed(Op::make_load(
                     name,
                     alias,
                     declared_ty,
                     [self.inputs[mem][2].unwrap(), ptr],
                 ));
 
-                return Some(self.create_peepholed(Node::make_phi(
+                return Some(self.create_peepholed(Op::make_phi(
                     name,
                     self.ty[node].unwrap(),
                     vec![self.inputs[mem][0], Some(ld1), Some(ld2)],
@@ -498,7 +494,7 @@ impl<'t> Nodes<'t> {
         let px = self.inputs[phi_node][idx];
         px.is_some_and(|px| {
             self.add_dep(px, this);
-            if let Node::MemOp(MemOp {
+            if let Op::MemOp(MemOp {
                 kind: MemOpKind::Store,
                 ..
             }) = &self[px]
@@ -511,7 +507,7 @@ impl<'t> Nodes<'t> {
     }
 
     fn idealize_store(&mut self, node: NodeId) -> Option<NodeId> {
-        let Node::MemOp(mem_op) = &self[node] else {
+        let Op::MemOp(mem_op) = &self[node] else {
             unreachable!()
         };
         todo!("{node}{mem_op:?}")
@@ -544,28 +540,28 @@ impl<'t> Nodes<'t> {
             return true;
         }
 
-        if matches!(self[lo], Node::Phi(_))
+        if matches!(self[lo], Op::Phi(_))
             && self.ty[self.inputs[lo][0].unwrap()] == Some(self.types.ty_xctrl)
         {
             return false;
         }
-        if matches!(self[hi], Node::Phi(_))
+        if matches!(self[hi], Op::Phi(_))
             && self.ty[self.inputs[hi][0].unwrap()] == Some(self.types.ty_xctrl)
         {
             return false;
         }
 
-        if matches!(self[lo], Node::Phi(_)) && self.all_cons(lo, dep) {
+        if matches!(self[lo], Op::Phi(_)) && self.all_cons(lo, dep) {
             return false;
         }
-        if matches!(self[hi], Node::Phi(_)) && self.all_cons(hi, dep) {
+        if matches!(self[hi], Op::Phi(_)) && self.all_cons(hi, dep) {
             return true;
         }
 
-        if matches!(self[lo], Node::Phi(_)) && !matches!(self[hi], Node::Phi(_)) {
+        if matches!(self[lo], Op::Phi(_)) && !matches!(self[hi], Op::Phi(_)) {
             return true;
         }
-        if matches!(self[hi], Node::Phi(_)) && !matches!(self[lo], Node::Phi(_)) {
+        if matches!(self[hi], Op::Phi(_)) && !matches!(self[lo], Op::Phi(_)) {
             return false;
         }
 
@@ -593,12 +589,12 @@ impl<'t> Nodes<'t> {
         let lphi = self.to_phi(lphi).unwrap();
 
         // RHS is a constant or a Phi of constants
-        if !matches!(&self[rhs], Node::Constant(_)) && self.pcon(Some(rhs), op).is_none() {
+        if !matches!(&self[rhs], Op::Constant(_)) && self.pcon(Some(rhs), op).is_none() {
             return None;
         }
 
         // If both are Phis, must be same Region
-        if matches!(&self[rhs], Node::Phi(_)) && self.inputs[lphi][0] != self.inputs[rhs][0] {
+        if matches!(&self[rhs], Op::Phi(_)) && self.inputs[lphi][0] != self.inputs[rhs][0] {
             return None;
         }
 
@@ -616,7 +612,7 @@ impl<'t> Nodes<'t> {
                 vec![
                     None,
                     self.inputs[lphi][i],
-                    if matches!(&self[rhs], Node::Phi(_)) {
+                    if matches!(&self[rhs], Op::Phi(_)) {
                         self.inputs[rhs][i]
                     } else {
                         Some(rhs)
@@ -632,7 +628,7 @@ impl<'t> Nodes<'t> {
         );
         let label = self.types.get_str(&label);
         let ty = self[lphi].ty;
-        let phi = self.create_peepholed(Node::make_phi(label, ty, ns));
+        let phi = self.create_peepholed(Op::make_phi(label, ty, ns));
 
         // Rotate needs another op, otherwise just the phi
         Some(if lhs == *lphi {
@@ -651,6 +647,6 @@ impl<'t> Nodes<'t> {
     /// a dependency to the phi's non-const input, because if later the input turn into a constant
     /// dep can make progress.
     fn pcon(&mut self, op: Option<NodeId>, dep: NodeId) -> Option<NodeId> {
-        op.filter(|op| matches!(&self[*op], Node::Phi(_)) && self.all_cons(*op, dep))
+        op.filter(|op| matches!(&self[*op], Op::Phi(_)) && self.all_cons(*op, dep))
     }
 }

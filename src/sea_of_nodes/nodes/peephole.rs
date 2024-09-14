@@ -1,5 +1,5 @@
 use crate::sea_of_nodes::nodes::node::MemOpKind;
-use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
+use crate::sea_of_nodes::nodes::{NodeId, Nodes, Op};
 use crate::sea_of_nodes::types::{Int, Ty, Type};
 
 impl<'t> NodeId {
@@ -48,8 +48,8 @@ impl<'t> Nodes<'t> {
         // println!("{:<3} {:<8} {:?}->{:?}", node, &self[node].label(), old, ty);
 
         // Replace constant computations from non-constants with a constant node
-        if !matches!(self[node], Node::Constant(_)) && ty.is_high_or_constant() {
-            let constant = self.create(Node::make_constant(self.start, ty));
+        if !matches!(self[node], Op::Constant(_)) && ty.is_high_or_constant() {
+            let constant = self.create(Op::make_constant(self.start, ty));
             return self.peephole_opt(constant);
         }
 
@@ -110,8 +110,8 @@ impl<'t> Nodes<'t> {
     pub(crate) fn compute(&mut self, node: NodeId) -> Ty<'t> {
         let types = self.types;
         match &self[node] {
-            Node::Constant(ty) => *ty,
-            Node::Return => {
+            Op::Constant(ty) => *ty,
+            Op::Return => {
                 let ctrl = self.inputs[node][0]
                     .and_then(|n| self.ty[n])
                     .unwrap_or(types.ty_bot);
@@ -120,14 +120,14 @@ impl<'t> Nodes<'t> {
                     .unwrap_or(types.ty_bot);
                 types.get_tuple_from_array([ctrl, expr])
             }
-            Node::Start(s) => s.args,
-            Node::Add => self.compute_binary_int(node, i64::wrapping_add),
-            Node::Sub => self.compute_binary_int(node, i64::wrapping_sub),
-            Node::Mul => self.compute_binary_int(node, i64::wrapping_mul),
-            Node::Div => {
+            Op::Start(s) => s.args,
+            Op::Add => self.compute_binary_int(node, i64::wrapping_add),
+            Op::Sub => self.compute_binary_int(node, i64::wrapping_sub),
+            Op::Mul => self.compute_binary_int(node, i64::wrapping_mul),
+            Op::Div => {
                 self.compute_binary_int(node, |a, b| if b == 0 { 0 } else { a.wrapping_div(b) })
             }
-            Node::Minus => {
+            Op::Minus => {
                 let Some(input) = self.inputs[node][1].and_then(|n| self.ty[n]) else {
                     return types.ty_bot;
                 };
@@ -136,9 +136,9 @@ impl<'t> Nodes<'t> {
                     _ => types.meet(types.ty_top, input),
                 }
             }
-            Node::Scope(_) => types.ty_bot,
-            Node::Bool(op) => self.compute_binary_int(node, |x, y| op.compute(x, y) as i64),
-            Node::Not => {
+            Op::Scope(_) => types.ty_bot,
+            Op::Bool(op) => self.compute_binary_int(node, |x, y| op.compute(x, y) as i64),
+            Op::Not => {
                 let Some(input) = self.inputs[node][1].and_then(|n| self.ty[n]) else {
                     return types.ty_bot;
                 };
@@ -149,7 +149,7 @@ impl<'t> Nodes<'t> {
                     _ => types.meet(types.ty_top, input),
                 }
             }
-            Node::Proj(n) => {
+            Op::Proj(n) => {
                 let Some(input) = self.inputs[node][0].and_then(|n| self.ty[n]) else {
                     return types.ty_bot;
                 };
@@ -158,7 +158,7 @@ impl<'t> Nodes<'t> {
                     _ => unreachable!("proj node ctrl must always be tuple, if present"),
                 }
             }
-            Node::If => {
+            Op::If => {
                 // If the If node is not reachable then neither is any following Proj
                 let ctrl_ty = self.ty[self.inputs[node][0].unwrap()];
                 if ctrl_ty != Some(types.ty_ctrl) && ctrl_ty != Some(types.ty_bot) {
@@ -190,8 +190,8 @@ impl<'t> Nodes<'t> {
                 let mut dom = self.idom(node);
                 let mut prior = node;
                 while let Some(d) = dom {
-                    if matches!(&self[d], Node::If) && self.inputs[d][1].unwrap() == pred {
-                        return if let Node::Proj(proj) = &self[prior] {
+                    if matches!(&self[d], Op::If) && self.inputs[d][1].unwrap() == pred {
+                        return if let Op::Proj(proj) = &self[prior] {
                             // Repeated test, dominated on one side.  Test result is the same.
                             if proj.index == 0 {
                                 types.ty_if_true
@@ -210,7 +210,7 @@ impl<'t> Nodes<'t> {
 
                 types.ty_if_both
             }
-            Node::Phi(_) => {
+            Op::Phi(_) => {
                 let region = self.inputs[node][0].unwrap();
                 if !self.instanceof_region(Some(region)) {
                     if self.ty[region] == Some(types.ty_xctrl) {
@@ -240,7 +240,7 @@ impl<'t> Nodes<'t> {
                     t
                 }
             }
-            Node::Region { .. } => {
+            Op::Region { .. } => {
                 if Self::in_progress(&self.nodes, &self.inputs, node) {
                     types.ty_ctrl
                 } else {
@@ -252,7 +252,7 @@ impl<'t> Nodes<'t> {
                         })
                 }
             }
-            Node::Loop => {
+            Op::Loop => {
                 if Self::in_progress(&self.nodes, &self.inputs, node) {
                     types.ty_ctrl
                 } else {
@@ -260,13 +260,13 @@ impl<'t> Nodes<'t> {
                     self.ty[entry].unwrap()
                 }
             }
-            Node::Stop => types.ty_bot,
-            Node::Cast(t) => types.join(self.ty[self.inputs[node][1].unwrap()].unwrap(), *t),
-            Node::MemOp(m) => match m.kind {
+            Op::Stop => types.ty_bot,
+            Op::Cast(t) => types.join(self.ty[self.inputs[node][1].unwrap()].unwrap(), *t),
+            Op::MemOp(m) => match m.kind {
                 MemOpKind::Load { declared_type } => declared_type,
                 MemOpKind::Store => types.get_mem(m.alias),
             },
-            Node::New(t) => *t,
+            Op::New(t) => *t,
         }
     }
 

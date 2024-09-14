@@ -1,5 +1,5 @@
 use crate::datastructures::arena::DroplessArena;
-use crate::sea_of_nodes::nodes::Node;
+use crate::sea_of_nodes::nodes::Op;
 use crate::sea_of_nodes::parser::Parser;
 use crate::sea_of_nodes::tests::test_error;
 use crate::sea_of_nodes::types::Types;
@@ -66,17 +66,17 @@ fn test_var_arg() {
     let mut parser = Parser::new_with_arg("return arg; #showGraph;", &types, arg);
     let stop = parser.parse().unwrap();
 
-    assert!(matches!(&parser.nodes[stop], Node::Stop));
+    assert!(matches!(&parser.nodes[stop], Op::Stop));
     let ret = parser.nodes.unique_input(*stop).expect("has one ret");
-    assert!(matches!(&parser.nodes[ret], Node::Return));
+    assert!(matches!(&parser.nodes[ret], Op::Return));
 
     assert!(matches!(
         parser.nodes[parser.nodes.inputs[ret][0].unwrap()],
-        Node::Proj(_)
+        Op::Proj(_)
     ));
     assert!(matches!(
         parser.nodes[parser.nodes.inputs[ret][1].unwrap()],
-        Node::Proj(_)
+        Op::Proj(_)
     ));
 }
 

@@ -1,15 +1,15 @@
 use std::collections::HashMap;
 
 use crate::sea_of_nodes::nodes::index::ScopeId;
-use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
+use crate::sea_of_nodes::nodes::{NodeId, Nodes, Op};
 use crate::sea_of_nodes::types::{Ty, Type};
 
 #[derive(Clone, Debug)]
-pub struct ScopeNode<'t> {
+pub struct ScopeOp<'t> {
     pub scopes: Vec<HashMap<&'t str, (usize, Ty<'t>)>>,
 }
 
-impl<'t> ScopeNode<'t> {
+impl<'t> ScopeOp<'t> {
     pub const CTRL: &'static str = "$ctrl";
     pub const ARG0: &'static str = "arg";
 
@@ -82,7 +82,7 @@ impl<'t> ScopeId {
 
                         let name = sea.types.get_str(name);
                         let recursive = loop_.lookup_update(name, None, nesting_level, sea);
-                        let new_phi = sea.create_peepholed(Node::make_phi(
+                        let new_phi = sea.create_peepholed(Op::make_phi(
                             name,
                             declared_ty,
                             vec![loop_.inputs(sea)[0], recursive, None],
@@ -111,7 +111,7 @@ impl<'t> ScopeId {
 
     pub fn dup(self, lazy_loop_phis: bool, sea: &mut Nodes<'t>) -> ScopeId {
         let clone = sea[self].clone();
-        let dup = sea.create((Node::Scope(clone), vec![]));
+        let dup = sea.create((Op::Scope(clone), vec![]));
         let dup = sea.to_scope(dup).unwrap();
 
         sea.add_def(*dup, self.inputs(sea)[0]); // ctrl
@@ -144,7 +144,7 @@ impl<'t> ScopeId {
     pub fn merge(self, that: ScopeId, sea: &mut Nodes<'t>) -> NodeId {
         let c1 = self.inputs(sea)[0];
         let c2 = that.inputs(sea)[0];
-        let region = sea.create(Node::make_region(vec![None, c1, c2]));
+        let region = sea.create(Op::make_region(vec![None, c1, c2]));
         sea.keep(region);
         sea.set_def(*self, 0, Some(region)); // set ctrl
 
@@ -162,7 +162,7 @@ impl<'t> ScopeId {
                 let that_l = that.lookup(name, sea).unwrap();
 
                 let declared_ty = sea[self].lookup(name).unwrap().1;
-                let phi = sea.create_peepholed(Node::make_phi(
+                let phi = sea.create_peepholed(Op::make_phi(
                     name,
                     declared_ty,
                     vec![Some(region), Some(this_l), Some(that_l)],
@@ -181,7 +181,7 @@ impl<'t> ScopeId {
     /// We set the second input to the phi from the back edge (i.e. loop body)
     pub fn end_loop(self, back: ScopeId, exit: ScopeId, sea: &mut Nodes<'t>) {
         let ctrl = self.inputs(sea)[0].unwrap();
-        assert!(matches!(&sea[ctrl], Node::Loop));
+        assert!(matches!(&sea[ctrl], Op::Loop));
         assert!(Nodes::in_progress(&sea.nodes, &sea.inputs, ctrl));
 
         sea.set_def(ctrl, 2, back.inputs(sea)[0]);
@@ -204,7 +204,7 @@ impl<'t> ScopeId {
         // Now one-time do a useless-phi removal
         for i in 1..self.inputs(sea).len() {
             if let Some(phi) = self.inputs(sea)[i] {
-                if let Node::Phi(_) = &sea[phi] {
+                if let Op::Phi(_) = &sea[phi] {
                     // Do an eager useless-phi removal
                     let in_ = phi.peephole(sea);
                     for &o in &sea.outputs[phi] {
@@ -240,7 +240,7 @@ impl<'t> ScopeId {
             if sea.to_not(pred).is_some() {
                 pred = pred.inputs(sea)[1].unwrap()
             } else {
-                pred = sea.create_peepholed(Node::make_not(pred));
+                pred = sea.create_peepholed(Op::make_not(pred));
                 sea.iter_peeps.add(pred);
             }
         }
@@ -257,7 +257,7 @@ impl<'t> ScopeId {
                 return None; // Already not-null, no reason to upcast
             }
             // Upcast the ptr to not-null ptr, and replace in scope
-            let c = sea.create_peepholed(Node::make_cast(sea.types.ty_pointer_void, ctrl, pred));
+            let c = sea.create_peepholed(Op::make_cast(sea.types.ty_pointer_void, ctrl, pred));
             let t = sea.compute(c);
             sea.set_type(c, t);
             self.replace(pred, Some(c), sea);
@@ -272,7 +272,7 @@ impl<'t> ScopeId {
                 return if sea.types.isa(t, tinit) {
                     None // Already zero/null, no reason to upcast
                 } else {
-                    let c = sea.create_peepholed(Node::make_constant(sea.start, tinit));
+                    let c = sea.create_peepholed(Op::make_constant(sea.start, tinit));
                     self.replace(not_in_1, Some(c), sea);
                     Some(c)
                 };

@@ -4,7 +4,7 @@ use std::num::NonZeroU32;
 
 use crate::datastructures::id::Id;
 use crate::datastructures::id_vec::IdVec;
-use crate::sea_of_nodes::nodes::{Node, Nodes};
+use crate::sea_of_nodes::nodes::{Nodes, Op};
 use crate::sea_of_nodes::types::Ty;
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
@@ -27,7 +27,7 @@ impl NodeId {
         self.get(&nodes.inputs)
     }
 
-    pub fn node<'a, 't>(self, nodes: &'a Nodes<'t>) -> &'a Node<'t> {
+    pub fn node<'a, 't>(self, nodes: &'a Nodes<'t>) -> &'a Op<'t> {
         &nodes[self]
     }
 

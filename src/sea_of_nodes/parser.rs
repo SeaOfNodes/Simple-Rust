@@ -1,6 +1,6 @@
 use crate::sea_of_nodes::graph_visualizer;
 use crate::sea_of_nodes::nodes::index::{ScopeId, StopId};
-use crate::sea_of_nodes::nodes::{BoolOp, Node, NodeCreation, NodeId, Nodes, ScopeNode};
+use crate::sea_of_nodes::nodes::{BoolOp, NodeCreation, NodeId, Nodes, Op, ScopeOp};
 use crate::sea_of_nodes::types::{Struct, Ty, Type, Types};
 use std::collections::HashMap;
 
@@ -62,16 +62,16 @@ impl<'s, 't> Parser<'s, 't> {
     pub fn new_with_arg(source: &'s str, types: &'t Types<'t>, arg: Ty<'t>) -> Self {
         let mut nodes = Nodes::new(types);
 
-        let scope = nodes.create(Node::make_scope());
+        let scope = nodes.create(Op::make_scope());
         let scope = nodes.to_scope(scope).unwrap();
         nodes.ty[scope] = Some(types.ty_bot); // in java this is done by the constructor
 
         let args = types.get_tuple_from_array([types.ty_ctrl, arg]);
-        let start = nodes.create(Node::make_start(args));
+        let start = nodes.create(Op::make_start(args));
         nodes.ty[start] = Some(args);
         nodes.start = nodes.to_start(start).unwrap();
 
-        let stop = nodes.create(Node::make_stop());
+        let stop = nodes.create(Op::make_stop());
         let stop = nodes.to_stop(stop).unwrap();
         nodes.ty[stop] = Some(types.ty_bot); // differs from java; ensures that it isn't dead
 
@@ -111,18 +111,13 @@ impl<'s, 't> Parser<'s, 't> {
 
         // project ctrl and arg0 from start
         let start = self.nodes.start;
-        let ctrl = self.peephole(Node::make_proj(start, 0, ScopeNode::CTRL));
+        let ctrl = self.peephole(Op::make_proj(start, 0, ScopeOp::CTRL));
         self.scope
-            .define(ScopeNode::CTRL, self.types.ty_ctrl, ctrl, &mut self.nodes)
+            .define(ScopeOp::CTRL, self.types.ty_ctrl, ctrl, &mut self.nodes)
             .expect("not in scope");
-        let arg0 = self.peephole(Node::make_proj(start, 1, ScopeNode::ARG0));
+        let arg0 = self.peephole(Op::make_proj(start, 1, ScopeOp::ARG0));
         self.scope
-            .define(
-                ScopeNode::ARG0,
-                self.types.ty_int_bot,
-                arg0,
-                &mut self.nodes,
-            )
+            .define(ScopeOp::ARG0, self.types.ty_int_bot, arg0, &mut self.nodes)
             .expect("not in scope");
 
         self.parse_block()?;
@@ -258,7 +253,7 @@ impl<'s, 't> Parser<'s, 't> {
         // associated phis; see {@code inProgress()}.
 
         let ctrl = self.ctrl();
-        let ctrl = self.peephole(Node::make_loop(ctrl)); // Note we set back edge to null here
+        let ctrl = self.peephole(Op::make_loop(ctrl)); // Note we set back edge to null here
         self.set_ctrl(ctrl);
 
         // At loop head, we clone the current Scope (this includes all
@@ -279,14 +274,14 @@ impl<'s, 't> Parser<'s, 't> {
         self.require(")")?;
 
         // IfNode takes current control and predicate
-        let if_node = self.peephole(Node::make_if(ctrl, pred));
+        let if_node = self.peephole(Op::make_if(ctrl, pred));
 
         // Setup projection nodes
         self.nodes.keep(if_node);
-        let if_true = self.peephole(Node::make_proj(if_node, 0, "True"));
+        let if_true = self.peephole(Op::make_proj(if_node, 0, "True"));
         self.nodes.unkeep(if_node);
         self.nodes.keep(if_true);
-        let if_false = self.peephole(Node::make_proj(if_node, 1, "False"));
+        let if_false = self.peephole(Op::make_proj(if_node, 1, "False"));
 
         // Clone the body Scope to create the break/exit Scope which accounts for any
         // side effects in the predicate.  The break/exit Scope will be the final
@@ -341,7 +336,7 @@ impl<'s, 't> Parser<'s, 't> {
     fn jump_to(&mut self, to_scope: Option<ScopeId>) -> ScopeId {
         let cur = self.scope.dup(false, &mut self.nodes);
 
-        let ctrl = self.peephole(Node::make_constant(self.nodes.start, self.types.ty_xctrl));
+        let ctrl = self.peephole(Op::make_constant(self.nodes.start, self.types.ty_xctrl));
         self.set_ctrl(ctrl); // Kill current scope
 
         // Prune nested lexical scopes that have depth > than the loop head
@@ -398,14 +393,14 @@ impl<'s, 't> Parser<'s, 't> {
 
         // IfNode takes current control and predicate
         let if_ctrl = self.ctrl();
-        let if_node = self.peephole(Node::make_if(if_ctrl, pred));
+        let if_node = self.peephole(Op::make_if(if_ctrl, pred));
 
         // Setup projection nodes
         self.nodes.keep(if_node);
-        let if_true = self.peephole(Node::make_proj(if_node, 0, "True"));
+        let if_true = self.peephole(Op::make_proj(if_node, 0, "True"));
         self.nodes.unkeep(if_node);
         self.nodes.keep(if_true);
-        let if_false = self.peephole(Node::make_proj(if_node, 1, "False"));
+        let if_false = self.peephole(Op::make_proj(if_node, 1, "False"));
         self.nodes.keep(if_false);
 
         // In if true branch, the ifT proj node becomes the ctrl
@@ -457,7 +452,7 @@ impl<'s, 't> Parser<'s, 't> {
         let expr = self.parse_expression()?;
         self.require(";")?;
         let ctrl = self.ctrl();
-        let ret = self.peephole(Node::make_return(ctrl, expr));
+        let ret = self.peephole(Op::make_return(ctrl, expr));
 
         // We lookup memory slices by the naming convention that they start with $
         // We could also use implicit knowledge that all memory projects are at offset >= 2
@@ -470,7 +465,7 @@ impl<'s, 't> Parser<'s, 't> {
         }
 
         self.nodes.add_def(*self.stop, Some(ret));
-        let ctrl = self.peephole(Node::make_constant(self.nodes.start, self.types.ty_xctrl));
+        let ctrl = self.peephole(Op::make_constant(self.nodes.start, self.types.ty_xctrl));
         self.set_ctrl(ctrl);
         Ok(())
     }
@@ -517,7 +512,7 @@ impl<'s, 't> Parser<'s, 't> {
             // Assign a default value
             if let Some(t) = t {
                 let init = self.types.make_init(t).unwrap();
-                expr = self.peephole(Node::make_constant(self.nodes.start, init))
+                expr = self.peephole(Op::make_constant(self.nodes.start, init))
             } else {
                 // No type and no expr is an error
                 return Err("expression".to_string());
@@ -580,7 +575,7 @@ impl<'s, 't> Parser<'s, 't> {
         let expr = if self.peek(';') {
             // Assign a null value
             let v = self.types.make_init(t).unwrap();
-            self.peephole(Node::make_constant(self.nodes.start, v))
+            self.peephole(Op::make_constant(self.nodes.start, v))
         } else {
             // Assign "= expr;"
             self.require("=")?;
@@ -635,7 +630,7 @@ impl<'s, 't> Parser<'s, 't> {
             };
             // do it before parsing rhs to get same ids as java...
             lhs = self.nodes.create((
-                Node::Bool(op),
+                Op::Bool(op),
                 if idx == 2 {
                     vec![None, Some(lhs), None]
                 } else {
@@ -646,7 +641,7 @@ impl<'s, 't> Parser<'s, 't> {
             self.nodes.set_def(lhs, idx, Some(rhs));
             lhs = lhs.peephole(&mut self.nodes);
             if negate {
-                lhs = self.peephole(Node::make_not(lhs));
+                lhs = self.peephole(Op::make_not(lhs));
             }
         }
     }
@@ -658,9 +653,9 @@ impl<'s, 't> Parser<'s, 't> {
         let mut lhs = self.parse_multiplication()?;
         loop {
             let op = if self.match_("+") {
-                Node::Add
+                Op::Add
             } else if self.match_("-") {
-                Node::Sub
+                Op::Sub
             } else {
                 return Ok(lhs);
             };
@@ -678,9 +673,9 @@ impl<'s, 't> Parser<'s, 't> {
         let mut lhs = self.parse_unary()?;
         loop {
             let op = if self.match_("*") {
-                Node::Mul
+                Op::Mul
             } else if self.match_("/") {
-                Node::Div
+                Op::Div
             } else {
                 return Ok(lhs);
             };
@@ -697,10 +692,10 @@ impl<'s, 't> Parser<'s, 't> {
     fn parse_unary(&mut self) -> PResult<NodeId> {
         if self.match_("-") {
             self.parse_unary()
-                .map(|expr| self.peephole(Node::make_minus(expr)))
+                .map(|expr| self.peephole(Op::make_minus(expr)))
         } else if self.match_("!") {
             self.parse_unary()
-                .map(|expr| self.peephole(Node::make_not(expr)))
+                .map(|expr| self.peephole(Op::make_not(expr)))
         } else {
             let primary = self.parse_primary()?;
             self.parse_postfix(primary)
@@ -718,14 +713,11 @@ impl<'s, 't> Parser<'s, 't> {
             self.require(")")?;
             Ok(e)
         } else if self.matchx("true") {
-            Ok(self.peephole(Node::make_constant(self.nodes.start, self.types.ty_int_one)))
+            Ok(self.peephole(Op::make_constant(self.nodes.start, self.types.ty_int_one)))
         } else if self.matchx("false") {
-            Ok(self.peephole(Node::make_constant(
-                self.nodes.start,
-                self.types.ty_int_zero,
-            )))
+            Ok(self.peephole(Op::make_constant(self.nodes.start, self.types.ty_int_zero)))
         } else if self.matchx("null") {
-            Ok(self.peephole(Node::make_constant(
+            Ok(self.peephole(Op::make_constant(
                 self.nodes.start,
                 self.types.ty_pointer_null,
             )))
@@ -750,13 +742,10 @@ impl<'s, 't> Parser<'s, 't> {
     fn new_struct(&mut self, obj: Ty<'t>) -> NodeId {
         let ptr_ty = self.types.get_pointer(obj, false);
         let ctrl = self.ctrl();
-        let n = self.peephole(Node::make_new(ptr_ty, ctrl));
+        let n = self.peephole(Op::make_new(ptr_ty, ctrl));
         self.nodes.keep(n);
 
-        let init_value = self.peephole(Node::make_constant(
-            self.nodes.start,
-            self.types.ty_int_zero,
-        ));
+        let init_value = self.peephole(Op::make_constant(self.nodes.start, self.types.ty_int_zero));
 
         let Type::Struct(Struct::Struct { name, fields }) = *obj else {
             unreachable!()
@@ -765,7 +754,7 @@ impl<'s, 't> Parser<'s, 't> {
         let mut alias = *self.nodes[self.nodes.start].alias_starts.get(name).unwrap();
         for &(fname, _) in fields {
             let mem_slice = self.mem_alias_lookup(alias).unwrap();
-            let store = self.peephole(Node::make_store(fname, alias, [mem_slice, n, init_value]));
+            let store = self.peephole(Op::make_store(fname, alias, [mem_slice, n, init_value]));
             self.mem_alias_update(alias, store).unwrap();
             alias += 1;
         }
@@ -841,7 +830,7 @@ impl<'s, 't> Parser<'s, 't> {
             } else {
                 let val = self.parse_expression()?;
                 let mem_slice = self.mem_alias_lookup(alias).unwrap();
-                let store = self.peephole(Node::make_store(name, alias, [mem_slice, expr, val]));
+                let store = self.peephole(Op::make_store(name, alias, [mem_slice, expr, val]));
                 self.mem_alias_update(alias, store).unwrap();
                 return Ok(expr); // "obj.a = expr" returns the expression while updating memory
             }
@@ -849,12 +838,7 @@ impl<'s, 't> Parser<'s, 't> {
 
         let declared_type = fields[idx].1;
         let mem_slice = self.mem_alias_lookup(alias).unwrap();
-        let load = self.peephole(Node::make_load(
-            name,
-            alias,
-            declared_type,
-            [mem_slice, expr],
-        ));
+        let load = self.peephole(Op::make_load(name, alias, declared_type, [mem_slice, expr]));
         self.parse_postfix(load)
     }
 
@@ -864,7 +848,7 @@ impl<'s, 't> Parser<'s, 't> {
     fn parse_integer_literal(&mut self) -> PResult<NodeId> {
         self.lexer
             .parse_number(self.types)
-            .map(|ty| self.peephole(Node::make_constant(self.nodes.start, ty)))
+            .map(|ty| self.peephole(Op::make_constant(self.nodes.start, ty)))
     }
 
     //

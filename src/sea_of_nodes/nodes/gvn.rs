@@ -1,5 +1,5 @@
 use crate::datastructures::id_vec::IdVec;
-use crate::sea_of_nodes::nodes::{Node, NodeId, NodeVec, Nodes};
+use crate::sea_of_nodes::nodes::{NodeId, NodeVec, Nodes, Op};
 use std::collections::hash_map::RawEntryMut;
 use std::hash::{BuildHasher, DefaultHasher, Hash, Hasher};
 use std::num::NonZeroU32;
@@ -72,11 +72,11 @@ impl<'t> Nodes<'t> {
         }
 
         match (&nodes[this], &nodes[that]) {
-            (Node::Constant(c1), Node::Constant(c2)) => c1 == c2,
-            (Node::Phi(_) | Node::Region { .. } | Node::Loop, _) => {
+            (Op::Constant(c1), Op::Constant(c2)) => c1 == c2,
+            (Op::Phi(_) | Op::Region { .. } | Op::Loop, _) => {
                 !Self::in_progress(nodes, inputs, this)
             }
-            (Node::Proj(p1), Node::Proj(p2)) => p1.index == p2.index,
+            (Op::Proj(p1), Op::Proj(p2)) => p1.index == p2.index,
             _ => true,
         }
     }
@@ -90,8 +90,8 @@ impl<'t> Nodes<'t> {
         let h = &mut DefaultHasher::new();
         self[node].operation().hash(h);
         match &self[node] {
-            Node::Constant(c) => c.hash(h),
-            Node::Proj(p) => p.index.hash(h),
+            Op::Constant(c) => c.hash(h),
+            Op::Proj(p) => p.index.hash(h),
             _ => {}
         };
         self.inputs[node].hash(h);

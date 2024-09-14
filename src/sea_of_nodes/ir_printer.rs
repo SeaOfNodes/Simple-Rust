@@ -3,7 +3,7 @@ use std::fmt;
 use std::fmt::Write;
 
 use crate::datastructures::id_set::IdSet;
-use crate::sea_of_nodes::nodes::{Node, NodeId, Nodes};
+use crate::sea_of_nodes::nodes::{NodeId, Nodes, Op};
 use crate::sea_of_nodes::types::{Int, Ty, Type};
 
 pub fn pretty_print_llvm(nodes: &Nodes, node: impl Into<NodeId>, depth: usize) -> String {
@@ -167,50 +167,50 @@ fn print_line_llvm(nodes: &Nodes, n: NodeId, sb: &mut String) -> fmt::Result {
 impl<'t> Nodes<'t> {
     pub fn is_multi_head(&self, node: NodeId) -> bool {
         match &self[node] {
-            Node::If | Node::Region { .. } | Node::Loop | Node::Start { .. } => true,
-            Node::Constant(_)
-            | Node::Return
-            | Node::Add
-            | Node::Sub
-            | Node::Mul
-            | Node::Div
-            | Node::Minus
-            | Node::Scope(_)
-            | Node::Bool(_)
-            | Node::Not
-            | Node::Proj(_)
-            | Node::Phi(_)
-            | Node::Cast(_)
-            | Node::New(_)
-            | Node::MemOp(_)
-            | Node::Stop => false,
+            Op::If | Op::Region { .. } | Op::Loop | Op::Start { .. } => true,
+            Op::Constant(_)
+            | Op::Return
+            | Op::Add
+            | Op::Sub
+            | Op::Mul
+            | Op::Div
+            | Op::Minus
+            | Op::Scope(_)
+            | Op::Bool(_)
+            | Op::Not
+            | Op::Proj(_)
+            | Op::Phi(_)
+            | Op::Cast(_)
+            | Op::New(_)
+            | Op::MemOp(_)
+            | Op::Stop => false,
         }
     }
 
     pub fn is_multi_tail(&self, node: NodeId) -> bool {
         match &self[node] {
-            Node::Constant(_) | Node::Phi(_) => true,
-            Node::Proj(_) => {
+            Op::Constant(_) | Op::Phi(_) => true,
+            Op::Proj(_) => {
                 let ctrl = self.inputs[node][0].unwrap();
                 self.is_multi_head(ctrl)
             }
-            Node::Return
-            | Node::Start { .. }
-            | Node::Add
-            | Node::Sub
-            | Node::Mul
-            | Node::Div
-            | Node::Minus
-            | Node::Scope(_)
-            | Node::Bool(_)
-            | Node::Not
-            | Node::If
-            | Node::Region { .. }
-            | Node::Loop
-            | Node::Cast(_)
-            | Node::New(_)
-            | Node::MemOp(_)
-            | Node::Stop => false,
+            Op::Return
+            | Op::Start { .. }
+            | Op::Add
+            | Op::Sub
+            | Op::Mul
+            | Op::Div
+            | Op::Minus
+            | Op::Scope(_)
+            | Op::Bool(_)
+            | Op::Not
+            | Op::If
+            | Op::Region { .. }
+            | Op::Loop
+            | Op::Cast(_)
+            | Op::New(_)
+            | Op::MemOp(_)
+            | Op::Stop => false,
         }
     }
 }
@@ -236,7 +236,7 @@ fn post_ord(
             if use_ != NodeId::DUMMY
                 && nodes.is_cfg(use_)
                 && nodes.outputs[use_].len() >= 1
-                && !matches!(nodes[nodes.outputs[use_][0]], Node::Loop)
+                && !matches!(nodes[nodes.outputs[use_][0]], Op::Loop)
             {
                 post_ord(use_, rpos, visit, bfs, nodes);
             }
