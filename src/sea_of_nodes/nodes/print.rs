@@ -5,13 +5,13 @@ use std::fmt::Display;
 use crate::datastructures::id::Id;
 use crate::datastructures::id_set::IdSet;
 use crate::sea_of_nodes::nodes::node::MemOpKind;
-use crate::sea_of_nodes::nodes::{NodeId, Nodes, Op};
+use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
 use crate::sea_of_nodes::types::Type;
 
 pub struct PrintNodes<'a, 't> {
-    node: Option<NodeId>,
+    node: Option<Node>,
     nodes: &'a Nodes<'t>,
-    visited: RefCell<IdSet<NodeId>>,
+    visited: RefCell<IdSet<Node>>,
 }
 
 impl Display for PrintNodes<'_, '_> {
@@ -26,13 +26,13 @@ impl Display for PrintNodes<'_, '_> {
 }
 
 pub struct PrintNodes2<'a, 'b, 't> {
-    node: Option<NodeId>,
+    node: Option<Node>,
     nodes: &'a Nodes<'t>,
-    visited: &'b RefCell<IdSet<NodeId>>,
+    visited: &'b RefCell<IdSet<Node>>,
 }
 
 impl<'t> Nodes<'t> {
-    pub(crate) fn print(&self, node: Option<NodeId>) -> PrintNodes<'_, 't> {
+    pub(crate) fn print(&self, node: Option<Node>) -> PrintNodes<'_, 't> {
         PrintNodes {
             node,
             nodes: self,
@@ -41,7 +41,7 @@ impl<'t> Nodes<'t> {
     }
 
     // Unique label for graph visualization, e.g. "Add12" or "Region30" or "EQ99"
-    pub fn unique_name(&self, node: NodeId) -> String {
+    pub fn unique_name(&self, node: Node) -> String {
         match &self[node] {
             Op::Constant(_) => format!("Con_{node}"),
             Op::Cast(_) => format!("Cast_{node}"),
@@ -145,7 +145,7 @@ impl Display for PrintNodes2<'_, '_, '_> {
                 };
                 write!(f, "new {}", p.to.str())
             }
-            Op::MemOp(m) => match m.kind {
+            Op::Mem(m) => match m.kind {
                 MemOpKind::Load { .. } => write!(f, ".{}", m.name),
                 MemOpKind::Store => write!(f, ".{}={};", m.name, input(3)),
             },

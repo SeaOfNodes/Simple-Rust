@@ -1,5 +1,5 @@
-use crate::sea_of_nodes::nodes::index::StartId;
-use crate::sea_of_nodes::nodes::{NodeCreation, NodeId, ScopeOp};
+use crate::sea_of_nodes::nodes::index::Start;
+use crate::sea_of_nodes::nodes::{Node, NodeCreation, ScopeOp};
 use crate::sea_of_nodes::types::{Ty, Type};
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -25,7 +25,7 @@ pub enum Op<'t> {
     Loop,
     Stop,
     Cast(Ty<'t>),
-    MemOp(MemOp<'t>),
+    Mem(MemOp<'t>),
     New(Ty<'t>),
 }
 
@@ -111,11 +111,11 @@ impl<'t> Op<'t> {
             Op::Stop => "Stop",
             Op::Cast(t) => return Cow::Owned(format!("({})", t.str())),
             Op::New(_) => "new",
-            Op::MemOp(MemOp {
+            Op::Mem(MemOp {
                 kind: MemOpKind::Load { .. },
                 ..
             }) => "Load",
-            Op::MemOp(MemOp {
+            Op::Mem(MemOp {
                 kind: MemOpKind::Store,
                 ..
             }) => "Store",
@@ -144,7 +144,7 @@ impl<'t> Op<'t> {
             Op::Stop => self.label(),
             Op::Cast(t) => Cow::Owned(format!("({})", t.str())),
             Op::New(_) => Cow::Borrowed("new"),
-            Op::MemOp(m) => match m.kind {
+            Op::Mem(m) => match m.kind {
                 MemOpKind::Load { .. } => Cow::Borrowed("Load"),
                 MemOpKind::Store => Cow::Borrowed("Store"),
             },
@@ -170,7 +170,7 @@ impl<'t> Op<'t> {
             | Op::Loop
             | Op::Cast(_)
             | Op::New(_)
-            | Op::MemOp(_)
+            | Op::Mem(_)
             | Op::Stop => false,
         }
     }
@@ -206,11 +206,11 @@ impl<'t> Op<'t> {
             Op::Stop => 18,
             Op::Cast(_) => 19,
             Op::New(_) => 20,
-            Op::MemOp(MemOp {
+            Op::Mem(MemOp {
                 kind: MemOpKind::Load { .. },
                 ..
             }) => 21,
-            Op::MemOp(MemOp {
+            Op::Mem(MemOp {
                 kind: MemOpKind::Store,
                 ..
             }) => 22,
@@ -227,28 +227,28 @@ impl<'t> Op<'t> {
             vec![],
         )
     }
-    pub fn make_return(ctrl: NodeId, data: NodeId) -> NodeCreation<'t> {
+    pub fn make_return(ctrl: Node, data: Node) -> NodeCreation<'t> {
         (Op::Return, vec![Some(ctrl), Some(data)])
     }
 
-    pub fn make_constant(start: StartId, ty: Ty<'t>) -> NodeCreation<'t> {
+    pub fn make_constant(start: Start, ty: Ty<'t>) -> NodeCreation<'t> {
         (Op::Constant(ty), vec![Some(*start)])
     }
 
-    pub fn make_add([left, right]: [NodeId; 2]) -> NodeCreation<'t> {
+    pub fn make_add([left, right]: [Node; 2]) -> NodeCreation<'t> {
         (Op::Add, vec![None, Some(left), Some(right)])
     }
-    pub fn make_sub([left, right]: [NodeId; 2]) -> NodeCreation<'t> {
+    pub fn make_sub([left, right]: [Node; 2]) -> NodeCreation<'t> {
         (Op::Sub, vec![None, Some(left), Some(right)])
     }
-    pub fn make_mul([left, right]: [NodeId; 2]) -> NodeCreation<'t> {
+    pub fn make_mul([left, right]: [Node; 2]) -> NodeCreation<'t> {
         (Op::Mul, vec![None, Some(left), Some(right)])
     }
-    pub fn make_div([left, right]: [NodeId; 2]) -> NodeCreation<'t> {
+    pub fn make_div([left, right]: [Node; 2]) -> NodeCreation<'t> {
         (Op::Div, vec![None, Some(left), Some(right)])
     }
 
-    pub fn make_minus(expr: NodeId) -> NodeCreation<'t> {
+    pub fn make_minus(expr: Node) -> NodeCreation<'t> {
         (Op::Minus, vec![None, Some(expr)])
     }
 
@@ -256,27 +256,27 @@ impl<'t> Op<'t> {
         (Op::Scope(ScopeOp { scopes: vec![] }), vec![])
     }
 
-    pub fn make_bool([left, right]: [NodeId; 2], op: BoolOp) -> NodeCreation<'t> {
+    pub fn make_bool([left, right]: [Node; 2], op: BoolOp) -> NodeCreation<'t> {
         (Op::Bool(op), vec![None, Some(left), Some(right)])
     }
 
-    pub fn make_not(expr: NodeId) -> NodeCreation<'t> {
+    pub fn make_not(expr: Node) -> NodeCreation<'t> {
         (Op::Not, vec![None, Some(expr)])
     }
 
-    pub fn make_proj<N: Into<NodeId>>(ctrl: N, index: usize, label: &'t str) -> NodeCreation<'t> {
+    pub fn make_proj<N: Into<Node>>(ctrl: N, index: usize, label: &'t str) -> NodeCreation<'t> {
         (Op::Proj(ProjOp { index, label }), vec![Some(ctrl.into())])
     }
 
-    pub fn make_if(ctrl: NodeId, pred: NodeId) -> NodeCreation<'t> {
+    pub fn make_if(ctrl: Node, pred: Node) -> NodeCreation<'t> {
         (Op::If, vec![Some(ctrl), Some(pred)])
     }
 
-    pub fn make_phi(label: &'t str, ty: Ty<'t>, inputs: Vec<Option<NodeId>>) -> NodeCreation<'t> {
+    pub fn make_phi(label: &'t str, ty: Ty<'t>, inputs: Vec<Option<Node>>) -> NodeCreation<'t> {
         (Op::Phi(PhiOp { label, ty }), inputs)
     }
 
-    pub fn make_region(inputs: Vec<Option<NodeId>>) -> NodeCreation<'t> {
+    pub fn make_region(inputs: Vec<Option<Node>>) -> NodeCreation<'t> {
         (Op::Region, inputs)
     }
 
@@ -284,11 +284,11 @@ impl<'t> Op<'t> {
         (Op::Stop, vec![])
     }
 
-    pub fn make_loop(entry: NodeId) -> NodeCreation<'t> {
+    pub fn make_loop(entry: Node) -> NodeCreation<'t> {
         (Op::Loop, vec![None, Some(entry), None])
     }
 
-    pub fn make_cast(ty: Ty<'t>, ctrl: NodeId, i: NodeId) -> NodeCreation<'t> {
+    pub fn make_cast(ty: Ty<'t>, ctrl: Node, i: Node) -> NodeCreation<'t> {
         (Op::Cast(ty), vec![Some(ctrl), Some(i)])
     }
 
@@ -296,10 +296,10 @@ impl<'t> Op<'t> {
         name: &'t str,
         alias: u32,
         declared_type: Ty<'t>,
-        [mem_slice, mem_ptr]: [NodeId; 2],
+        [mem_slice, mem_ptr]: [Node; 2],
     ) -> NodeCreation<'t> {
         (
-            Op::MemOp(MemOp {
+            Op::Mem(MemOp {
                 name,
                 alias,
                 kind: MemOpKind::Load { declared_type },
@@ -311,10 +311,10 @@ impl<'t> Op<'t> {
     pub fn make_store(
         name: &'t str,
         alias: u32,
-        [mem_slice, mem_ptr, value]: [NodeId; 3],
+        [mem_slice, mem_ptr, value]: [Node; 3],
     ) -> NodeCreation<'t> {
         (
-            Op::MemOp(MemOp {
+            Op::Mem(MemOp {
                 name,
                 alias,
                 kind: MemOpKind::Store,
@@ -323,7 +323,7 @@ impl<'t> Op<'t> {
         )
     }
 
-    pub fn make_new(ptr: Ty<'t>, ctrl: NodeId) -> NodeCreation<'t> {
+    pub fn make_new(ptr: Ty<'t>, ctrl: Node) -> NodeCreation<'t> {
         (Op::New(ptr), vec![Some(ctrl)])
     }
 }

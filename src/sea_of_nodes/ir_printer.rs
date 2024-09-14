@@ -3,19 +3,19 @@ use std::fmt;
 use std::fmt::Write;
 
 use crate::datastructures::id_set::IdSet;
-use crate::sea_of_nodes::nodes::{NodeId, Nodes, Op};
+use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
 use crate::sea_of_nodes::types::{Int, Ty, Type};
 
-pub fn pretty_print_llvm(nodes: &Nodes, node: impl Into<NodeId>, depth: usize) -> String {
+pub fn pretty_print_llvm(nodes: &Nodes, node: impl Into<Node>, depth: usize) -> String {
     pretty_print_(nodes, node.into(), depth, true)
 }
 
 /// Another bulk pretty-printer.  Makes more effort at basic-block grouping.
-pub fn pretty_print(nodes: &Nodes, node: impl Into<NodeId>, depth: usize) -> String {
+pub fn pretty_print(nodes: &Nodes, node: impl Into<Node>, depth: usize) -> String {
     pretty_print_(nodes, node.into(), depth, false)
 }
 
-fn pretty_print_(nodes: &Nodes, node: NodeId, depth: usize, llvm_format: bool) -> String {
+fn pretty_print_(nodes: &Nodes, node: Node, depth: usize, llvm_format: bool) -> String {
     // First, a Breadth First Search at a fixed depth.
     let bfs = BFS::run(nodes, node, depth);
 
@@ -55,7 +55,7 @@ fn pretty_print_(nodes: &Nodes, node: NodeId, depth: usize, llvm_format: bool) -
     sb
 }
 
-fn print_line(nodes: &Nodes, n: NodeId, sb: &mut String, llvm_format: bool) -> fmt::Result {
+fn print_line(nodes: &Nodes, n: Node, sb: &mut String, llvm_format: bool) -> fmt::Result {
     if llvm_format {
         print_line_llvm(nodes, n, sb)
     } else {
@@ -66,7 +66,7 @@ fn print_line(nodes: &Nodes, n: NodeId, sb: &mut String, llvm_format: bool) -> f
 /// Print a node on 1 line, columnar aligned, as:
 /// NNID NNAME DDEF DDEF  [[  UUSE UUSE  ]]  TYPE
 /// 1234 sssss 1234 1234 1234 1234 1234 1234 tttttt
-fn print_line_(nodes: &Nodes, n: NodeId, sb: &mut String) -> fmt::Result {
+fn print_line_(nodes: &Nodes, n: Node, sb: &mut String) -> fmt::Result {
     write!(sb, "{n:4} {: <7.7} ", nodes[n].label())?;
 
     if nodes.is_dead(n) {
@@ -86,7 +86,7 @@ fn print_line_(nodes: &Nodes, n: NodeId, sb: &mut String) -> fmt::Result {
     sb.push_str(" [[  ");
 
     for use_ in &nodes.outputs[n] {
-        if *use_ != NodeId::DUMMY {
+        if *use_ != Node::DUMMY {
             write!(sb, "{use_:4} ")?;
         } else {
             write!(sb, "____ ")?;
@@ -106,7 +106,7 @@ fn print_line_(nodes: &Nodes, n: NodeId, sb: &mut String) -> fmt::Result {
     writeln!(sb)
 }
 
-fn node_id(nodes: &Nodes, n: NodeId, sb: &mut String) -> fmt::Result {
+fn node_id(nodes: &Nodes, n: Node, sb: &mut String) -> fmt::Result {
     write!(sb, "%{n}")?;
     if let Some(p) = nodes.to_proj(n) {
         write!(sb, ".{}", nodes[p].index)?;
@@ -140,7 +140,7 @@ fn type_name(ty: Ty) -> Cow<str> {
 /// Print a node on 1 line, format is inspired by LLVM
 /// %id: TYPE = NODE(inputs ....)
 /// Nodes as referred to as %id
-fn print_line_llvm(nodes: &Nodes, n: NodeId, sb: &mut String) -> fmt::Result {
+fn print_line_llvm(nodes: &Nodes, n: Node, sb: &mut String) -> fmt::Result {
     node_id(nodes, n, sb)?;
     write!(sb, ": ")?;
     if nodes.inputs[n].is_empty() {
@@ -165,7 +165,7 @@ fn print_line_llvm(nodes: &Nodes, n: NodeId, sb: &mut String) -> fmt::Result {
 }
 
 impl<'t> Nodes<'t> {
-    pub fn is_multi_head(&self, node: NodeId) -> bool {
+    pub fn is_multi_head(&self, node: Node) -> bool {
         match &self[node] {
             Op::If | Op::Region { .. } | Op::Loop | Op::Start { .. } => true,
             Op::Constant(_)
@@ -182,12 +182,12 @@ impl<'t> Nodes<'t> {
             | Op::Phi(_)
             | Op::Cast(_)
             | Op::New(_)
-            | Op::MemOp(_)
+            | Op::Mem(_)
             | Op::Stop => false,
         }
     }
 
-    pub fn is_multi_tail(&self, node: NodeId) -> bool {
+    pub fn is_multi_tail(&self, node: Node) -> bool {
         match &self[node] {
             Op::Constant(_) | Op::Phi(_) => true,
             Op::Proj(_) => {
@@ -209,17 +209,17 @@ impl<'t> Nodes<'t> {
             | Op::Loop
             | Op::Cast(_)
             | Op::New(_)
-            | Op::MemOp(_)
+            | Op::Mem(_)
             | Op::Stop => false,
         }
     }
 }
 
 fn post_ord(
-    n: NodeId,
-    rpos: &mut Vec<NodeId>,
-    visit: &mut IdSet<NodeId>,
-    bfs: &IdSet<NodeId>,
+    n: Node,
+    rpos: &mut Vec<Node>,
+    visit: &mut IdSet<Node>,
+    bfs: &IdSet<Node>,
     nodes: &Nodes,
 ) {
     if !bfs.get(n) {
@@ -233,7 +233,7 @@ fn post_ord(
     // First walk the CFG, then everything
     if nodes.is_cfg(n) {
         for &use_ in &nodes.outputs[n] {
-            if use_ != NodeId::DUMMY
+            if use_ != Node::DUMMY
                 && nodes.is_cfg(use_)
                 && nodes.outputs[use_].len() >= 1
                 && !matches!(nodes[nodes.outputs[use_][0]], Op::Loop)
@@ -242,13 +242,13 @@ fn post_ord(
             }
         }
         for &use_ in &nodes.outputs[n] {
-            if use_ != NodeId::DUMMY && nodes.is_cfg(use_) {
+            if use_ != Node::DUMMY && nodes.is_cfg(use_) {
                 post_ord(use_, rpos, visit, bfs, nodes);
             }
         }
     }
     for &use_ in &nodes.outputs[n] {
-        if use_ != NodeId::DUMMY {
+        if use_ != Node::DUMMY {
             post_ord(use_, rpos, visit, bfs, nodes);
         }
     }
@@ -259,9 +259,9 @@ fn post_ord(
 /// Maintains a root-set of Nodes at the limit (or past by 1 if MultiHead).
 struct BFS {
     /// A breadth first search, plus MultiHeads for any MultiTails
-    _bfs: Vec<NodeId>,
+    _bfs: Vec<Node>,
     /// Visited members
-    _bs: IdSet<NodeId>,
+    _bs: IdSet<Node>,
     /// Depth limit
     _depth: usize,
     /// From here to _bfs._len can be roots for a reverse search
@@ -269,7 +269,7 @@ struct BFS {
 }
 
 impl BFS {
-    fn run<'t>(nodes: &Nodes<'t>, base: NodeId, mut d: usize) -> Self {
+    fn run<'t>(nodes: &Nodes<'t>, base: Node, mut d: usize) -> Self {
         let mut bfs = Self {
             _bfs: vec![],
             _bs: IdSet::zeros(nodes.len()),
@@ -330,7 +330,7 @@ impl BFS {
         self._bfs.swap(x, y);
     }
 
-    fn add(&mut self, n: NodeId) {
+    fn add(&mut self, n: Node) {
         self._bfs.push(n);
         self._bs.add(n);
     }
@@ -340,7 +340,7 @@ impl BFS {
         self._bs.remove(n);
     }
 
-    fn any_visited<'t>(&self, nodes: &Nodes<'t>, n: NodeId) -> bool {
+    fn any_visited<'t>(&self, nodes: &Nodes<'t>, n: Node) -> bool {
         nodes.inputs[n]
             .iter()
             .flatten()

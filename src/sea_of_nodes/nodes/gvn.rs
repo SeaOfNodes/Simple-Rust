@@ -1,5 +1,5 @@
 use crate::datastructures::id_vec::IdVec;
-use crate::sea_of_nodes::nodes::{NodeId, Nodes, Op, OpVec};
+use crate::sea_of_nodes::nodes::{Node, Nodes, Op, OpVec};
 use std::collections::hash_map::RawEntryMut;
 use std::hash::{BuildHasher, DefaultHasher, Hash, Hasher};
 use std::num::NonZeroU32;
@@ -8,7 +8,7 @@ use std::num::NonZeroU32;
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub struct GvnEntry {
     hash: NonZeroU32,
-    node: NodeId,
+    node: Node,
 }
 
 impl Hash for GvnEntry {
@@ -20,7 +20,7 @@ impl Hash for GvnEntry {
 impl<'t> Nodes<'t> {
     /// Returns a different semantically equal node, if one is present in the gvn table
     /// or inserts this one if not already present.
-    pub fn global_value_numbering(&mut self, node: NodeId) -> Option<NodeId> {
+    pub fn global_value_numbering(&mut self, node: Node) -> Option<Node> {
         if self.hash[node].is_none() {
             let entry = GvnEntry {
                 hash: self.hash_code(node),
@@ -43,7 +43,7 @@ impl<'t> Nodes<'t> {
     }
 
     /// If the _hash is set, then the Node is in the GVN table; remove it.
-    pub fn unlock(&mut self, node: NodeId) {
+    pub fn unlock(&mut self, node: Node) {
         if let Some(hash) = self.hash[node].take() {
             self.gvn
                 .remove(&GvnEntry { hash, node })
@@ -55,9 +55,9 @@ impl<'t> Nodes<'t> {
     /// which means the same Java class, plus same internal parts.
     fn equals(
         ops: &OpVec<'t>,
-        inputs: &IdVec<NodeId, Vec<Option<NodeId>>>,
-        this: NodeId,
-        that: NodeId,
+        inputs: &IdVec<Node, Vec<Option<Node>>>,
+        this: Node,
+        that: Node,
     ) -> bool {
         if this == that {
             return true;
@@ -80,7 +80,7 @@ impl<'t> Nodes<'t> {
     }
 
     /// Hash of opcode and inputs
-    fn hash_code(&mut self, node: NodeId) -> NonZeroU32 {
+    fn hash_code(&mut self, node: Node) -> NonZeroU32 {
         if let Some(hash) = self.hash[node] {
             return hash;
         }

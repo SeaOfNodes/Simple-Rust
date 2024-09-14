@@ -1,5 +1,5 @@
 use crate::datastructures::arena::DroplessArena;
-use crate::sea_of_nodes::nodes::index::StopId;
+use crate::sea_of_nodes::nodes::index::Stop;
 use crate::sea_of_nodes::nodes::{Nodes, Op};
 use crate::sea_of_nodes::parser::Parser;
 use crate::sea_of_nodes::types::Types;
@@ -32,7 +32,7 @@ fn test_error_iterate(source: &str, error: &str) {
 }
 
 impl<'t> Nodes<'t> {
-    pub fn ret_ctrl(&self, stop: StopId) -> &Op<'t> {
+    pub fn ret_ctrl(&self, stop: Stop) -> &Op<'t> {
         let ret = self.unique_input(*stop).unwrap();
         assert!(matches!(&self[ret], Op::Return));
         &self[self.inputs[ret][0].unwrap()]

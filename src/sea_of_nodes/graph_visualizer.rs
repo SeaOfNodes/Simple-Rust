@@ -5,8 +5,8 @@ use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::time::Duration;
 
-use crate::sea_of_nodes::nodes::index::{ScopeId, StopId};
-use crate::sea_of_nodes::nodes::{NodeId, Nodes, Op};
+use crate::sea_of_nodes::nodes::index::{Scope, Stop};
+use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
 
 pub fn run_graphviz_and_chromium(input: String) {
     let child = Command::new(&"bash")
@@ -56,9 +56,9 @@ pub fn run_graphviz_and_chromium(input: String) {
 
 pub fn generate_dot_output(
     nodes: &Nodes,
-    stop: StopId,
-    scope: Option<ScopeId>,
-    x_scopes: &[ScopeId],
+    stop: Stop,
+    scope: Option<Scope>,
+    x_scopes: &[Scope],
     source: &str,
     separate_control_cluster: bool,
 ) -> Result<String, fmt::Error> {
@@ -91,7 +91,7 @@ fn nodes_by_cluster(
     sb: &mut String,
     do_ctrl: bool,
     nodes: &Nodes,
-    all: &HashSet<NodeId>,
+    all: &HashSet<Node>,
     separate_control_cluster: bool,
 ) -> fmt::Result {
     if !separate_control_cluster && do_ctrl {
@@ -183,14 +183,14 @@ fn nodes_by_cluster(
 fn do_nodes(
     sb: &mut String,
     nodes: &Nodes,
-    all: &HashSet<NodeId>,
+    all: &HashSet<Node>,
     separate_control_cluster: bool,
 ) -> fmt::Result {
     nodes_by_cluster(sb, true, nodes, all, separate_control_cluster)?;
     nodes_by_cluster(sb, false, nodes, all, separate_control_cluster)
 }
 
-fn do_scope(sb: &mut String, nodes: &Nodes, scope: ScopeId) -> fmt::Result {
+fn do_scope(sb: &mut String, nodes: &Nodes, scope: Scope) -> fmt::Result {
     let scopes = &nodes[scope].scopes;
     writeln!(sb, "\tnode [shape=plaintext];")?;
 
@@ -220,7 +220,7 @@ fn do_scope(sb: &mut String, nodes: &Nodes, scope: ScopeId) -> fmt::Result {
     Ok(())
 }
 
-fn make_scope_name(nodes: &Nodes, scope: ScopeId, level: usize) -> String {
+fn make_scope_name(nodes: &Nodes, scope: Scope, level: usize) -> String {
     format!("{}_{level}", nodes.unique_name(*scope))
 }
 
@@ -228,7 +228,7 @@ fn make_port_name(scope_name: &str, var_name: &str) -> String {
     format!("{scope_name}_{var_name}")
 }
 
-fn node_edges(sb: &mut String, nodes: &Nodes, all: &HashSet<NodeId>) -> fmt::Result {
+fn node_edges(sb: &mut String, nodes: &Nodes, all: &HashSet<Node>) -> fmt::Result {
     writeln!(sb, "\tedge [ fontname=Helvetica, fontsize=8 ];")?;
     for &n in all.iter() {
         if matches!(&nodes[n], Op::Constant(_) | Op::Proj(_) | Op::Scope(_)) {
@@ -267,7 +267,7 @@ fn node_edges(sb: &mut String, nodes: &Nodes, all: &HashSet<NodeId>) -> fmt::Res
     Ok(())
 }
 
-fn scope_edges(sb: &mut String, nodes: &Nodes, scope: ScopeId) -> fmt::Result {
+fn scope_edges(sb: &mut String, nodes: &Nodes, scope: Scope) -> fmt::Result {
     writeln!(sb, "\tedge [style=dashed color=cornflowerblue];")?;
     for (level, s) in nodes[scope].scopes.iter().rev().enumerate() {
         let scope_name = make_scope_name(nodes, scope, level + 1);
@@ -287,7 +287,7 @@ fn scope_edges(sb: &mut String, nodes: &Nodes, scope: ScopeId) -> fmt::Result {
     Ok(())
 }
 
-fn def_name(nodes: &Nodes, def: NodeId) -> String {
+fn def_name(nodes: &Nodes, def: Node) -> String {
     match &nodes[def] {
         Op::Proj(p) => {
             let mname = nodes.unique_name(nodes.inputs[def][0].unwrap());
@@ -297,7 +297,7 @@ fn def_name(nodes: &Nodes, def: NodeId) -> String {
     }
 }
 
-fn find_all(nodes: &Nodes, leaves: &[Option<NodeId>]) -> HashSet<NodeId> {
+fn find_all(nodes: &Nodes, leaves: &[Option<Node>]) -> HashSet<Node> {
     let mut all = HashSet::new();
     for &node in leaves.iter().flatten() {
         for output in &nodes.outputs[node] {
@@ -307,11 +307,11 @@ fn find_all(nodes: &Nodes, leaves: &[Option<NodeId>]) -> HashSet<NodeId> {
     all
 }
 
-fn walk(nodes: &Nodes, all: &mut HashSet<NodeId>, node: Option<NodeId>) {
+fn walk(nodes: &Nodes, all: &mut HashSet<Node>, node: Option<Node>) {
     let Some(node) = node else {
         return;
     };
-    if node == NodeId::DUMMY {
+    if node == Node::DUMMY {
         return;
     }
 

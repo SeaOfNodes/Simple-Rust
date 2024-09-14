@@ -1,5 +1,5 @@
 use crate::datastructures::id_set::IdSet;
-use crate::sea_of_nodes::nodes::{NodeId, Nodes, Op, ProjOp};
+use crate::sea_of_nodes::nodes::{Node, Nodes, Op, ProjOp};
 use std::collections::HashMap;
 
 #[derive(Debug, Eq, PartialEq)]
@@ -11,7 +11,7 @@ pub enum EResult {
 
 pub fn evaluate(
     nodes: &Nodes,
-    graph: impl Into<NodeId>,
+    graph: impl Into<Node>,
     parameter: Option<i64>,
     loops: Option<usize>,
 ) -> i64 {
@@ -27,7 +27,7 @@ pub fn evaluate(
     }
 }
 
-pub fn evaluate_with_result(nodes: &Nodes, graph: NodeId, parameter: i64, loops: usize) -> EResult {
+pub fn evaluate_with_result(nodes: &Nodes, graph: Node, parameter: i64, loops: usize) -> EResult {
     let mut visited = IdSet::zeros(nodes.len());
     let Some(start) = nodes.find_start(&mut visited, Some(graph)) else {
         return EResult::Timeout;
@@ -38,7 +38,7 @@ pub fn evaluate_with_result(nodes: &Nodes, graph: NodeId, parameter: i64, loops:
 
 /// Find the start node from some node in the graph or null if there is no start node
 impl<'t> Nodes<'t> {
-    fn find_start(&self, visit: &mut IdSet<NodeId>, node: Option<NodeId>) -> Option<NodeId> {
+    fn find_start(&self, visit: &mut IdSet<Node>, node: Option<Node>) -> Option<Node> {
         let node = node?;
         if let Op::Start { .. } = &self[node] {
             return Some(node);
@@ -61,7 +61,7 @@ impl<'t> Nodes<'t> {
     }
 
     /// Find the control output from a control node
-    fn find_control(&self, control: NodeId) -> Option<NodeId> {
+    fn find_control(&self, control: Node) -> Option<Node> {
         self.outputs[control]
             .iter()
             .find(|&&use_| self.is_cfg(use_))
@@ -69,7 +69,7 @@ impl<'t> Nodes<'t> {
     }
 
     /// Find the projection for a node
-    fn find_projection(&self, node: NodeId, idx: usize) -> Option<NodeId> {
+    fn find_projection(&self, node: Node, idx: usize) -> Option<Node> {
         self.outputs[node]
             .iter()
             .find(|&&use_| matches!(&self[use_], Op::Proj(ProjOp {index, .. }) if *index == idx))
@@ -81,7 +81,7 @@ struct GraphEvaluator<'a, 't> {
     nodes: &'a Nodes<'t>,
 
     /// Cache values for phi and parameter projection nodes.
-    cache_values: HashMap<NodeId, i64>,
+    cache_values: HashMap<Node, i64>,
     /// Cache for loop phis as they can depend on itself or other loop phis
     loop_phi_cache: Vec<i64>,
 }
@@ -95,7 +95,7 @@ impl<'a, 't> GraphEvaluator<'a, 't> {
         }
     }
 
-    fn div(&mut self, div: NodeId) -> i64 {
+    fn div(&mut self, div: Node) -> i64 {
         let in2 = self.get_value(self.nodes.inputs[div][2]);
         if in2 == 0 {
             0
@@ -104,14 +104,14 @@ impl<'a, 't> GraphEvaluator<'a, 't> {
         }
     }
 
-    fn binary<F: FnOnce(i64, i64) -> i64>(&mut self, node: NodeId, op: F) -> i64 {
+    fn binary<F: FnOnce(i64, i64) -> i64>(&mut self, node: Node, op: F) -> i64 {
         let a = self.get_value(self.nodes.inputs[node][1]);
         let b = self.get_value(self.nodes.inputs[node][2]);
         op(a, b)
     }
 
     /// Calculate the value of a node
-    fn get_value(&mut self, node: Option<NodeId>) -> i64 {
+    fn get_value(&mut self, node: Option<Node>) -> i64 {
         let Some(node) = node else {
             panic!("cannot evaluate None")
         };
@@ -138,7 +138,7 @@ impl<'a, 't> GraphEvaluator<'a, 't> {
     }
 
     /// Special case of latchPhis when phis can depend on phis of the same region.
-    fn latch_loop_phis(&mut self, region: NodeId, prev: NodeId) {
+    fn latch_loop_phis(&mut self, region: Node, prev: Node) {
         let idx = self.nodes.inputs[region]
             .iter()
             .position(|n| *n == Some(prev))
@@ -161,7 +161,7 @@ impl<'a, 't> GraphEvaluator<'a, 't> {
     }
 
     /// Calculate the values of phis of the region and caches the values. The phis are not allowed to depend on other phis of the region.
-    fn latch_phis(&mut self, region: NodeId, prev: NodeId) {
+    fn latch_phis(&mut self, region: Node, prev: Node) {
         let idx = self.nodes.inputs[region]
             .iter()
             .position(|n| *n == Some(prev))
@@ -176,7 +176,7 @@ impl<'a, 't> GraphEvaluator<'a, 't> {
     }
 
     /// Run the graph until either a return is found or the number of loop iterations are done.
-    fn evaluate(&mut self, start: NodeId, parameter: i64, mut loops: usize) -> EResult {
+    fn evaluate(&mut self, start: Node, parameter: i64, mut loops: usize) -> EResult {
         assert!(matches!(&self.nodes[start], Op::Start { .. }));
 
         if let Some(parameter1) = self.nodes.find_projection(start, 1) {

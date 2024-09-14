@@ -8,10 +8,10 @@ use crate::sea_of_nodes::nodes::{Nodes, Op};
 use crate::sea_of_nodes::types::Ty;
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
-pub struct NodeId(pub(super) NonZeroU32);
+pub struct Node(pub(super) NonZeroU32);
 
-impl NodeId {
-    pub const DUMMY: NodeId = NodeId(NonZeroU32::MAX);
+impl Node {
+    pub const DUMMY: Node = Node(NonZeroU32::MAX);
 
     /// attemt to make code read more like the op version:
     ///
@@ -23,7 +23,7 @@ impl NodeId {
         &vec[self]
     }
 
-    pub fn inputs<'a>(self, nodes: &'a Nodes) -> &'a Vec<Option<NodeId>> {
+    pub fn inputs<'a>(self, nodes: &'a Nodes) -> &'a Vec<Option<Node>> {
         self.get(&nodes.inputs)
     }
 
@@ -36,18 +36,18 @@ impl NodeId {
     }
 }
 
-impl Id for NodeId {
+impl Id for Node {
     fn index(&self) -> usize {
         self.0.get() as usize
     }
 }
 
-impl Display for NodeId {
+impl Display for Node {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         Display::fmt(&self.0.get(), f)
     }
 }
-impl Debug for NodeId {
+impl Debug for Node {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         Debug::fmt(&self.0.get(), f)
     }

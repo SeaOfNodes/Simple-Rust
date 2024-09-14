@@ -1,12 +1,12 @@
 use crate::datastructures::id::Id;
-use crate::sea_of_nodes::nodes::index::PhiId;
+use crate::sea_of_nodes::nodes::index::Phi;
 use crate::sea_of_nodes::nodes::node::{MemOp, MemOpKind, PhiOp};
-use crate::sea_of_nodes::nodes::{BoolOp, NodeId, Nodes, Op};
+use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes, Op};
 use crate::sea_of_nodes::types::{Int, Ty, Type};
 
 impl<'t> Nodes<'t> {
     /// do not peephole directly returned values!
-    pub(super) fn idealize(&mut self, node: NodeId) -> Option<NodeId> {
+    pub(super) fn idealize(&mut self, node: Node) -> Option<Node> {
         match &self[node] {
             Op::Add => self.idealize_add(node),
             Op::Sub => self.idealize_sub(node),
@@ -19,7 +19,7 @@ impl<'t> Nodes<'t> {
             Op::Region { .. } | Op::Loop => self.idealize_region(node),
             Op::If => self.idealize_if(node),
             Op::Cast(t) => self.idealize_cast(node, *t),
-            Op::MemOp(m) => match m.kind {
+            Op::Mem(m) => match m.kind {
                 MemOpKind::Load { declared_type } => self.idealize_load(node, declared_type),
                 MemOpKind::Store => self.idealize_store(node),
             },
@@ -30,7 +30,7 @@ impl<'t> Nodes<'t> {
         }
     }
 
-    fn idealize_add(&mut self, node: NodeId) -> Option<NodeId> {
+    fn idealize_add(&mut self, node: Node) -> Option<Node> {
         let lhs = self.inputs[node][1]?;
         let rhs = self.inputs[node][2]?;
         let t2 = self.ty[rhs]?;
@@ -131,7 +131,7 @@ impl<'t> Nodes<'t> {
         None
     }
 
-    fn idealize_sub(&mut self, node: NodeId) -> Option<NodeId> {
+    fn idealize_sub(&mut self, node: Node) -> Option<Node> {
         // Sub of same is 0
         if self.inputs[node][1]? == self.inputs[node][2]? {
             return Some(self.create(Op::make_constant(self.start, self.types.ty_int_zero)));
@@ -157,7 +157,7 @@ impl<'t> Nodes<'t> {
         None
     }
 
-    fn idealize_mul(&mut self, node: NodeId) -> Option<NodeId> {
+    fn idealize_mul(&mut self, node: Node) -> Option<Node> {
         let left = self.inputs[node][1]?;
         let right = self.inputs[node][2]?;
         let left_ty = self.ty[left]?;
@@ -176,7 +176,7 @@ impl<'t> Nodes<'t> {
         }
     }
 
-    fn idealize_bool(&mut self, op: BoolOp, node: NodeId) -> Option<NodeId> {
+    fn idealize_bool(&mut self, op: BoolOp, node: Node) -> Option<Node> {
         if self.inputs[node][1]? == self.inputs[node][2]? {
             let value = if op.compute(3, 3) {
                 self.types.ty_int_one
@@ -193,7 +193,7 @@ impl<'t> Nodes<'t> {
         phicon
     }
 
-    fn idealize_phi(&mut self, node: PhiId, declared_ty: Ty<'t>) -> Option<NodeId> {
+    fn idealize_phi(&mut self, node: Phi, declared_ty: Ty<'t>) -> Option<Node> {
         let region = self.inputs[node][0];
         if !self.instanceof_region(region) {
             return self.inputs[node][1]; // Input has collapse to e.g. starting control.
@@ -297,7 +297,7 @@ impl<'t> Nodes<'t> {
         None
     }
 
-    fn idealize_stop(&mut self, node: NodeId) -> Option<NodeId> {
+    fn idealize_stop(&mut self, node: Node) -> Option<Node> {
         let mut result = None;
         let mut i = 0;
         while i < self.inputs[node].len() {
@@ -311,11 +311,11 @@ impl<'t> Nodes<'t> {
         result
     }
 
-    fn idealize_return(&mut self, node: NodeId) -> Option<NodeId> {
+    fn idealize_return(&mut self, node: Node) -> Option<Node> {
         self.inputs[node][0].filter(|ctrl| self.ty[*ctrl] == Some(self.types.ty_xctrl))
     }
 
-    fn idealize_proj(&mut self, node: NodeId, index: usize) -> Option<NodeId> {
+    fn idealize_proj(&mut self, node: Node, index: usize) -> Option<Node> {
         if let Some(Type::Tuple { types: ts }) = self.ty[self.inputs[node][0]?].as_deref() {
             if ts[index] == self.types.ty_xctrl {
                 return Some(
@@ -330,7 +330,7 @@ impl<'t> Nodes<'t> {
         None
     }
 
-    fn idealize_region(&mut self, node: NodeId) -> Option<NodeId> {
+    fn idealize_region(&mut self, node: Node) -> Option<Node> {
         if Self::in_progress(&self.ops, &self.inputs, node) {
             return None;
         }
@@ -378,13 +378,13 @@ impl<'t> Nodes<'t> {
         }
     }
 
-    fn has_phi(&self, node: NodeId) -> bool {
+    fn has_phi(&self, node: Node) -> bool {
         self.outputs[node]
             .iter()
             .any(|phi| matches!(&self[*phi], Op::Phi(_)))
     }
 
-    fn idealize_if(&mut self, node: NodeId) -> Option<NodeId> {
+    fn idealize_if(&mut self, node: Node) -> Option<Node> {
         // Hunt up the immediate dominator tree.  If we find an identical if
         // test on either the true or false branch, that side wins.
         let pred = self.inputs[node][1]?;
@@ -417,16 +417,16 @@ impl<'t> Nodes<'t> {
         None
     }
 
-    fn idealize_cast(&mut self, node: NodeId, ty: Ty<'t>) -> Option<NodeId> {
+    fn idealize_cast(&mut self, node: Node, ty: Ty<'t>) -> Option<Node> {
         self.inputs[node][1].filter(|&n| self.ty[n].is_some_and(|t| self.types.isa(t, ty)))
     }
 
-    fn idealize_load(&mut self, node: NodeId, declared_ty: Ty<'t>) -> Option<NodeId> {
+    fn idealize_load(&mut self, node: Node, declared_ty: Ty<'t>) -> Option<Node> {
         let mem = self.inputs[node][1]?;
         let ptr = self.inputs[node][2]?;
 
         // Simple Load-after-Store on same address.
-        if let Op::MemOp(MemOp {
+        if let Op::Mem(MemOp {
             kind: MemOpKind::Store,
             name,
             ..
@@ -435,7 +435,7 @@ impl<'t> Nodes<'t> {
             let store_ptr = self.inputs[mem][2]?;
             // Must check same object
             if ptr == store_ptr {
-                let Op::MemOp(mem_op) = &self[node] else {
+                let Op::Mem(mem_op) = &self[node] else {
                     unreachable!()
                 };
                 debug_assert_eq!(name, &mem_op.name); // Equiv class aliasing is perfect
@@ -459,7 +459,7 @@ impl<'t> Nodes<'t> {
                 // Else must not be a loop to count profit on LHS.
                 (!matches!(self[self.inputs[mem][0].unwrap()], Op::Loop) && self.profit(node, mem, 1))
             {
-                let Op::MemOp(mem_op) = &self[node] else {
+                let Op::Mem(mem_op) = &self[node] else {
                     unreachable!()
                 };
                 let name = mem_op.name;
@@ -490,11 +490,11 @@ impl<'t> Nodes<'t> {
     }
 
     /// Profitable if we find a matching Store on this Phi arm.
-    fn profit(&mut self, this: NodeId, phi_node: NodeId, idx: usize) -> bool {
+    fn profit(&mut self, this: Node, phi_node: Node, idx: usize) -> bool {
         let px = self.inputs[phi_node][idx];
         px.is_some_and(|px| {
             self.add_dep(px, this);
-            if let Op::MemOp(MemOp {
+            if let Op::Mem(MemOp {
                 kind: MemOpKind::Store,
                 ..
             }) = &self[px]
@@ -506,14 +506,14 @@ impl<'t> Nodes<'t> {
         })
     }
 
-    fn idealize_store(&mut self, node: NodeId) -> Option<NodeId> {
-        let Op::MemOp(mem_op) = &self[node] else {
+    fn idealize_store(&mut self, node: Node) -> Option<Node> {
+        let Op::Mem(mem_op) = &self[node] else {
             unreachable!()
         };
         todo!("{node}{mem_op:?}")
     }
 
-    fn idealize_minus(&mut self, node: NodeId) -> Option<NodeId> {
+    fn idealize_minus(&mut self, node: Node) -> Option<Node> {
         // -(-x) is x
         let in_1 = self.inputs[node][1]?;
         if self.to_minus(in_1).is_some() {
@@ -522,7 +522,7 @@ impl<'t> Nodes<'t> {
         None
     }
 
-    fn find_dead_input(&self, node: NodeId) -> Option<usize> {
+    fn find_dead_input(&self, node: Node) -> Option<usize> {
         (1..self.inputs[node].len())
             .find(|&i| self.ty[self.inputs[node][i].unwrap()].unwrap() == self.types.ty_xctrl)
     }
@@ -532,7 +532,7 @@ impl<'t> Nodes<'t> {
     // Generally constants always go right, then Phi-of-constants, then muls, then others.
     // Ties with in a category sort by node ID.
     // TRUE if swapping hi and lo.
-    fn spine_cmp(&mut self, hi: NodeId, lo: NodeId, dep: NodeId) -> bool {
+    fn spine_cmp(&mut self, hi: Node, lo: Node, dep: Node) -> bool {
         if self.ty[lo].is_some_and(|t| t.is_constant()) {
             return false;
         }
@@ -571,7 +571,7 @@ impl<'t> Nodes<'t> {
     //     // Rotation is only valid for associative ops, e.g. Add, Mul, And, Or.
     //     // Do we have ((phi cons)|(x + (phi cons)) + con|(phi cons)) ?
     //     // Push constant up through the phi: x + (phi con0+con0 con1+con1...)
-    fn phi_con(&mut self, op: NodeId, rotate: bool) -> Option<NodeId> {
+    fn phi_con(&mut self, op: Node, rotate: bool) -> Option<Node> {
         let lhs = self.inputs[op][1]?;
         let rhs = self.inputs[op][2]?;
 
@@ -646,7 +646,7 @@ impl<'t> Nodes<'t> {
     /// If op is a phi, but its inputs are not all constants, then dep is added as
     /// a dependency to the phi's non-const input, because if later the input turn into a constant
     /// dep can make progress.
-    fn pcon(&mut self, op: Option<NodeId>, dep: NodeId) -> Option<NodeId> {
+    fn pcon(&mut self, op: Option<Node>, dep: Node) -> Option<Node> {
         op.filter(|op| matches!(&self[*op], Op::Phi(_)) && self.all_cons(*op, dep))
     }
 }

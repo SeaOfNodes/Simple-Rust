@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 use std::num::NonZeroU32;
 
-pub use id::NodeId;
+pub use id::Node;
 pub use node::{BoolOp, Op, ProjOp, StartOp};
 pub use scope::ScopeOp;
 
 use crate::datastructures::id_set::IdSet;
 use crate::datastructures::id_vec::IdVec;
 use crate::sea_of_nodes::nodes::gvn::GvnEntry;
-use crate::sea_of_nodes::nodes::index::{ScopeId, StartId};
+use crate::sea_of_nodes::nodes::index::{Scope, Start};
 use crate::sea_of_nodes::parser::Parser;
 use crate::sea_of_nodes::types::{MemPtr, Struct, Ty, Type, Types};
 use iter_peeps::IterPeeps;
@@ -23,7 +23,7 @@ mod peephole;
 mod print;
 mod scope;
 
-pub struct OpVec<'t>(IdVec<NodeId, Op<'t>>);
+pub struct OpVec<'t>(IdVec<Node, Op<'t>>);
 
 /// Using `IdVec` has two advantages over `Vec`+helper methods:
 /// 1) `self.inputs[x]` and `self.outputs[x]` can be borrowed simultaneously
@@ -34,7 +34,7 @@ pub struct Nodes<'t> {
     /// indexed by self[id]
     ops: OpVec<'t>,
 
-    pub ty: IdVec<NodeId, Option<Ty<'t>>>,
+    pub ty: IdVec<Node, Option<Ty<'t>>>,
 
     /// Inputs to the node. These are use-def references to Nodes.
     ///
@@ -42,7 +42,7 @@ pub struct Nodes<'t> {
     /// trailing space. Ordering is required because e.g. "a/ b"
     /// is different from "b/ a". The first input (offset 0) is
     /// often a isCFG node.
-    pub inputs: IdVec<NodeId, Vec<Option<NodeId>>>,
+    pub inputs: IdVec<Node, Vec<Option<Node>>>,
 
     /// Outputs reference Nodes that are not null and have this Node
     /// as an input. These nodes are users of this node, thus these
@@ -52,25 +52,25 @@ pub struct Nodes<'t> {
     /// can be walked in either direction. These outputs are typically
     /// used for efficient optimizations but otherwise have no semantics
     /// meaning
-    pub outputs: IdVec<NodeId, Vec<NodeId>>,
+    pub outputs: IdVec<Node, Vec<Node>>,
 
     /// Some of the peephole rules get complex, and search further afield than
     /// just the nearest neighbor.  These peepholes can fail the pattern match
     /// on a node some distance away, and if that node ever changes we should
     /// retry the peephole.  Track a set of Nodes dependent on `this`, and
     /// revisit them if `this` changes.
-    pub deps: IdVec<NodeId, Vec<NodeId>>,
+    pub deps: IdVec<Node, Vec<Node>>,
 
     /// Immediate dominator tree depth, used to approximate a real IDOM during
     ///  parsing where we do not have the whole program, and also peepholes
     ///  change the CFG incrementally.
-    idepth: IdVec<NodeId, u32>,
+    idepth: IdVec<Node, u32>,
 
     /// If this is true peephole only computes the type.
     pub disable_peephole: bool,
 
     /// the start node to be used for creating constants.
-    pub start: StartId,
+    pub start: Start,
 
     /// Creating nodes such as constants and computing peepholes requires
     /// interning new types and operations such as meet and join.
@@ -82,7 +82,7 @@ pub struct Nodes<'t> {
     pub iter_cnt: usize,
     pub iter_nop_cnt: usize,
 
-    walk_visited: IdSet<NodeId>,
+    walk_visited: IdSet<Node>,
 
     /// Global Value Numbering. Hash over opcode and inputs; hits in this table
     /// are structurally equal.
@@ -93,10 +93,10 @@ pub struct Nodes<'t> {
     /// anyway).  If Non-Zero then this Node is IN the GVN table, or is being
     /// probed to see if it can be inserted.  His edges are "locked", because
     /// hacking his edges will change his hash.
-    hash: IdVec<NodeId, Option<NonZeroU32>>,
+    hash: IdVec<Node, Option<NonZeroU32>>,
 }
 
-pub type NodeCreation<'t> = (Op<'t>, Vec<Option<NodeId>>);
+pub type NodeCreation<'t> = (Op<'t>, Vec<Option<Node>>);
 
 impl<'t> Nodes<'t> {
     pub fn new(types: &'t Types<'t>) -> Self {
@@ -109,7 +109,7 @@ impl<'t> Nodes<'t> {
             deps: IdVec::new(vec![vec![]]),
             idepth: IdVec::new(vec![0]),
             disable_peephole: false,
-            start: StartId::DUMMY,
+            start: Start::DUMMY,
             types,
             iter_peeps: IterPeeps::new(),
             iter_cnt: 0,
@@ -123,10 +123,10 @@ impl<'t> Nodes<'t> {
         self.ops.0.len()
     }
 
-    pub fn create(&mut self, (op, inputs): NodeCreation<'t>) -> NodeId {
+    pub fn create(&mut self, (op, inputs): NodeCreation<'t>) -> Node {
         let id = u32::try_from(self.len())
             .and_then(NonZeroU32::try_from)
-            .map(NodeId)
+            .map(Node)
             .unwrap();
         self.ops.0.push(op);
         self.inputs.push(inputs);
@@ -147,15 +147,15 @@ impl<'t> Nodes<'t> {
         id
     }
 
-    pub fn create_peepholed(&mut self, c: NodeCreation<'t>) -> NodeId {
+    pub fn create_peepholed(&mut self, c: NodeCreation<'t>) -> Node {
         self.create(c).peephole(self)
     }
 
-    pub fn is_dead(&self, node: NodeId) -> bool {
+    pub fn is_dead(&self, node: Node) -> bool {
         self.is_unused(node) && self.inputs[node].is_empty() && self.ty[node].is_none()
     }
 
-    pub fn pop_n(&mut self, node: NodeId, n: usize) {
+    pub fn pop_n(&mut self, node: Node, n: usize) {
         self.unlock(node);
         for _ in 0..n {
             let old_def = self.inputs[node].pop().unwrap();
@@ -168,7 +168,7 @@ impl<'t> Nodes<'t> {
         }
     }
 
-    pub fn kill(&mut self, node: NodeId) {
+    pub fn kill(&mut self, node: Node) {
         self.unlock(node);
         debug_assert!(self.is_unused(node));
         for _ in 0..self.inputs[node].len() {
@@ -188,7 +188,7 @@ impl<'t> Nodes<'t> {
     }
 
     /// Replace 'this' with nnn in the graph, making 'this' go dead
-    pub fn subsume(&mut self, this: NodeId, that: NodeId) {
+    pub fn subsume(&mut self, this: Node, that: Node) {
         assert_ne!(this, that);
         while let Some(n) = self.outputs[this].pop() {
             self.unlock(n);
@@ -202,7 +202,7 @@ impl<'t> Nodes<'t> {
         self.kill(this);
     }
 
-    pub fn set_def(&mut self, this: NodeId, index: usize, new_def: Option<NodeId>) {
+    pub fn set_def(&mut self, this: Node, index: usize, new_def: Option<Node>) {
         self.unlock(this);
 
         let old_def = self.inputs[this][index];
@@ -225,7 +225,7 @@ impl<'t> Nodes<'t> {
         self.move_deps_to_worklist(this);
     }
 
-    pub fn add_def(&mut self, node: NodeId, new_def: Option<NodeId>) {
+    pub fn add_def(&mut self, node: Node, new_def: Option<Node>) {
         self.unlock(node);
         self.inputs[node].push(new_def);
         if let Some(new_def) = new_def {
@@ -236,7 +236,7 @@ impl<'t> Nodes<'t> {
     /// Remove the numbered input, compressing the inputs in-place.  This
     /// shuffles the order deterministically - which is suitable for Region and
     /// Phi, but not for every Node.
-    fn del_def(&mut self, node: NodeId, index: usize) {
+    fn del_def(&mut self, node: Node, index: usize) {
         self.unlock(node);
         let old_def = self.inputs[node][index];
         if let Some(old_def) = old_def {
@@ -249,38 +249,38 @@ impl<'t> Nodes<'t> {
         self.inputs[node].swap_remove(index);
     }
 
-    pub fn add_use(&mut self, node: NodeId, use_: NodeId) {
+    pub fn add_use(&mut self, node: Node, use_: Node) {
         self.outputs[node].push(use_)
     }
 
-    pub fn del_use(&mut self, node: NodeId, use_: NodeId) {
+    pub fn del_use(&mut self, node: Node, use_: Node) {
         if let Some(pos) = self.outputs[node].iter().rposition(|n| *n == use_) {
             self.outputs[node].swap_remove(pos);
         }
     }
 
-    pub fn is_unused(&self, node: NodeId) -> bool {
+    pub fn is_unused(&self, node: Node) -> bool {
         self.outputs[node].is_empty()
     }
 
-    pub fn swap_12(&mut self, node: NodeId) -> NodeId {
+    pub fn swap_12(&mut self, node: Node) -> Node {
         self.unlock(node);
         self.inputs[node].swap(1, 2);
         node
     }
-    pub fn keep(&mut self, node: NodeId) {
-        self.add_use(node, NodeId::DUMMY);
+    pub fn keep(&mut self, node: Node) {
+        self.add_use(node, Node::DUMMY);
     }
 
-    pub fn unkeep(&mut self, node: NodeId) {
-        self.del_use(node, NodeId::DUMMY);
+    pub fn unkeep(&mut self, node: Node) {
+        self.del_use(node, Node::DUMMY);
     }
 
-    pub fn is_keep(&self, node: NodeId) -> bool {
-        self.outputs[node].contains(&NodeId::DUMMY)
+    pub fn is_keep(&self, node: Node) -> bool {
+        self.outputs[node].contains(&Node::DUMMY)
     }
 
-    pub fn err(&self, node: NodeId) -> Option<String> {
+    pub fn err(&self, node: Node) -> Option<String> {
         if let Some(memop) = self.to_mem_op(node) {
             let ptr = node.inputs(self)[2]?.ty(self)?;
             if ptr == self.types.ty_bot || matches!(*ptr, Type::Pointer(MemPtr { nil: true, .. })) {
@@ -290,7 +290,7 @@ impl<'t> Nodes<'t> {
         None
     }
 
-    pub fn is_cfg(&self, node: NodeId) -> bool {
+    pub fn is_cfg(&self, node: Node) -> bool {
         match &self[node] {
             Op::Start { .. } | Op::Return | Op::Stop => true,
             Op::If | Op::Region { .. } | Op::Loop => true,
@@ -307,13 +307,13 @@ impl<'t> Nodes<'t> {
             | Op::Bool(_)
             | Op::Phi(_)
             | Op::Cast(_)
-            | Op::MemOp(_)
+            | Op::Mem(_)
             | Op::New(_)
             | Op::Not => false,
         }
     }
 
-    pub fn unique_input(&self, stop: NodeId) -> Option<NodeId> {
+    pub fn unique_input(&self, stop: Node) -> Option<Node> {
         if self.inputs[stop].len() == 1 {
             self.inputs[stop][0]
         } else {
@@ -329,7 +329,7 @@ impl<'t> Nodes<'t> {
     /// It is sufficient for one of the non-const
     /// inputs to have the dependency so we don't bother
     /// checking the rest.
-    pub fn all_cons(&mut self, node: NodeId, dep: NodeId) -> bool {
+    pub fn all_cons(&mut self, node: Node, dep: Node) -> bool {
         if matches!(&self[node], Op::Phi(_)) {
             let region = self.inputs[node][0];
             if !self.instanceof_region(region) {
@@ -354,7 +354,7 @@ impl<'t> Nodes<'t> {
         }
     }
 
-    fn same_op(&self, node: NodeId) -> bool {
+    fn same_op(&self, node: Node) -> bool {
         for i in 2..self.inputs[node].len() {
             if self[self.inputs[node][1].unwrap()].operation()
                 != self[self.inputs[node][i].unwrap()].operation()
@@ -364,7 +364,7 @@ impl<'t> Nodes<'t> {
         }
         true
     }
-    fn single_unique_input(&mut self, phi: NodeId) -> Option<NodeId> {
+    fn single_unique_input(&mut self, phi: Node) -> Option<Node> {
         let region = self.inputs[phi][0].unwrap();
         if matches!(&self[region], Op::Loop)
             && self.ty[self.inputs[region][1].unwrap()] == Some(self.types.ty_xctrl)
@@ -391,7 +391,7 @@ impl<'t> Nodes<'t> {
     }
 
     /// Return the immediate dominator of this Node and compute dom tree depth.
-    fn idom(&mut self, node: NodeId) -> Option<NodeId> {
+    fn idom(&mut self, node: Node) -> Option<Node> {
         match &self[node] {
             Op::Start { .. } | Op::Stop => None,
             Op::Loop => self.inputs[node][1],
@@ -422,7 +422,7 @@ impl<'t> Nodes<'t> {
         }
     }
 
-    fn idepth(&mut self, node: NodeId) -> u32 {
+    fn idepth(&mut self, node: Node) -> u32 {
         if self.idepth[node] != 0 {
             return self.idepth[node];
         }
@@ -445,11 +445,7 @@ impl<'t> Nodes<'t> {
         self.idepth[node]
     }
 
-    fn in_progress(
-        ops: &OpVec<'t>,
-        inputs: &IdVec<NodeId, Vec<Option<NodeId>>>,
-        region: NodeId,
-    ) -> bool {
+    fn in_progress(ops: &OpVec<'t>, inputs: &IdVec<Node, Vec<Option<Node>>>, region: Node) -> bool {
         debug_assert!(matches!(
             ops[region],
             Op::Region { .. } | Op::Loop | Op::Phi(_)
@@ -460,9 +456,9 @@ impl<'t> Nodes<'t> {
 
     /// Utility to walk the entire graph applying a function; return the first
     /// not-null result.
-    fn walk_non_reentrant<T, F: FnMut(&mut Self, NodeId) -> Option<T>>(
+    fn walk_non_reentrant<T, F: FnMut(&mut Self, Node) -> Option<T>>(
         &mut self,
-        node: NodeId,
+        node: Node,
         mut f: F,
     ) -> Option<T> {
         assert!(self.walk_visited.is_empty());
@@ -471,9 +467,9 @@ impl<'t> Nodes<'t> {
         result
     }
 
-    fn walk_non_reentrant_inner<T, F: FnMut(&mut Self, NodeId) -> Option<T>>(
+    fn walk_non_reentrant_inner<T, F: FnMut(&mut Self, Node) -> Option<T>>(
         &mut self,
-        node: NodeId,
+        node: Node,
         f: &mut F,
     ) -> Option<T> {
         if self.walk_visited.get(node) {
@@ -499,13 +495,13 @@ impl<'t> Nodes<'t> {
         None
     }
 
-    pub fn instanceof_region(&self, node: Option<NodeId>) -> bool {
+    pub fn instanceof_region(&self, node: Option<Node>) -> bool {
         node.is_some_and(|n| matches!(&self[n], Op::Region { .. } | Op::Loop))
     }
 
     /// Creates a projection for each of the struct's fields, using the field alias
     /// as the key.
-    pub fn add_mem_proj(&mut self, start: StartId, ts: Ty<'t>, scope: ScopeId) {
+    pub fn add_mem_proj(&mut self, start: Start, ts: Ty<'t>, scope: Scope) {
         let Type::Struct(Struct::Struct { name, fields }) = *ts else {
             unreachable!()
         };

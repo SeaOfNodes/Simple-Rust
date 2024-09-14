@@ -1,12 +1,12 @@
 use crate::sea_of_nodes::nodes::node::MemOpKind;
-use crate::sea_of_nodes::nodes::{NodeId, Nodes, Op};
+use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
 use crate::sea_of_nodes::types::{Int, Ty, Type};
 
-impl<'t> NodeId {
+impl<'t> Node {
     /// Try to peephole at this node and return a better replacement Node.
     /// Always returns some not-null Node (often this).
     #[must_use]
-    pub fn peephole(self, sea: &mut Nodes<'t>) -> NodeId {
+    pub fn peephole(self, sea: &mut Nodes<'t>) -> Node {
         if sea.disable_peephole {
             sea.ty[self] = Some(sea.compute(self));
             self // Peephole optimizations turned off
@@ -38,7 +38,7 @@ impl<'t> Nodes<'t> {
     /// for a better replacement (which can be this).
     /// </ul>
     #[must_use]
-    pub fn peephole_opt(&mut self, node: NodeId) -> Option<NodeId> {
+    pub fn peephole_opt(&mut self, node: Node) -> Option<Node> {
         self.iter_cnt += 1;
 
         // Compute initial or improved Type
@@ -82,7 +82,7 @@ impl<'t> Nodes<'t> {
 
     /// Set the type.  Assert monotonic progress.
     /// If changing, add users to worklist.
-    pub(crate) fn set_type(&mut self, node: NodeId, ty: Ty<'t>) -> Option<Ty<'t>> {
+    pub(crate) fn set_type(&mut self, node: Node, ty: Ty<'t>) -> Option<Ty<'t>> {
         let old = self.ty[node];
         if let Some(old) = old {
             debug_assert!(self.types.isa(ty, old));
@@ -99,7 +99,7 @@ impl<'t> Nodes<'t> {
         old
     }
 
-    fn dead_code_elimination(&mut self, old: NodeId, new: NodeId) {
+    fn dead_code_elimination(&mut self, old: Node, new: Node) {
         if new != old && self.is_unused(old) && !self.is_dead(old) {
             self.keep(new);
             self.kill(old);
@@ -107,7 +107,7 @@ impl<'t> Nodes<'t> {
         }
     }
 
-    pub(crate) fn compute(&mut self, node: NodeId) -> Ty<'t> {
+    pub(crate) fn compute(&mut self, node: Node) -> Ty<'t> {
         let types = self.types;
         match &self[node] {
             Op::Constant(ty) => *ty,
@@ -262,7 +262,7 @@ impl<'t> Nodes<'t> {
             }
             Op::Stop => types.ty_bot,
             Op::Cast(t) => types.join(self.ty[self.inputs[node][1].unwrap()].unwrap(), *t),
-            Op::MemOp(m) => match m.kind {
+            Op::Mem(m) => match m.kind {
                 MemOpKind::Load { declared_type } => declared_type,
                 MemOpKind::Store => types.get_mem(m.alias),
             },
@@ -270,7 +270,7 @@ impl<'t> Nodes<'t> {
         }
     }
 
-    fn compute_binary_int<F: FnOnce(i64, i64) -> i64>(&self, node: NodeId, op: F) -> Ty<'t> {
+    fn compute_binary_int<F: FnOnce(i64, i64) -> i64>(&self, node: Node, op: F) -> Ty<'t> {
         let types = self.types;
         let Some(first) = self.inputs[node][1].and_then(|n| self.ty[n]) else {
             return types.ty_bot;

@@ -1,12 +1,12 @@
 use crate::datastructures::arena::DroplessArena;
 use crate::sea_of_nodes::ir_printer;
-use crate::sea_of_nodes::nodes::index::StopId;
+use crate::sea_of_nodes::nodes::index::Stop;
 use crate::sea_of_nodes::nodes::{Nodes, Op};
 use crate::sea_of_nodes::parser::Parser;
 use crate::sea_of_nodes::types::Types;
 
 /// assertTrue(stop.ret().ctrl() instanceof ProjNode);
-fn assert_ret_ctrl_is_proj(nodes: &Nodes, stop: StopId) {
+fn assert_ret_ctrl_is_proj(nodes: &Nodes, stop: Stop) {
     assert!(matches!(nodes.ret_ctrl(stop), Op::Proj(_)));
 }
 

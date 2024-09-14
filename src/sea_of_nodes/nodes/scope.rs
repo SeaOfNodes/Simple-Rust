@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use crate::sea_of_nodes::nodes::index::ScopeId;
-use crate::sea_of_nodes::nodes::{NodeId, Nodes, Op};
+use crate::sea_of_nodes::nodes::index::Scope;
+use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
 use crate::sea_of_nodes::types::{Ty, Type};
 
 #[derive(Clone, Debug)]
@@ -18,7 +18,7 @@ impl<'t> ScopeOp<'t> {
     }
 }
 
-impl<'t> ScopeId {
+impl<'t> Scope {
     pub fn push(self, sea: &mut Nodes<'t>) {
         sea[self].scopes.push(HashMap::new());
     }
@@ -32,7 +32,7 @@ impl<'t> ScopeId {
         self,
         name: &'t str,
         declared_ty: Ty<'t>,
-        value: NodeId,
+        value: Node,
         sea: &mut Nodes<'t>,
     ) -> Result<(), ()> {
         let len = self.inputs(sea).len();
@@ -44,12 +44,12 @@ impl<'t> ScopeId {
         Ok(())
     }
 
-    pub fn lookup(self, name: &str, sea: &mut Nodes<'t>) -> Result<NodeId, ()> {
+    pub fn lookup(self, name: &str, sea: &mut Nodes<'t>) -> Result<Node, ()> {
         let nesting_level = sea[self].scopes.len() - 1;
         self.lookup_update(name, None, nesting_level, sea).ok_or(())
     }
 
-    pub fn update(self, name: &str, value: NodeId, sea: &mut Nodes<'t>) -> Result<NodeId, ()> {
+    pub fn update(self, name: &str, value: Node, sea: &mut Nodes<'t>) -> Result<Node, ()> {
         let nesting_level = sea[self].scopes.len() - 1;
         self.lookup_update(name, Some(value), nesting_level, sea)
             .ok_or(())
@@ -58,10 +58,10 @@ impl<'t> ScopeId {
     fn lookup_update(
         self,
         name: &str,
-        value: Option<NodeId>,
+        value: Option<Node>,
         nesting_level: usize,
         sea: &mut Nodes<'t>,
-    ) -> Option<NodeId> {
+    ) -> Option<Node> {
         let syms = &sea[self].scopes[nesting_level];
         if let Some((index, declared_ty)) = syms.get(name).copied() {
             let mut old = self.inputs(sea)[index];
@@ -109,7 +109,7 @@ impl<'t> ScopeId {
         }
     }
 
-    pub fn dup(self, lazy_loop_phis: bool, sea: &mut Nodes<'t>) -> ScopeId {
+    pub fn dup(self, lazy_loop_phis: bool, sea: &mut Nodes<'t>) -> Scope {
         let clone = sea[self].clone();
         let dup = sea.create((Op::Scope(clone), vec![]));
         let dup = sea.to_scope(dup).unwrap();
@@ -141,7 +141,7 @@ impl<'t> ScopeId {
         names
     }
 
-    pub fn merge(self, that: ScopeId, sea: &mut Nodes<'t>) -> NodeId {
+    pub fn merge(self, that: Scope, sea: &mut Nodes<'t>) -> Node {
         let c1 = self.inputs(sea)[0];
         let c2 = that.inputs(sea)[0];
         let region = sea.create(Op::make_region(vec![None, c1, c2]));
@@ -179,7 +179,7 @@ impl<'t> ScopeId {
 
     /// Merge the backedge scope into this loop head scope
     /// We set the second input to the phi from the back edge (i.e. loop body)
-    pub fn end_loop(self, back: ScopeId, exit: ScopeId, sea: &mut Nodes<'t>) {
+    pub fn end_loop(self, back: Scope, exit: Scope, sea: &mut Nodes<'t>) {
         let ctrl = self.inputs(sea)[0].unwrap();
         assert!(matches!(&sea[ctrl], Op::Loop));
         assert!(Nodes::in_progress(&sea.ops, &sea.inputs, ctrl));
@@ -227,11 +227,11 @@ impl<'t> ScopeId {
     /// combinations, and replaces the variable with the upcast variant.
     pub fn upcast(
         self,
-        ctrl: NodeId,
-        mut pred: NodeId,
+        ctrl: Node,
+        mut pred: Node,
         invert: bool,
         sea: &mut Nodes<'t>,
-    ) -> Option<NodeId> {
+    ) -> Option<Node> {
         if ctrl.ty(sea)? == sea.types.ty_xctrl {
             return None;
         }
@@ -287,7 +287,7 @@ impl<'t> ScopeId {
         None
     }
 
-    fn replace(self, old: NodeId, cast: Option<NodeId>, sea: &mut Nodes<'t>) {
+    fn replace(self, old: Node, cast: Option<Node>, sea: &mut Nodes<'t>) {
         debug_assert_ne!(Some(old), cast);
         for i in 0..self.inputs(sea).len() {
             if self.inputs(sea)[i] == Some(old) {

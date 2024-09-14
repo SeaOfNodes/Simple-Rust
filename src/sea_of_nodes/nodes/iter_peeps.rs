@@ -34,8 +34,8 @@
 
 use crate::datastructures::id_set::IdSet;
 use crate::datastructures::random::Random;
-use crate::sea_of_nodes::nodes::index::StopId;
-use crate::sea_of_nodes::nodes::{NodeId, Nodes, Op};
+use crate::sea_of_nodes::nodes::index::Stop;
+use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
 
 pub struct IterPeeps {
     work: WorkList,
@@ -49,7 +49,7 @@ impl IterPeeps {
             mid_assert: false,
         }
     }
-    pub fn add(&mut self, node: NodeId) {
+    pub fn add(&mut self, node: Node) {
         self.work.push(node);
     }
 }
@@ -58,7 +58,7 @@ impl<'t> Nodes<'t> {
     /// Add a node to the list of dependencies.  Only add it if its not an input
     /// or output of this node, that is, it is at least one step away.  The node
     /// being added must benefit from this node being peepholed.
-    pub fn add_dep(&mut self, this: NodeId, dep: NodeId) {
+    pub fn add_dep(&mut self, this: Node, dep: Node) {
         // Running peepholes during the big assert cannot have side effects
         // like adding dependencies.
         if self.iter_peeps.mid_assert {
@@ -74,14 +74,14 @@ impl<'t> Nodes<'t> {
     }
 
     /// Move the dependents onto a worklist, and clear for future dependents.
-    pub fn move_deps_to_worklist(&mut self, node: NodeId) {
+    pub fn move_deps_to_worklist(&mut self, node: Node) {
         for dep in self.deps[node].drain(..) {
             self.iter_peeps.add(dep);
         }
     }
 
     /// Iterate peepholes to a fixed point
-    pub fn iterate(&mut self, stop: StopId) {
+    pub fn iterate(&mut self, stop: Stop) {
         debug_assert!(self.progress_on_list(*stop));
         while let Some(n) = self.iter_peeps.work.pop() {
             if self.is_dead(n) {
@@ -142,7 +142,7 @@ impl<'t> Nodes<'t> {
     /// neighbors and these should fail, but will then try to add dependencies
     /// {@link #Node.addDep} which is a side effect in an assert.  The {@link
     /// #midAssert} is used to stop this side effect.
-    fn progress_on_list(&mut self, stop: NodeId) -> bool {
+    fn progress_on_list(&mut self, stop: Node) -> bool {
         self.iter_peeps.mid_assert = true;
         let (old_cnt, old_nop) = (self.iter_cnt, self.iter_nop_cnt);
 
@@ -167,9 +167,9 @@ impl<'t> Nodes<'t> {
 /// Classic WorkList, with a fast add/remove, dup removal, random pull.
 /// The Node's nid is used to check membership in the worklist.
 struct WorkList {
-    es: Vec<NodeId>,
+    es: Vec<Node>,
     /// Bit set if node is on WorkList
-    on: IdSet<NodeId>,
+    on: IdSet<Node>,
     /// For randomizing pull from the WorkList
     r: Random,
     /// Useful stat - how many nodes are processed in the post parse iterative opt
@@ -187,7 +187,7 @@ impl WorkList {
     }
 
     /// push node if not present
-    pub fn push(&mut self, node: NodeId) {
+    pub fn push(&mut self, node: Node) {
         if !self.on.get(node) {
             self.on.add(node);
             self.es.push(node);
@@ -196,12 +196,12 @@ impl WorkList {
     }
 
     /// True if Node is on the WorkList
-    pub fn on(&self, node: NodeId) -> bool {
+    pub fn on(&self, node: Node) -> bool {
         self.on.get(node)
     }
 
     /// Removes a random Node from the WorkList
-    pub fn pop(&mut self) -> Option<NodeId> {
+    pub fn pop(&mut self) -> Option<Node> {
         if self.es.is_empty() {
             return None;
         }

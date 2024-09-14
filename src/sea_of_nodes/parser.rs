@@ -1,6 +1,6 @@
 use crate::sea_of_nodes::graph_visualizer;
-use crate::sea_of_nodes::nodes::index::{ScopeId, StopId};
-use crate::sea_of_nodes::nodes::{BoolOp, NodeCreation, NodeId, Nodes, Op, ScopeOp};
+use crate::sea_of_nodes::nodes::index::{Scope, Stop};
+use crate::sea_of_nodes::nodes::{BoolOp, Node, NodeCreation, Nodes, Op, ScopeOp};
 use crate::sea_of_nodes::types::{Struct, Ty, Type, Types};
 use std::collections::HashMap;
 
@@ -17,16 +17,16 @@ pub struct Parser<'s, 't> {
     pub nodes: Nodes<'t>,
 
     /// returned after parsing
-    pub(crate) stop: StopId,
+    pub(crate) stop: Stop,
 
     /// The current scope changes as we parse.
-    pub(crate) scope: ScopeId,
+    pub(crate) scope: Scope,
 
     /// stack of scopes for graph visualization
-    pub(crate) x_scopes: Vec<ScopeId>,
+    pub(crate) x_scopes: Vec<Scope>,
 
-    continue_scope: Option<ScopeId>,
-    break_scope: Option<ScopeId>,
+    continue_scope: Option<Scope>,
+    break_scope: Option<Scope>,
 
     name_to_type: HashMap<&'t str, Ty<'t>>,
 
@@ -92,18 +92,18 @@ impl<'s, 't> Parser<'s, 't> {
         }
     }
 
-    fn ctrl(&mut self) -> NodeId {
+    fn ctrl(&mut self) -> Node {
         self.nodes.inputs[self.scope][0].expect("has ctrl")
     }
-    fn set_ctrl(&mut self, node: NodeId) {
+    fn set_ctrl(&mut self, node: Node) {
         self.nodes.set_def(*self.scope, 0, Some(node));
     }
 
-    fn peephole(&mut self, c: NodeCreation<'t>) -> NodeId {
+    fn peephole(&mut self, c: NodeCreation<'t>) -> Node {
         self.nodes.create_peepholed(c)
     }
 
-    pub fn parse(&mut self) -> PResult<StopId> {
+    pub fn parse(&mut self) -> PResult<Stop> {
         self.x_scopes.push(self.scope);
 
         // Enter a new scope for the initial control and arguments
@@ -137,7 +137,7 @@ impl<'s, 't> Parser<'s, 't> {
         }
     }
 
-    pub fn iterate(&mut self, stop: StopId) {
+    pub fn iterate(&mut self, stop: Stop) {
         self.nodes.iterate(stop)
     }
 
@@ -333,7 +333,7 @@ impl<'s, 't> Parser<'s, 't> {
         Ok(())
     }
 
-    fn jump_to(&mut self, to_scope: Option<ScopeId>) -> ScopeId {
+    fn jump_to(&mut self, to_scope: Option<Scope>) -> Scope {
         let cur = self.scope.dup(false, &mut self.nodes);
 
         let ctrl = self.peephole(Op::make_constant(self.nodes.start, self.types.ty_xctrl));
@@ -488,7 +488,7 @@ impl<'s, 't> Parser<'s, 't> {
         }
     }
 
-    pub fn print(&mut self, node: impl Into<NodeId>) -> String {
+    pub fn print(&mut self, node: impl Into<Node>) -> String {
         self.nodes.print(Some(node.into())).to_string()
     }
 
@@ -507,7 +507,7 @@ impl<'s, 't> Parser<'s, 't> {
         let t = self.parse_type();
         let name = self.require_id()?;
 
-        let expr: NodeId;
+        let expr: Node;
         if self.match_(";") {
             // Assign a default value
             if let Some(t) = t {
@@ -601,14 +601,14 @@ impl<'s, 't> Parser<'s, 't> {
     /// <pre>
     ///     expr : compareExpr
     /// </pre>
-    fn parse_expression(&mut self) -> PResult<NodeId> {
+    fn parse_expression(&mut self) -> PResult<Node> {
         self.parse_comparison()
     }
 
     /// <pre>
     ///     expr : additiveExpr op additiveExpr
     /// </pre>
-    fn parse_comparison(&mut self) -> PResult<NodeId> {
+    fn parse_comparison(&mut self) -> PResult<Node> {
         let mut lhs = self.parse_addition()?;
         loop {
             let mut negate = false;
@@ -649,7 +649,7 @@ impl<'s, 't> Parser<'s, 't> {
     /// <pre>
     ///     additiveExpr : multiplicativeExpr (('+' | '-') multiplicativeExpr)*
     /// </pre>
-    fn parse_addition(&mut self) -> PResult<NodeId> {
+    fn parse_addition(&mut self) -> PResult<Node> {
         let mut lhs = self.parse_multiplication()?;
         loop {
             let op = if self.match_("+") {
@@ -669,7 +669,7 @@ impl<'s, 't> Parser<'s, 't> {
     /// <pre>
     ///     multiplicativeExpr : unaryExpr (('*' | '/') unaryExpr)*
     /// </pre>
-    fn parse_multiplication(&mut self) -> PResult<NodeId> {
+    fn parse_multiplication(&mut self) -> PResult<Node> {
         let mut lhs = self.parse_unary()?;
         loop {
             let op = if self.match_("*") {
@@ -689,7 +689,7 @@ impl<'s, 't> Parser<'s, 't> {
     /// <pre>
     ///     unaryExpr : ('-') | '!') unaryExpr | postfixExpr | primaryExpr
     /// </pre>
-    fn parse_unary(&mut self) -> PResult<NodeId> {
+    fn parse_unary(&mut self) -> PResult<Node> {
         if self.match_("-") {
             self.parse_unary()
                 .map(|expr| self.peephole(Op::make_minus(expr)))
@@ -705,7 +705,7 @@ impl<'s, 't> Parser<'s, 't> {
     /// <pre>
     ///     primaryExpr : integerLiteral | Identifier | true | false | null | new Identifier | '(' expression ')'
     /// </pre>
-    fn parse_primary(&mut self) -> PResult<NodeId> {
+    fn parse_primary(&mut self) -> PResult<Node> {
         if self.lexer.peek_number() {
             self.parse_integer_literal()
         } else if self.match_("(") {
@@ -739,7 +739,7 @@ impl<'s, 't> Parser<'s, 't> {
     }
 
     /// Return a NewNode but also generate instructions to initialize it.
-    fn new_struct(&mut self, obj: Ty<'t>) -> NodeId {
+    fn new_struct(&mut self, obj: Ty<'t>) -> Node {
         let ptr_ty = self.types.get_pointer(obj, false);
         let ctrl = self.ctrl();
         let n = self.peephole(Op::make_new(ptr_ty, ctrl));
@@ -766,12 +766,12 @@ impl<'s, 't> Parser<'s, 't> {
     /// variables are prefixed by $ so they cannot be referenced in Simple code.
     /// Using vars has the benefit that all the existing machinery of scoping
     /// and phis work as expected
-    fn mem_alias_lookup(&mut self, alias: u32) -> Result<NodeId, ()> {
+    fn mem_alias_lookup(&mut self, alias: u32) -> Result<Node, ()> {
         let name = self.types.get_str(&Self::mem_name(alias));
         self.scope.lookup(name, &mut self.nodes)
     }
 
-    fn mem_alias_update(&mut self, alias: u32, st: NodeId) -> Result<NodeId, ()> {
+    fn mem_alias_update(&mut self, alias: u32, st: Node) -> Result<Node, ()> {
         let name = self.types.get_str(&Self::mem_name(alias));
         self.scope.update(name, st, &mut self.nodes)
     }
@@ -786,7 +786,7 @@ impl<'s, 't> Parser<'s, 't> {
     /// <pre>
     ///     expr ('.' IDENTIFIER)* [ = expr ]
     /// </pre>
-    fn parse_postfix(&mut self, expr: NodeId) -> PResult<NodeId> {
+    fn parse_postfix(&mut self, expr: Node) -> PResult<Node> {
         if !self.match_(".") {
             return Ok(expr);
         }
@@ -845,7 +845,7 @@ impl<'s, 't> Parser<'s, 't> {
     /// <pre>
     ///     integerLiteral: [1-9][0-9]* | [0]
     /// </pre>
-    fn parse_integer_literal(&mut self) -> PResult<NodeId> {
+    fn parse_integer_literal(&mut self) -> PResult<Node> {
         self.lexer
             .parse_number(self.types)
             .map(|ty| self.peephole(Op::make_constant(self.nodes.start, ty)))
