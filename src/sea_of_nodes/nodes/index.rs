@@ -78,6 +78,17 @@ macro_rules! define_id {
             }
         }
 
+        // downcast
+        impl Node {
+            pub fn $downcast(self, sea: &Nodes) -> Option<$Id> {
+                #[allow(unused_variables)]
+                match &sea[self] {
+                    $pattern => Some($Id(self)),
+                    _ => None,
+                }
+            }
+        }
+
         // generic index
         impl<T> Index<$Id> for IdVec<Node, T> {
             type Output = T;
@@ -134,11 +145,11 @@ macro_rules! define_ids {
             $($Id($Id)),*
         }
 
-        impl<'t> OpVec<'t> {
-            pub fn downcast(&self, node: Node) -> TypedNode {
+        impl Node {
+            pub fn downcast(self, ops: &OpVec) -> TypedNode {
                 #[allow(unused_variables)]
-                match &self[node] {
-                    $($pattern => $Id(node).into()),*
+                match &ops[self] {
+                    $($pattern => $Id(self).into()),*
                 }
             }
         }
@@ -168,12 +179,6 @@ define_ids!(<'t>
     Mem: to_mem_op, MemOp<'t>, Op::Mem(n) => n;
     New: to_new, Ty<'t>, Op::New(n) => n;
 );
-
-impl<'t> Nodes<'t> {
-    pub fn downcast(&self, node: Node) -> TypedNode {
-        self.ops.downcast(node)
-    }
-}
 
 impl Start {
     pub const DUMMY: Start = Start(Node::DUMMY);

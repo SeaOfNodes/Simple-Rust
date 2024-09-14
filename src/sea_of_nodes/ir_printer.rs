@@ -106,10 +106,10 @@ fn print_line_(nodes: &Nodes, n: Node, sb: &mut String) -> fmt::Result {
     writeln!(sb)
 }
 
-fn node_id(nodes: &Nodes, n: Node, sb: &mut String) -> fmt::Result {
+fn node_id(sea: &Nodes, n: Node, sb: &mut String) -> fmt::Result {
     write!(sb, "%{n}")?;
-    if let Some(p) = nodes.to_proj(n) {
-        write!(sb, ".{}", nodes[p].index)?;
+    if let Some(p) = n.to_proj(sea) {
+        write!(sb, ".{}", sea[p].index)?;
     }
     Ok(())
 }

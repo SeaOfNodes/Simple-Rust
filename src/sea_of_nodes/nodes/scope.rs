@@ -67,11 +67,11 @@ impl<'t> Scope {
             let mut old = self.inputs(sea)[index];
 
             if let Some(loop_) = old {
-                if let Some(loop_) = sea.to_scope(loop_) {
+                if let Some(loop_) = loop_.to_scope(sea) {
                     // Lazy Phi!
                     let loop_phi = loop_.inputs(sea)[index];
                     old = if loop_phi.is_some_and(|p| {
-                        sea.to_phi(p).is_some() && loop_.inputs(sea)[0] == p.inputs(sea)[0]
+                        p.to_phi(sea).is_some() && loop_.inputs(sea)[0] == p.inputs(sea)[0]
                     }) {
                         // Loop already has a real Phi, use it
                         loop_phi
@@ -111,8 +111,10 @@ impl<'t> Scope {
 
     pub fn dup(self, lazy_loop_phis: bool, sea: &mut Nodes<'t>) -> Scope {
         let clone = sea[self].clone();
-        let dup = sea.create((Op::Scope(clone), vec![]));
-        let dup = sea.to_scope(dup).unwrap();
+        let dup = sea
+            .create((Op::Scope(clone), vec![]))
+            .to_scope(sea)
+            .unwrap();
 
         sea.add_def(*dup, self.inputs(sea)[0]); // ctrl
         for i in 1..self.inputs(sea).len() {
@@ -237,7 +239,7 @@ impl<'t> Scope {
         }
         // Invert the If conditional
         if invert {
-            if sea.to_not(pred).is_some() {
+            if pred.to_not(sea).is_some() {
                 pred = pred.inputs(sea)[1].unwrap()
             } else {
                 pred = sea.create_peepholed(Op::make_not(pred));
@@ -263,7 +265,7 @@ impl<'t> Scope {
             self.replace(pred, Some(c), sea);
         }
 
-        if sea.to_not(pred).is_some() {
+        if pred.to_not(sea).is_some() {
             // Direct use of a !value as predicate.  This is a zero/null test.
             let not_in_1 = pred.inputs(sea)[1].unwrap();
             if self.inputs(sea).iter().any(|x| *x == Some(not_in_1)) {

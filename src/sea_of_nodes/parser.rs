@@ -62,17 +62,15 @@ impl<'s, 't> Parser<'s, 't> {
     pub fn new_with_arg(source: &'s str, types: &'t Types<'t>, arg: Ty<'t>) -> Self {
         let mut nodes = Nodes::new(types);
 
-        let scope = nodes.create(Op::make_scope());
-        let scope = nodes.to_scope(scope).unwrap();
+        let scope = nodes.create(Op::make_scope()).to_scope(&nodes).unwrap();
         nodes.ty[scope] = Some(types.ty_bot); // in java this is done by the constructor
 
         let args = types.get_tuple_from_array([types.ty_ctrl, arg]);
-        let start = nodes.create(Op::make_start(args));
+        let start = nodes.create(Op::make_start(args)).to_start(&nodes).unwrap();
         nodes.ty[start] = Some(args);
-        nodes.start = nodes.to_start(start).unwrap();
+        nodes.start = start;
 
-        let stop = nodes.create(Op::make_stop());
-        let stop = nodes.to_stop(stop).unwrap();
+        let stop = nodes.create(Op::make_stop()).to_stop(&nodes).unwrap();
         nodes.ty[stop] = Some(types.ty_bot); // differs from java; ensures that it isn't dead
 
         Self {
