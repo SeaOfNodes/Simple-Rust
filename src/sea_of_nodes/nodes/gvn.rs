@@ -1,5 +1,5 @@
 use crate::datastructures::id_vec::IdVec;
-use crate::sea_of_nodes::nodes::{NodeId, NodeVec, Nodes, Op};
+use crate::sea_of_nodes::nodes::{NodeId, Nodes, Op, OpVec};
 use std::collections::hash_map::RawEntryMut;
 use std::hash::{BuildHasher, DefaultHasher, Hash, Hasher};
 use std::num::NonZeroU32;
@@ -28,7 +28,7 @@ impl<'t> Nodes<'t> {
             };
             let h = self.gvn.hasher().hash_one(entry);
             match self.gvn.raw_entry_mut().from_hash(h, |o| {
-                entry.hash == o.hash && Self::equals(&self.nodes, &self.inputs, entry.node, o.node)
+                entry.hash == o.hash && Self::equals(&self.ops, &self.inputs, entry.node, o.node)
             }) {
                 RawEntryMut::Vacant(v) => {
                     v.insert(entry, ()); // Put in table now
@@ -54,7 +54,7 @@ impl<'t> Nodes<'t> {
     /// Two nodes are equal if they have the same inputs and the same "opcode"
     /// which means the same Java class, plus same internal parts.
     fn equals(
-        nodes: &NodeVec<'t>,
+        ops: &OpVec<'t>,
         inputs: &IdVec<NodeId, Vec<Option<NodeId>>>,
         this: NodeId,
         that: NodeId,
@@ -63,7 +63,7 @@ impl<'t> Nodes<'t> {
             return true;
         }
 
-        if nodes[this].operation() != nodes[that].operation() {
+        if ops[this].operation() != ops[that].operation() {
             return false;
         }
 
@@ -71,11 +71,9 @@ impl<'t> Nodes<'t> {
             return false;
         }
 
-        match (&nodes[this], &nodes[that]) {
+        match (&ops[this], &ops[that]) {
             (Op::Constant(c1), Op::Constant(c2)) => c1 == c2,
-            (Op::Phi(_) | Op::Region { .. } | Op::Loop, _) => {
-                !Self::in_progress(nodes, inputs, this)
-            }
+            (Op::Phi(_) | Op::Region { .. } | Op::Loop, _) => !Self::in_progress(ops, inputs, this),
             (Op::Proj(p1), Op::Proj(p2)) => p1.index == p2.index,
             _ => true,
         }

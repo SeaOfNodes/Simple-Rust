@@ -107,11 +107,7 @@ impl Display for PrintNodes2<'_, '_, '_> {
             Op::If => write!(f, "if( {} )", input(1)),
             Op::Phi(_) => {
                 if !nodes.instanceof_region(inputs[0])
-                    || Nodes::in_progress(
-                        &nodes.nodes,
-                        &nodes.inputs,
-                        nodes.inputs[node][0].unwrap(),
-                    )
+                    || Nodes::in_progress(&nodes.ops, &nodes.inputs, nodes.inputs[node][0].unwrap())
                 {
                     write!(f, "Z")?;
                 }

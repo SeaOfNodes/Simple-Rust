@@ -218,7 +218,7 @@ impl<'t> Nodes<'t> {
                     } else {
                         self.ty[node].unwrap()
                     }
-                } else if Self::in_progress(&self.nodes, &self.inputs, node) {
+                } else if Self::in_progress(&self.ops, &self.inputs, node) {
                     // During parsing Phis have to be computed type pessimistically.
                     self[self.to_phi(node).unwrap()].ty
                 } else {
@@ -241,7 +241,7 @@ impl<'t> Nodes<'t> {
                 }
             }
             Op::Region { .. } => {
-                if Self::in_progress(&self.nodes, &self.inputs, node) {
+                if Self::in_progress(&self.ops, &self.inputs, node) {
                     types.ty_ctrl
                 } else {
                     self.inputs[node]
@@ -253,7 +253,7 @@ impl<'t> Nodes<'t> {
                 }
             }
             Op::Loop => {
-                if Self::in_progress(&self.nodes, &self.inputs, node) {
+                if Self::in_progress(&self.ops, &self.inputs, node) {
                     types.ty_ctrl
                 } else {
                     let entry = self.inputs[node][1].unwrap();

@@ -198,7 +198,7 @@ impl<'t> Nodes<'t> {
         if !self.instanceof_region(region) {
             return self.inputs[node][1]; // Input has collapse to e.g. starting control.
         }
-        if Self::in_progress(&self.nodes, &self.inputs, *node)
+        if Self::in_progress(&self.ops, &self.inputs, *node)
             || self.inputs[region.unwrap()].is_empty()
         {
             return None; // Input is in-progress
@@ -331,7 +331,7 @@ impl<'t> Nodes<'t> {
     }
 
     fn idealize_region(&mut self, node: NodeId) -> Option<NodeId> {
-        if Self::in_progress(&self.nodes, &self.inputs, node) {
+        if Self::in_progress(&self.ops, &self.inputs, node) {
             return None;
         }
 

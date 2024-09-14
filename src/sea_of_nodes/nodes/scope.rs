@@ -182,7 +182,7 @@ impl<'t> ScopeId {
     pub fn end_loop(self, back: ScopeId, exit: ScopeId, sea: &mut Nodes<'t>) {
         let ctrl = self.inputs(sea)[0].unwrap();
         assert!(matches!(&sea[ctrl], Op::Loop));
-        assert!(Nodes::in_progress(&sea.nodes, &sea.inputs, ctrl));
+        assert!(Nodes::in_progress(&sea.ops, &sea.inputs, ctrl));
 
         sea.set_def(ctrl, 2, back.inputs(sea)[0]);
 

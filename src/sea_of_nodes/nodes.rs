@@ -23,7 +23,7 @@ mod peephole;
 mod print;
 mod scope;
 
-pub struct NodeVec<'t>(IdVec<NodeId, Op<'t>>);
+pub struct OpVec<'t>(IdVec<NodeId, Op<'t>>);
 
 /// Using `IdVec` has two advantages over `Vec`+helper methods:
 /// 1) `self.inputs[x]` and `self.outputs[x]` can be borrowed simultaneously
@@ -32,7 +32,7 @@ pub struct NodeVec<'t>(IdVec<NodeId, Op<'t>>);
 ///    while `self.inputs[x]` automatically decides
 pub struct Nodes<'t> {
     /// indexed by self[id]
-    nodes: NodeVec<'t>,
+    ops: OpVec<'t>,
 
     pub ty: IdVec<NodeId, Option<Ty<'t>>>,
 
@@ -102,7 +102,7 @@ impl<'t> Nodes<'t> {
     pub fn new(types: &'t Types<'t>) -> Self {
         let dummy = Op::Stop;
         Nodes {
-            nodes: NodeVec(IdVec::new(vec![dummy])),
+            ops: OpVec(IdVec::new(vec![dummy])),
             inputs: IdVec::new(vec![vec![]]),
             outputs: IdVec::new(vec![vec![]]),
             ty: IdVec::new(vec![None]),
@@ -120,15 +120,15 @@ impl<'t> Nodes<'t> {
         }
     }
     pub fn len(&self) -> usize {
-        self.nodes.0.len()
+        self.ops.0.len()
     }
 
-    pub fn create(&mut self, (node, inputs): NodeCreation<'t>) -> NodeId {
+    pub fn create(&mut self, (op, inputs): NodeCreation<'t>) -> NodeId {
         let id = u32::try_from(self.len())
             .and_then(NonZeroU32::try_from)
             .map(NodeId)
             .unwrap();
-        self.nodes.0.push(node);
+        self.ops.0.push(op);
         self.inputs.push(inputs);
         self.outputs.push(vec![]);
         self.ty.push(None);
@@ -338,7 +338,7 @@ impl<'t> Nodes<'t> {
             // When the region completes (is no longer in progress) the Phi can
             // become a "all constants" Phi, and the "dep" might make progress.
             self.add_dep(node, dep);
-            if Self::in_progress(&self.nodes, &self.inputs, region.unwrap()) {
+            if Self::in_progress(&self.ops, &self.inputs, region.unwrap()) {
                 return false;
             }
         }
@@ -446,15 +446,15 @@ impl<'t> Nodes<'t> {
     }
 
     fn in_progress(
-        nodes: &NodeVec<'t>,
+        ops: &OpVec<'t>,
         inputs: &IdVec<NodeId, Vec<Option<NodeId>>>,
         region: NodeId,
     ) -> bool {
         debug_assert!(matches!(
-            nodes[region],
+            ops[region],
             Op::Region { .. } | Op::Loop | Op::Phi(_)
         ));
-        (matches!(&nodes[region], Op::Phi(_)) || !inputs[region].is_empty())
+        (matches!(&ops[region], Op::Phi(_)) || !inputs[region].is_empty())
             && inputs[region].last().unwrap().is_none()
     }
 
@@ -527,7 +527,7 @@ impl<'t> Nodes<'t> {
             .collect::<Vec<Ty>>();
 
         let args_ty = self.types.get_tuple_from_slice(&args);
-        self.nodes[start].args = args_ty;
+        self.ops[start].args = args_ty;
         self.ty[start] = Some(args_ty);
 
         // For each of the fields we now add a mem projection.  Note that the

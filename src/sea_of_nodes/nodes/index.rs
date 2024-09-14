@@ -1,18 +1,18 @@
 use crate::datastructures::id_vec::IdVec;
 use crate::sea_of_nodes::nodes::node::{MemOp, PhiOp, StartOp};
-use crate::sea_of_nodes::nodes::{BoolOp, NodeId, NodeVec, Nodes, Op, ProjOp, ScopeOp};
+use crate::sea_of_nodes::nodes::{BoolOp, NodeId, Nodes, Op, OpVec, ProjOp, ScopeOp};
 use crate::sea_of_nodes::types::Ty;
 use std::fmt;
 use std::ops::{Deref, Index, IndexMut};
 
 // generic index
-impl<'t> Index<NodeId> for NodeVec<'t> {
+impl<'t> Index<NodeId> for OpVec<'t> {
     type Output = Op<'t>;
     fn index(&self, index: NodeId) -> &Self::Output {
         &self.0[index]
     }
 }
-impl<'t> IndexMut<NodeId> for NodeVec<'t> {
+impl<'t> IndexMut<NodeId> for OpVec<'t> {
     fn index_mut(&mut self, index: NodeId) -> &mut Self::Output {
         &mut self.0[index]
     }
@@ -22,12 +22,12 @@ impl<'t> IndexMut<NodeId> for NodeVec<'t> {
 impl<'t> Index<NodeId> for Nodes<'t> {
     type Output = Op<'t>;
     fn index(&self, index: NodeId) -> &Self::Output {
-        &self.nodes[index]
+        &self.ops[index]
     }
 }
 impl<'t> IndexMut<NodeId> for Nodes<'t> {
     fn index_mut(&mut self, index: NodeId) -> &mut Self::Output {
-        &mut self.nodes[index]
+        &mut self.ops[index]
     }
 }
 
@@ -53,7 +53,7 @@ macro_rules! define_id {
         }
 
         // downcast
-        impl NodeVec<'_> {
+        impl OpVec<'_> {
             pub fn $downcast<N: Into<Option<NodeId>>>(&self, node: N) -> Option<$Id> {
                 let node = node.into()?;
                 #[allow(unused_variables)]
@@ -66,7 +66,7 @@ macro_rules! define_id {
 
         // forward downcast
         impl Nodes<'_> {
-            pub fn $downcast<N: Into<Option<NodeId>>>(&self, node: N) -> Option<$Id> { self.nodes.$downcast(node) }
+            pub fn $downcast<N: Into<Option<NodeId>>>(&self, node: N) -> Option<$Id> { self.ops.$downcast(node) }
         }
 
         // generic index
@@ -79,7 +79,7 @@ macro_rules! define_id {
         }
 
         // downcasting index
-        impl<$t> Index<$Id> for NodeVec<$t> {
+        impl<$t> Index<$Id> for OpVec<$t> {
             type Output = $Out;
 
             fn index(&self, index: $Id) -> &Self::Output {
@@ -89,7 +89,7 @@ macro_rules! define_id {
                 }
             }
         }
-        impl<$t> IndexMut<$Id> for NodeVec<$t> {
+        impl<$t> IndexMut<$Id> for OpVec<$t> {
             fn index_mut(&mut self, index: $Id) -> &mut Self::Output {
                 match &mut self[index.0] {
                     $($pattern => $result,)*
@@ -101,10 +101,10 @@ macro_rules! define_id {
         // forward downcasting
         impl<$t> Index<$Id> for Nodes<$t> {
             type Output = $Out;
-            fn index(&self, index: $Id) -> &Self::Output { &self.nodes[index] }
+            fn index(&self, index: $Id) -> &Self::Output { &self.ops[index] }
         }
         impl<$t> IndexMut<$Id> for Nodes<$t> {
-            fn index_mut(&mut self, index: $Id) -> &mut Self::Output { &mut self.nodes[index] }
+            fn index_mut(&mut self, index: $Id) -> &mut Self::Output { &mut self.ops[index] }
         }
     };
 }
@@ -153,7 +153,7 @@ pub enum TypedNodeId {
     New(NewId),
 }
 
-impl<'t> NodeVec<'t> {
+impl<'t> OpVec<'t> {
     pub fn downcast(&self, node: NodeId) -> TypedNodeId {
         match &self[node] {
             Op::Constant(_) => ConstantId(node).into(),
@@ -182,7 +182,7 @@ impl<'t> NodeVec<'t> {
 
 impl<'t> Nodes<'t> {
     pub fn downcast(&self, node: NodeId) -> TypedNodeId {
-        self.nodes.downcast(node)
+        self.ops.downcast(node)
     }
 }
 
