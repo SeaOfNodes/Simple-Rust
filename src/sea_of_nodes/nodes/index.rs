@@ -1,6 +1,6 @@
 use crate::datastructures::id_vec::IdVec;
 use crate::sea_of_nodes::nodes::node::{MemOp, PhiOp, StartOp};
-use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes, Op, OpVec, ProjOp, ScopeOp};
+use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes, OpVec, ProjOp, ScopeOp};
 use crate::sea_of_nodes::types::Ty;
 use std::fmt;
 use std::ops::{Deref, Index, IndexMut};
@@ -31,8 +31,13 @@ impl<'t> IndexMut<Node> for Nodes<'t> {
     }
 }
 
+macro_rules! ite {
+    ((         ) ($($t:tt)*) ($($e:tt)*) ) => { $($e)* };
+    (($($x:tt)+) ($($t:tt)*) ($($e:tt)*) ) => { $($t)* };
+}
+
 macro_rules! define_id {
-    ($Id:ident, $downcast:ident, $t:lifetime, $Out:ty, $pattern:pat => $result:expr) => {
+    ($Id:ident, $(($op:ty))?, $downcast:ident, $t:lifetime) => {
         #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
         pub struct $Id(Node);
 
@@ -63,9 +68,8 @@ macro_rules! define_id {
         impl OpVec<'_> {
             pub fn $downcast<N: Into<Option<Node>>>(&self, node: N) -> Option<$Id> {
                 let node = node.into()?;
-                #[allow(unused_variables)]
                 match &self[node] {
-                    $pattern => Some($Id(node)),
+                    ite!(($($op)?) (Op::$Id(_)) (Op::$Id)) => Some($Id(node)),
                     _ => None,
                 }
             }
@@ -81,9 +85,8 @@ macro_rules! define_id {
         // downcast
         impl Node {
             pub fn $downcast(self, sea: &Nodes) -> Option<$Id> {
-                #[allow(unused_variables)]
                 match &sea[self] {
-                    $pattern => Some($Id(self)),
+                    ite!(($($op)?) (Op::$Id(_)) (Op::$Id)) => Some($Id(self)),
                     _ => None,
                 }
             }
@@ -104,11 +107,11 @@ macro_rules! define_id {
 
         // downcasting index
         impl<$t> Index<$Id> for OpVec<$t> {
-            type Output = $Out;
+            type Output = ite!(($($op)?) ($($op)?) (Op<$t>));
 
             fn index(&self, index: $Id) -> &Self::Output {
                 match &self[index.0] {
-                    $pattern => $result,
+                    ite!(($($op)?) (Op::$Id(n)) (n @ Op::$Id)) => n,
                     _ => unreachable!(),
                 }
             }
@@ -116,7 +119,7 @@ macro_rules! define_id {
         impl<$t> IndexMut<$Id> for OpVec<$t> {
             fn index_mut(&mut self, index: $Id) -> &mut Self::Output {
                 match &mut self[index.0] {
-                    $pattern => $result,
+                    ite!(($($op)?) (Op::$Id(n)) (n @ Op::$Id)) => n,
                     _ => unreachable!(),
                 }
             }
@@ -124,7 +127,7 @@ macro_rules! define_id {
 
         // forward downcasting
         impl<$t> Index<$Id> for Nodes<$t> {
-            type Output = $Out;
+            type Output = ite!(($($op)?) ($($op)?) (Op<$t>));
             fn index(&self, index: $Id) -> &Self::Output {
                 &self.ops[index]
             }
@@ -138,18 +141,24 @@ macro_rules! define_id {
 }
 
 macro_rules! define_ids {
-    (<$t:lifetime> $($Id:ident: $downcast:ident, $Out:ty, $pattern:pat => $result:expr;)*) => {
-        $(define_id!($Id, $downcast, $t, $Out, $pattern => $result);)*
+    (<$t:lifetime> $($Id:ident $(($op:ty))? $downcast:ident;)*) => {
+        $(define_id!($Id, $(($op))?, $downcast, $t);)*
 
+        /// Node specific operation
+        #[derive(Clone, Debug)]
+        pub enum Op<$t> {
+            $($Id$(($op))?),*
+        }
+
+        #[derive(Copy, Clone, Debug)]
         pub enum TypedNode {
             $($Id($Id)),*
         }
 
         impl Node {
             pub fn downcast(self, ops: &OpVec) -> TypedNode {
-                #[allow(unused_variables)]
                 match &ops[self] {
-                    $($pattern => $Id(self).into()),*
+                    $(ite!(($($op)?) (Op::$Id(_)) (Op::$Id)) => $Id(self).into()),*
                 }
             }
         }
@@ -158,26 +167,26 @@ macro_rules! define_ids {
 }
 
 define_ids!(<'t>
-    Constant: to_constant, Ty<'t>, Op::Constant(n) => n;
-    Return: to_return, Op<'t>, n @ Op::Return => n;
-    Start: to_start, StartOp<'t>, Op::Start(n) => n;
-    Add: to_add, Op<'t>, n @ Op::Add => n;
-    Sub: to_sub, Op<'t>, n @ Op::Sub => n;
-    Mul: to_mul, Op<'t>, n @ Op::Mul => n;
-    Div: to_div, Op<'t>, n @ Op::Div => n;
-    Minus: to_minus, Op<'t>, n @ Op::Minus => n;
-    Scope: to_scope, ScopeOp<'t>, Op::Scope(n) => n;
-    Bool: to_bool, BoolOp, Op::Bool(n) => n;
-    Not: to_not, Op<'t>, n @ Op::Not => n;
-    Proj: to_proj, ProjOp<'t>, Op::Proj(n) => n;
-    If: to_if, Op<'t>, n @ Op::If => n;
-    Phi: to_phi, PhiOp<'t>, Op::Phi(n) => n;
-    Region: to_region, Op<'t>, n @ Op::Region => n;
-    Loop: to_loop, Op<'t>, n @ Op::Loop => n;
-    Stop: to_stop, Op<'t>, n @ Op::Stop => n;
-    Cast: to_cast, Ty<'t>, Op::Cast(n) => n;
-    Mem: to_mem_op, MemOp<'t>, Op::Mem(n) => n;
-    New: to_new, Ty<'t>, Op::New(n) => n;
+    Constant(Ty<'t>)   to_constant;
+    Return             to_return;
+    Start(StartOp<'t>) to_start;
+    Add                to_add;
+    Sub                to_sub;
+    Mul                to_mul;
+    Div                to_div;
+    Minus              to_minus;
+    Scope(ScopeOp<'t>) to_scope;
+    Bool(BoolOp)       to_bool;
+    Not                to_not;
+    Proj(ProjOp<'t>)   to_proj;
+    If                 to_if;
+    Phi(PhiOp<'t>)     to_phi;
+    Region             to_region;
+    Loop               to_loop;
+    Stop               to_stop;
+    Cast(Ty<'t>)       to_cast;
+    Mem(MemOp<'t>)     to_mem_op;
+    New(Ty<'t>)        to_new;
 );
 
 impl Start {

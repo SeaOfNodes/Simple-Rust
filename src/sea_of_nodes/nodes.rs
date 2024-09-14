@@ -2,7 +2,8 @@ use std::collections::HashMap;
 use std::num::NonZeroU32;
 
 pub use id::Node;
-pub use node::{BoolOp, Op, ProjOp, StartOp};
+pub use index::Op;
+pub use node::{BoolOp, ProjOp, StartOp};
 pub use scope::ScopeOp;
 
 use crate::datastructures::id_set::IdSet;

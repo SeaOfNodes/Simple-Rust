@@ -1,33 +1,8 @@
 use crate::sea_of_nodes::nodes::index::Start;
-use crate::sea_of_nodes::nodes::{Node, NodeCreation, ScopeOp};
+use crate::sea_of_nodes::nodes::{Node, NodeCreation, Op, ScopeOp};
 use crate::sea_of_nodes::types::{Ty, Type};
 use std::borrow::Cow;
 use std::collections::HashMap;
-
-/// Node specific operation
-#[derive(Clone, Debug)]
-pub enum Op<'t> {
-    Constant(Ty<'t>),
-    Return,
-    Start(StartOp<'t>),
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Minus,
-    Scope(ScopeOp<'t>),
-    Bool(BoolOp),
-    Not,
-    Proj(ProjOp<'t>),
-    If,
-    Phi(PhiOp<'t>),
-    Region,
-    Loop,
-    Stop,
-    Cast(Ty<'t>),
-    Mem(MemOp<'t>),
-    New(Ty<'t>),
-}
 
 #[derive(Clone, Debug)]
 pub struct StartOp<'t> {
