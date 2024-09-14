@@ -8,19 +8,17 @@ impl<'t> Node {
     #[must_use]
     pub fn peephole(self, sea: &mut Nodes<'t>) -> Node {
         if sea.disable_peephole {
-            sea.ty[self] = Some(sea.compute(self));
+            sea.ty[self] = Some(self.compute(sea));
             self // Peephole optimizations turned off
-        } else if let Some(n) = sea.peephole_opt(self) {
+        } else if let Some(n) = self.peephole_opt(sea) {
             let n = n.peephole(sea);
-            sea.dead_code_elimination(self, n);
+            self.dead_code_elimination(n, sea);
             n
         } else {
             self // Cannot return null for no-progress
         }
     }
-}
 
-impl<'t> Nodes<'t> {
     /// Try to peephole at this node and return a better replacement Node if
     /// possible.  We compute a {@link Type} and then check and replace:
     /// <ul>
@@ -38,97 +36,95 @@ impl<'t> Nodes<'t> {
     /// for a better replacement (which can be this).
     /// </ul>
     #[must_use]
-    pub fn peephole_opt(&mut self, node: Node) -> Option<Node> {
-        self.iter_cnt += 1;
+    pub fn peephole_opt(self, sea: &mut Nodes) -> Option<Node> {
+        sea.iter_cnt += 1;
 
         // Compute initial or improved Type
-        let ty = self.compute(node);
-        let old = self.set_type(node, ty);
+        let ty = self.compute(sea);
+        let old = self.set_type(ty, sea);
 
-        // println!("{:<3} {:<8} {:?}->{:?}", node, &self[node].label(), old, ty);
+        // println!("{:<3} {:<8} {:?}->{:?}", node, &sea[self].label(), old, ty);
 
         // Replace constant computations from non-constants with a constant node
-        if !matches!(self[node], Op::Constant(_)) && ty.is_high_or_constant() {
-            let constant = self.create(Op::make_constant(self.start, ty));
-            return self.peephole_opt(constant);
+        if self.to_constant(sea).is_none() && ty.is_high_or_constant() {
+            return sea
+                .create(Op::make_constant(sea.start, ty))
+                .peephole_opt(sea);
         }
 
         // Global Value Numbering
-        if let Some(replacement) = self.global_value_numbering(node) {
+        if let Some(replacement) = sea.global_value_numbering(self) {
             // Because of random worklist ordering, the two equal nodes
             // might have different types.  Because of monotonicity, both
             // types are valid.  To preserve monotonicity, the resulting
             // shared Node has to have the best of both types.
-            self.set_type(
-                replacement,
-                self.types.join(self.ty[replacement].unwrap(), ty),
-            );
-            self.dead_code_elimination(node, replacement);
+            replacement.set_type(sea.types.join(replacement.ty(sea).unwrap(), ty), sea);
+            self.dead_code_elimination(replacement, sea);
             return Some(replacement);
         }
 
         // Ask each node for a better replacement
-        if let idealized @ Some(_) = self.idealize(node) {
+        if let idealized @ Some(_) = sea.idealize(self) {
             return idealized; // Something changes, report progress
         }
 
-        if old == self.ty[node] {
-            self.iter_nop_cnt += 1;
+        if old == self.ty(sea) {
+            sea.iter_nop_cnt += 1;
             None
         } else {
-            Some(node) // Report progress
+            Some(self) // Report progress
         }
     }
 
     /// Set the type.  Assert monotonic progress.
     /// If changing, add users to worklist.
-    pub(crate) fn set_type(&mut self, node: Node, ty: Ty<'t>) -> Option<Ty<'t>> {
-        let old = self.ty[node];
+    pub(crate) fn set_type(self, ty: Ty<'t>, sea: &mut Nodes<'t>) -> Option<Ty<'t>> {
+        let old = self.ty(sea);
         if let Some(old) = old {
-            debug_assert!(self.types.isa(ty, old));
+            debug_assert!(sea.types.isa(ty, old));
         }
         if old == Some(ty) {
             return old;
         }
-        self.ty[node] = Some(ty); // Set _type late for easier assert debugging
+        sea.ty[self] = Some(ty); // Set _type late for easier assert debugging
 
-        for o in &self.outputs[node] {
-            self.iter_peeps.add(*o);
+        for o in &sea.outputs[self] {
+            sea.iter_peeps.add(*o);
         }
-        self.move_deps_to_worklist(node);
+        sea.move_deps_to_worklist(self);
         old
     }
 
-    fn dead_code_elimination(&mut self, old: Node, new: Node) {
-        if new != old && self.is_unused(old) && !self.is_dead(old) {
-            self.keep(new);
-            self.kill(old);
-            self.unkeep(new);
+    fn dead_code_elimination(self, new: Node, sea: &mut Nodes) {
+        if new != self && sea.is_unused(self) && !sea.is_dead(self) {
+            sea.keep(new);
+            sea.kill(self);
+            sea.unkeep(new);
         }
     }
 
-    pub(crate) fn compute(&mut self, node: Node) -> Ty<'t> {
-        let types = self.types;
-        match &self[node] {
+    pub(crate) fn compute(self, sea: &mut Nodes<'t>) -> Ty<'t> {
+        let types = sea.types;
+        match &sea[self] {
             Op::Constant(ty) => *ty,
             Op::Return => {
-                let ctrl = self.inputs[node][0]
-                    .and_then(|n| self.ty[n])
+                let ctrl = self.inputs(sea)[0]
+                    .and_then(|n| n.ty(sea))
                     .unwrap_or(types.ty_bot);
-                let expr = self.inputs[node][1]
-                    .and_then(|n| self.ty[n])
+                let expr = self.inputs(sea)[1]
+                    .and_then(|n| n.ty(sea))
                     .unwrap_or(types.ty_bot);
                 types.get_tuple_from_array([ctrl, expr])
             }
             Op::Start(s) => s.args,
-            Op::Add => self.compute_binary_int(node, i64::wrapping_add),
-            Op::Sub => self.compute_binary_int(node, i64::wrapping_sub),
-            Op::Mul => self.compute_binary_int(node, i64::wrapping_mul),
+            Op::Add => self.compute_binary_int(i64::wrapping_add, sea),
+            Op::Sub => self.compute_binary_int(i64::wrapping_sub, sea),
+            Op::Mul => self.compute_binary_int(i64::wrapping_mul, sea),
             Op::Div => {
-                self.compute_binary_int(node, |a, b| if b == 0 { 0 } else { a.wrapping_div(b) })
+                self.compute_binary_int(|a, b| if b == 0 { 0 } else { a.wrapping_div(b) }, sea)
             }
             Op::Minus => {
-                let Some(input) = self.inputs[node][1].and_then(|n| self.ty[n]) else {
+                let Some(input) = self.inputs(sea)[1].and_then(|n| n.ty(sea)) else {
                     return types.ty_bot;
                 };
                 match &*input {
@@ -137,9 +133,9 @@ impl<'t> Nodes<'t> {
                 }
             }
             Op::Scope(_) => types.ty_bot,
-            Op::Bool(op) => self.compute_binary_int(node, |x, y| op.compute(x, y) as i64),
+            Op::Bool(op) => self.compute_binary_int(|x, y| op.compute(x, y) as i64, sea),
             Op::Not => {
-                let Some(input) = self.inputs[node][1].and_then(|n| self.ty[n]) else {
+                let Some(input) = self.inputs(sea)[1].and_then(|n| n.ty(sea)) else {
                     return types.ty_bot;
                 };
                 match &*input {
@@ -150,7 +146,7 @@ impl<'t> Nodes<'t> {
                 }
             }
             Op::Proj(n) => {
-                let Some(input) = self.inputs[node][0].and_then(|n| self.ty[n]) else {
+                let Some(input) = self.inputs(sea)[0].and_then(|n| n.ty(sea)) else {
                     return types.ty_bot;
                 };
                 match &*input {
@@ -160,13 +156,13 @@ impl<'t> Nodes<'t> {
             }
             Op::If => {
                 // If the If node is not reachable then neither is any following Proj
-                let ctrl_ty = self.ty[self.inputs[node][0].unwrap()];
+                let ctrl_ty = self.inputs(sea)[0].unwrap().ty(sea);
                 if ctrl_ty != Some(types.ty_ctrl) && ctrl_ty != Some(types.ty_bot) {
                     return types.ty_if_neither;
                 }
 
-                let pred = self.inputs[node][1].unwrap();
-                let t = self.ty[pred].unwrap();
+                let pred = self.inputs(sea)[1].unwrap();
+                let t = pred.ty(sea).unwrap();
 
                 // High types mean NEITHER side is reachable.
                 // Wait until the type falls to decide which way to go.
@@ -187,11 +183,11 @@ impl<'t> Nodes<'t> {
                 // Hunt up the immediate dominator tree.  If we find an identical if
                 // test on either the true or false branch, then this test matches.
 
-                let mut dom = self.idom(node);
-                let mut prior = node;
+                let mut dom = sea.idom(self);
+                let mut prior = self;
                 while let Some(d) = dom {
-                    if matches!(&self[d], Op::If) && self.inputs[d][1].unwrap() == pred {
-                        return if let Op::Proj(proj) = &self[prior] {
+                    if matches!(&sea[d], Op::If) && d.inputs(sea)[1].unwrap() == pred {
+                        return if let Op::Proj(proj) = &sea[prior] {
                             // Repeated test, dominated on one side.  Test result is the same.
                             if proj.index == 0 {
                                 types.ty_if_true
@@ -200,68 +196,67 @@ impl<'t> Nodes<'t> {
                             }
                         } else {
                             // Repeated test not dominated on one side
-                            self.ty[d].unwrap()
+                            d.ty(sea).unwrap()
                         };
                     }
 
                     prior = d;
-                    dom = self.idom(d);
+                    dom = sea.idom(d);
                 }
 
                 types.ty_if_both
             }
             Op::Phi(_) => {
-                let region = self.inputs[node][0].unwrap();
-                if !self.instanceof_region(Some(region)) {
-                    if self.ty[region] == Some(types.ty_xctrl) {
+                let region = self.inputs(sea)[0].unwrap();
+                if !sea.instanceof_region(Some(region)) {
+                    if region.ty(sea) == Some(types.ty_xctrl) {
                         types.ty_top
                     } else {
-                        self.ty[node].unwrap()
+                        self.ty(sea).unwrap()
                     }
-                } else if Self::in_progress(&self.ops, &self.inputs, node) {
+                } else if Nodes::in_progress(&sea.ops, &sea.inputs, self) {
                     // During parsing Phis have to be computed type pessimistically.
-                    self[self.to_phi(node).unwrap()].ty
+                    sea[self.to_phi(sea).unwrap()].ty
                 } else {
                     // Set type to local top of the starting type
-                    let mut t = self
+                    let mut t = sea
                         .types
-                        .dual(self.types.glb(self[self.to_phi(node).unwrap()].ty));
+                        .dual(sea.types.glb(sea[self.to_phi(sea).unwrap()].ty));
 
-                    for i in 1..self.inputs[node].len() {
+                    for i in 1..self.inputs(sea).len() {
                         // If the region's control input is live, add this as a dependency
                         // to the control because we can be peeped should it become dead.
-                        let r_in_i = self.inputs[region][i].unwrap();
-                        self.add_dep(r_in_i, node);
-                        let in_i = self.inputs[node][i].unwrap();
-                        if self.ty[r_in_i] != Some(types.ty_xctrl) {
-                            t = types.meet(t, self.ty[in_i].unwrap())
+                        let r_in_i = region.inputs(sea)[i].unwrap();
+                        sea.add_dep(r_in_i, self);
+                        let in_i = self.inputs(sea)[i].unwrap();
+                        if r_in_i.ty(sea) != Some(types.ty_xctrl) {
+                            t = types.meet(t, in_i.ty(sea).unwrap())
                         }
                     }
                     t
                 }
             }
             Op::Region { .. } => {
-                if Self::in_progress(&self.ops, &self.inputs, node) {
+                if Nodes::in_progress(&sea.ops, &sea.inputs, self) {
                     types.ty_ctrl
                 } else {
-                    self.inputs[node]
+                    self.inputs(sea)
                         .iter()
                         .skip(1)
                         .fold(types.ty_xctrl, |t, n| {
-                            types.meet(t, self.ty[n.unwrap()].unwrap())
+                            types.meet(t, n.unwrap().ty(sea).unwrap())
                         })
                 }
             }
             Op::Loop => {
-                if Self::in_progress(&self.ops, &self.inputs, node) {
+                if Nodes::in_progress(&sea.ops, &sea.inputs, self) {
                     types.ty_ctrl
                 } else {
-                    let entry = self.inputs[node][1].unwrap();
-                    self.ty[entry].unwrap()
+                    self.inputs(sea)[1].unwrap().ty(sea).unwrap()
                 }
             }
             Op::Stop => types.ty_bot,
-            Op::Cast(t) => types.join(self.ty[self.inputs[node][1].unwrap()].unwrap(), *t),
+            Op::Cast(t) => types.join(self.inputs(sea)[1].unwrap().ty(sea).unwrap(), *t),
             Op::Mem(m) => match m.kind {
                 MemOpKind::Load { declared_type } => declared_type,
                 MemOpKind::Store => types.get_mem(m.alias),
@@ -270,12 +265,12 @@ impl<'t> Nodes<'t> {
         }
     }
 
-    fn compute_binary_int<F: FnOnce(i64, i64) -> i64>(&self, node: Node, op: F) -> Ty<'t> {
-        let types = self.types;
-        let Some(first) = self.inputs[node][1].and_then(|n| self.ty[n]) else {
+    fn compute_binary_int<F: FnOnce(i64, i64) -> i64>(self, op: F, sea: &Nodes<'t>) -> Ty<'t> {
+        let types = sea.types;
+        let Some(first) = self.inputs(sea)[1].and_then(|n| n.ty(sea)) else {
             return types.ty_bot;
         };
-        let Some(second) = self.inputs[node][2].and_then(|n| self.ty[n]) else {
+        let Some(second) = self.inputs(sea)[2].and_then(|n| n.ty(sea)) else {
             return types.ty_bot;
         };
 

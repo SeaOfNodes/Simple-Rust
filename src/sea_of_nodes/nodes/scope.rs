@@ -260,8 +260,8 @@ impl<'t> Scope {
             }
             // Upcast the ptr to not-null ptr, and replace in scope
             let c = sea.create_peepholed(Op::make_cast(sea.types.ty_pointer_void, ctrl, pred));
-            let t = sea.compute(c);
-            sea.set_type(c, t);
+            let t = c.compute(sea);
+            c.set_type(t, sea);
             self.replace(pred, Some(c), sea);
         }
 

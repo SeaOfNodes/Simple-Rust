@@ -88,15 +88,15 @@ impl<'t> Nodes<'t> {
                 continue;
             }
 
-            if let Some(x) = self.peephole_opt(n) {
+            if let Some(x) = n.peephole_opt(self) {
                 if self.is_dead(x) {
                     continue;
                 }
 
                 // peepholeOpt can return brand-new nodes, needing an initial type set
                 if self.ty[x].is_none() {
-                    let ty = self.compute(x);
-                    self.set_type(x, ty);
+                    let ty = x.compute(self);
+                    x.set_type(ty, self);
                 }
 
                 // Changes require neighbors onto the worklist
@@ -148,7 +148,7 @@ impl<'t> Nodes<'t> {
 
         let changed = self.walk_non_reentrant(stop, |nodes: &mut Self, n| {
             if !nodes.iter_peeps.work.on(n) {
-                if let Some(m) = nodes.peephole_opt(n) {
+                if let Some(m) = n.peephole_opt(nodes) {
                     println!("BREAK HERE FOR BUG");
                     return Some(m);
                 }
