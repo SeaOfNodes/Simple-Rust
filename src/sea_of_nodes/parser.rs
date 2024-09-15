@@ -461,7 +461,7 @@ impl<'s, 't> Parser<'s, 't> {
         // We could also use implicit knowledge that all memory projects are at offset >= 2
         let names = self.scope.reverse_names(&self.nodes);
         for name in names.into_iter().map(Option::unwrap) {
-            if name.starts_with("$") && name == "$ctrl" {
+            if name.starts_with("$") && name != "$ctrl" {
                 let v = self.scope.lookup(name, &mut self.nodes).unwrap();
                 self.nodes.add_def(ret, Some(v));
             }
