@@ -878,7 +878,7 @@ impl<'s, 't> Parser<'s, 't> {
     fn require_id(&mut self) -> PResult<&'s str> {
         let id = self.lexer.match_id();
         id.filter(|i| !is_keyword(i))
-            .ok_or_else(|| format!("Expected an identifier, found '{}'", id.unwrap_or("")))
+            .ok_or_else(|| format!("Expected an identifier, found '{}'", id.unwrap_or("null")))
     }
 
     fn require(&mut self, syntax: &str) -> PResult<()> {
