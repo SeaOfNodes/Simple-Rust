@@ -174,6 +174,7 @@ impl<'t> Scope {
         }
 
         sea.kill(*that);
+        sea.iter_peeps.add(region);
 
         sea.unkeep(region);
         region.peephole(sea)
@@ -214,7 +215,10 @@ impl<'t> Scope {
                     }
                     sea.move_deps_to_worklist(phi);
                     if in_ != phi {
-                        sea.subsume(phi, in_);
+                        // Keeping phi around for parser elsewhere
+                        if !sea.is_keep(phi) {
+                            sea.subsume(phi, in_);
+                        }
                         sea.set_def(*self, i, Some(in_)); // Set the update back into Scope
                     }
                 }
