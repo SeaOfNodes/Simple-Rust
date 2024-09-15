@@ -72,6 +72,8 @@ impl Node {
                 !Nodes::in_progress(ops, inputs, self)
             }
             (Op::Proj(p1), Op::Proj(p2)) => p1.index == p2.index,
+            (Op::Mem(m1), Op::Mem(m2)) => m1.alias == m2.alias,
+            (Op::New(_), Op::New(_)) => false,
             _ => true,
         }
     }
@@ -87,6 +89,7 @@ impl Node {
         match &sea[self] {
             Op::Constant(c) => c.hash(h),
             Op::Proj(p) => p.index.hash(h),
+            Op::Mem(m) => m.alias.hash(h),
             _ => {}
         };
         self.inputs(sea).hash(h);
