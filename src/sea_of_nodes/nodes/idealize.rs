@@ -379,11 +379,12 @@ impl<'t> Nodes<'t> {
             return None;
         }
 
+        // Delete dead paths into a Region
         if let Some(path) = self.find_dead_input(node) {
-            //             // Do not delete the entry path of a loop (ok to remove the back
-            //             // edge and make the loop a single-entry Region which folds away
-            //             // the Loop).  Folding the entry path confused the loop structure,
-            //             // moving the backedge to the entry point.
+            // Do not delete the entry path of a loop (ok to remove the back
+            // edge and make the loop a single-entry Region which folds away
+            // the Loop).  Folding the entry path confused the loop structure,
+            // moving the backedge to the entry point.
             if !(matches!(&self[node], Op::Loop) && self.inputs[node][1] == self.inputs[node][path])
             {
                 // Cannot use the obvious output iterator here, because a Phi
@@ -401,6 +402,9 @@ impl<'t> Nodes<'t> {
                             && self.inputs[node].len() == self.inputs[phi].len()
                         {
                             self.del_def(phi, path);
+                            for &o in &self.outputs[phi] {
+                                self.iter_peeps.add(o);
+                            }
                         }
                     }
                 }
@@ -416,10 +420,24 @@ impl<'t> Nodes<'t> {
 
         // If down to a single input, become that input - but also make all
         if self.inputs[node].len() == 2 && !self.has_phi(node) {
-            self.inputs[node][1]
-        } else {
-            None
+            return self.inputs[node][1]; // Collapse if no Phis; 1-input Phis will collapse on their own
         }
+
+        // If a CFG diamond with no merging, delete: "if( pred ) {} else {};"
+        if !self.has_phi(node) {
+            // No Phi users, just a control user
+            if let Some(p1) = node.inputs(self)[1].and_then(|n| n.to_proj(self)) {
+                if let Some(p2) = node.inputs(self)[2].and_then(|n| n.to_proj(self)) {
+                    if p1.inputs(self)[0] == p2.inputs(self)[0] {
+                        if let Some(iff) = p1.inputs(self)[0].and_then(|n| n.to_if(self)) {
+                            return iff.inputs(self)[0];
+                        }
+                    }
+                }
+            }
+        }
+
+        None
     }
 
     fn has_phi(&self, node: Node) -> bool {
