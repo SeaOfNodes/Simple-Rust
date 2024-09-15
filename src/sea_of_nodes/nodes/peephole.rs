@@ -135,14 +135,36 @@ impl<'t> Node {
             Op::Scope(_) => types.ty_bot,
             Op::Bool(op) => self.compute_binary_int(|x, y| op.compute(x, y) as i64, sea),
             Op::Not => {
-                let Some(input) = self.inputs(sea)[1].and_then(|n| n.ty(sea)) else {
-                    return types.ty_bot;
-                };
-                match &*input {
-                    Type::Int(Int::Constant(0)) => types.ty_int_one,
-                    Type::Int(Int::Constant(_)) => types.ty_int_zero,
-                    Type::Int(_) => input,
-                    _ => types.meet(types.ty_top, input),
+                let t0 = self.inputs(sea)[1].unwrap().ty(sea).unwrap();
+                match &*t0 {
+                    Type::Int(i) => match i {
+                        Int::Constant(0) => types.ty_int_one,
+                        Int::Constant(_) => types.ty_int_zero,
+                        _ => t0,
+                    },
+                    Type::Pointer(p) => {
+                        // top->top, bot->bot, null->1, *void->0, not-null ptr->0, ptr/nil->bot
+                        // If input in null then true
+                        // If input is not null ptr then false
+                        if t0 == types.ty_pointer_top {
+                            types.ty_int_top
+                        } else if t0 == types.ty_pointer_null {
+                            types.ty_int_one
+                        } else if !p.nil {
+                            types.ty_int_zero
+                        } else {
+                            types.ty_int_bot
+                        }
+                    }
+                    _ => {
+                        // Only doing NOT on ints and ptrs
+                        assert!(t0 == types.ty_top || t0 == types.ty_bot);
+                        if t0 == types.ty_top {
+                            t0
+                        } else {
+                            types.ty_bot
+                        }
+                    }
                 }
             }
             Op::Proj(n) => {
