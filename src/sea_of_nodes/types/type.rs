@@ -35,6 +35,23 @@ pub enum Struct<'t> {
     },
 }
 
+impl<'t> Struct<'t> {
+    pub fn name(&self) -> &'t str {
+        match self {
+            Struct::Bot => "$BOT",
+            Struct::Top => "$TOP",
+            Struct::Struct { name, .. } => name,
+        }
+    }
+
+    pub fn fields(&self) -> &[(&'t str, Ty<'t>)] {
+        match self {
+            Struct::Bot | Struct::Top => &[],
+            Struct::Struct { fields, .. } => fields,
+        }
+    }
+}
+
 #[derive(Eq, PartialEq, Copy, Clone, Hash, Debug)]
 pub struct MemPtr<'t> {
     /// points to Type::Struct
@@ -90,11 +107,7 @@ impl<'t> Type<'t> {
                 Int::Constant(c) => Owned(c.to_string()),
             },
             Type::Tuple { .. } => Owned(self.to_string()),
-            Type::Struct(s) => Borrowed(match s {
-                Struct::Bot => "$BOT",
-                Struct::Top => "$TOP",
-                Struct::Struct { name, .. } => name,
-            }),
+            Type::Struct(s) => Borrowed(s.name()),
             Type::Pointer(p) => {
                 if *p.to == Type::Struct(Struct::Top) && p.nil {
                     Borrowed("null")

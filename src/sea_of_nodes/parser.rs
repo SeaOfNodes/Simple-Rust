@@ -801,17 +801,13 @@ impl<'s, 't> Parser<'s, 't> {
                 expr_ty.str()
             ));
         };
-        let Type::Struct(Struct::Struct {
-            name: sname,
-            fields,
-        }) = *ptr.to
-        else {
-            unreachable!()
+        let Type::Struct(s) = *ptr.to else {
+            unreachable!("{ptr:?}")
         };
 
         let name = self.types.get_str(self.require_id()?);
 
-        let Some(idx) = fields.iter().position(|&f| f.0 == name) else {
+        let Some(idx) = s.fields().iter().position(|&f| f.0 == name) else {
             return Err(format!(
                 "Accessing unknown field '{name}' from '{}'",
                 expr_ty.str()
@@ -820,7 +816,7 @@ impl<'s, 't> Parser<'s, 't> {
 
         let alias = self.nodes[self.nodes.start]
             .alias_starts
-            .get(sname)
+            .get(s.name())
             .unwrap()
             + idx as u32;
 
@@ -839,7 +835,7 @@ impl<'s, 't> Parser<'s, 't> {
             }
         }
 
-        let declared_type = fields[idx].1;
+        let declared_type = s.fields()[idx].1;
         let mem_slice = self.mem_alias_lookup(alias).unwrap();
         let load = self.peephole(Op::make_load(name, alias, declared_type, [mem_slice, expr]));
         self.parse_postfix(load)
