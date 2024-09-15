@@ -396,7 +396,10 @@ impl<'t> Nodes<'t> {
                 while nouts != self.outputs[node].len() {
                     nouts = self.outputs[node].len();
 
-                    for i in 0..nouts {
+                    for i in 0.. {
+                        if i >= self.outputs[node].len() {
+                            break;
+                        }
                         let phi = self.outputs[node][i];
                         if matches!(&self[phi], Op::Phi(_))
                             && self.inputs[node].len() == self.inputs[phi].len()
