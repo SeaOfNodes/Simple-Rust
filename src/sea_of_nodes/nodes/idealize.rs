@@ -507,10 +507,54 @@ impl<'t> Nodes<'t> {
     }
 
     fn idealize_store(&mut self, node: Node) -> Option<Node> {
-        let Op::Mem(mem_op) = &self[node] else {
-            unreachable!()
-        };
-        todo!("{node}{mem_op:?}")
+        // Simple store-after-store on same address.  Should pick up the
+        // required init-store being stomped by a first user store.
+        let mem = node.inputs(self)[1]?;
+        let ptr = node.inputs(self)[2]?;
+
+        if let Op::Mem(MemOp {
+            kind: MemOpKind::Store,
+            ..
+        }) = self[mem]
+        {
+            let store_ptr = self.inputs[mem][2]?;
+            // Must check same object
+            if ptr == store_ptr {
+                // No bother if weird dead pointers
+                if let Some(Type::Pointer(_)) = ptr.ty(self).as_deref() {
+                    // Must have exactly one use of "this" or you get weird
+                    // non-serializable memory effects in the worse case.
+                    if Self::check_no_use_beyond(mem, node, self) {
+                        debug_assert!({
+                            let x = node.to_mem_op(self).unwrap();
+                            let y = mem.to_mem_op(self).unwrap();
+                            self[x].name == self[y].name // Equiv class aliasing is perfect
+                        });
+                        let st_mem = mem.inputs(self)[1];
+                        self.set_def(node, 1, st_mem);
+                        return Some(node);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    // Check that `this` has no uses beyond `that`
+    fn check_no_use_beyond(this: Node, that: Node, sea: &mut Nodes) -> bool {
+        let n_outs = sea.outputs[this].len();
+        if n_outs == 1 {
+            return true;
+        }
+        // Add deps on the other uses (can be e.g. ScopeNode mid-parse) so that
+        // when the other uses go away we can retry.
+        for i in 0..n_outs {
+            let use_ = sea.outputs[this][i];
+            if use_ != that {
+                sea.add_dep(use_, that);
+            }
+        }
+        false
     }
 
     fn idealize_minus(&mut self, node: Node) -> Option<Node> {
