@@ -3,7 +3,7 @@ use std::num::NonZeroU32;
 
 pub use id::Node;
 pub use index::Op;
-pub use node::{BoolOp, ProjOp, StartOp};
+pub use node::{BoolOp, MemOp, MemOpKind, ProjOp, StartOp};
 pub use scope::ScopeOp;
 
 use crate::datastructures::id_set::IdSet;
@@ -439,7 +439,7 @@ impl<'t> Nodes<'t> {
                 self.idepth[node] = d;
                 return d;
             }
-            Op::Loop => 1,
+            Op::Loop => 1, // Bypass Region idom, same as the default idom() using use entry in(1) instead of in(0)
             _ => 0,
         };
         self.idepth[node] = self.idepth(self.inputs[node][index].unwrap()) + 1;

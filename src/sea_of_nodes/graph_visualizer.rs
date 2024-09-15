@@ -6,7 +6,8 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use crate::sea_of_nodes::nodes::index::{Scope, Stop};
-use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
+use crate::sea_of_nodes::nodes::{MemOpKind, Node, Nodes, Op};
+use crate::sea_of_nodes::types::Type;
 
 pub fn run_graphviz_and_chromium(input: String) {
     let child = Command::new(&"bash")
@@ -227,6 +228,17 @@ fn make_port_name(scope_name: &str, var_name: &str) -> String {
     format!("{scope_name}_{var_name}")
 }
 
+impl Node {
+    fn is_mem(self, sea: &Nodes) -> bool {
+        match &sea[self] {
+            Op::Phi(p) => matches!(*p.ty, Type::Memory(_)),
+            Op::Proj(_) => matches!(self.ty(sea).as_deref(), Some(Type::Memory(_))),
+            Op::Mem(m) => matches!(m.kind, MemOpKind::Store),
+            _ => false,
+        }
+    }
+}
+
 fn node_edges(sb: &mut String, nodes: &Nodes, all: &HashSet<Node>) -> fmt::Result {
     writeln!(sb, "\tedge [ fontname=Helvetica, fontsize=8 ];")?;
     for &n in all.iter() {
@@ -254,7 +266,7 @@ fn node_edges(sb: &mut String, nodes: &Nodes, all: &HashSet<Node>) -> fmt::Resul
                 write!(sb, " color=green")?;
             } else if nodes.is_cfg(def) {
                 write!(sb, " color=red")?;
-            } else if def.to_mem_op(nodes).is_some() {
+            } else if def.is_mem(nodes) {
                 write!(sb, " color=blue")?;
             }
 
