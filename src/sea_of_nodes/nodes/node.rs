@@ -1,5 +1,5 @@
-use crate::sea_of_nodes::nodes::index::Start;
-use crate::sea_of_nodes::nodes::{Node, NodeCreation, Op, ScopeOp};
+use crate::sea_of_nodes::nodes::index::{If, Start};
+use crate::sea_of_nodes::nodes::{Node, NodeCreation, Nodes, Op, ScopeOp};
 use crate::sea_of_nodes::types::{Ty, Type};
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -242,11 +242,17 @@ impl<'t> Op<'t> {
     pub fn make_proj<N: Into<Node>>(ctrl: N, index: usize, label: &'t str) -> NodeCreation<'t> {
         (Op::Proj(ProjOp { index, label }), vec![Some(ctrl.into())])
     }
+}
 
-    pub fn make_if(ctrl: Node, pred: Node) -> NodeCreation<'t> {
-        (Op::If, vec![Some(ctrl), Some(pred)])
+impl If {
+    pub fn new(ctrl: Node, pred: Node, sea: &mut Nodes) -> Self {
+        let this = sea.create((Op::If, vec![Some(ctrl), Some(pred)]));
+        sea.iter_peeps.add(this); // Because idoms are complex, just add it
+        this.to_if(sea).unwrap()
     }
+}
 
+impl<'t> Op<'t> {
     pub fn make_phi(label: &'t str, ty: Ty<'t>, inputs: Vec<Option<Node>>) -> NodeCreation<'t> {
         (Op::Phi(PhiOp { label, ty }), inputs)
     }

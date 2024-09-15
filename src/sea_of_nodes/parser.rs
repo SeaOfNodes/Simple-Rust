@@ -1,5 +1,5 @@
 use crate::sea_of_nodes::graph_visualizer;
-use crate::sea_of_nodes::nodes::index::{Scope, Stop};
+use crate::sea_of_nodes::nodes::index::{If, Scope, Stop};
 use crate::sea_of_nodes::nodes::{BoolOp, Node, NodeCreation, Nodes, Op, ScopeOp};
 use crate::sea_of_nodes::types::{Struct, Ty, Type, Types};
 use std::collections::HashMap;
@@ -274,7 +274,7 @@ impl<'s, 't> Parser<'s, 't> {
         self.require(")")?;
 
         // IfNode takes current control and predicate
-        let if_node = self.peephole(Op::make_if(ctrl, pred));
+        let if_node = If::new(ctrl, pred, &mut self.nodes).peephole(&mut self.nodes);
 
         // Setup projection nodes
         self.nodes.keep(if_node);
@@ -392,8 +392,7 @@ impl<'s, 't> Parser<'s, 't> {
         self.nodes.keep(pred);
 
         // IfNode takes current control and predicate
-        let if_ctrl = self.ctrl();
-        let if_node = self.peephole(Op::make_if(if_ctrl, pred));
+        let if_node = If::new(self.ctrl(), pred, &mut self.nodes).peephole(&mut self.nodes);
 
         // Setup projection nodes
         self.nodes.keep(if_node);
