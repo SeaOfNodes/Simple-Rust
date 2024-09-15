@@ -499,19 +499,21 @@ impl<'t> Nodes<'t> {
     pub fn instanceof_region(&self, node: Option<Node>) -> bool {
         node.is_some_and(|n| matches!(&self[n], Op::Region { .. } | Op::Loop))
     }
+}
 
+impl Start {
     /// Creates a projection for each of the struct's fields, using the field alias
     /// as the key.
-    pub fn add_mem_proj(&mut self, start: Start, ts: Ty<'t>, scope: Scope) {
+    pub fn add_mem_proj<'t>(self, ts: Ty<'t>, scope: Scope, sea: &mut Nodes<'t>) {
         let Type::Struct(Struct::Struct { name, fields }) = *ts else {
             unreachable!()
         };
-        let Type::Tuple { types } = *self[start].args else {
+        let Type::Tuple { types } = *sea[self].args else {
             unreachable!()
         };
 
         let len = types.len();
-        self[start].alias_starts.insert(name, len as u32);
+        sea[self].alias_starts.insert(name, len as u32);
 
         // resize the tuple's type array to include all fields of the struct
         let args = types
@@ -519,20 +521,20 @@ impl<'t> Nodes<'t> {
             .copied()
             .chain(fields.iter().enumerate().map(|(i, _)| {
                 // The new members of the tuple get a mem type with an alias
-                self.types.get_mem((i + types.len()) as u32)
+                sea.types.get_mem((i + types.len()) as u32)
             }))
             .collect::<Vec<Ty>>();
 
-        let args_ty = self.types.get_tuple_from_slice(&args);
-        self.ops[start].args = args_ty;
-        self.ty[start] = Some(args_ty);
+        let args_ty = sea.types.get_tuple_from_slice(&args);
+        sea.ops[self].args = args_ty;
+        sea.ty[self] = Some(args_ty);
 
         // For each of the fields we now add a mem projection.  Note that the
         // alias matches the slot of the field in the tuple
         for (alias, &alias_ty) in args[len..].iter().enumerate() {
-            let name = self.types.get_str(&Parser::mem_name(alias as u32));
-            let n = self.create_peepholed(Op::make_proj(start, alias, name));
-            scope.define(name, alias_ty, n, self).unwrap()
+            let name = sea.types.get_str(&Parser::mem_name(alias as u32));
+            let n = sea.create_peepholed(Op::make_proj(self, alias, name));
+            scope.define(name, alias_ty, n, sea).unwrap()
         }
     }
 }

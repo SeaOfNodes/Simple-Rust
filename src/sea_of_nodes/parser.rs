@@ -231,7 +231,9 @@ impl<'s, 't> Parser<'s, 't> {
         // Build and install the TypeStruct
         let ts = self.types.get_struct(type_name, &fields);
         self.name_to_type.insert(type_name, ts); // Insert the struct name in the collection of all struct names
-        self.nodes.add_mem_proj(self.nodes.start, ts, self.scope); // Insert memory edges
+        self.nodes
+            .start
+            .add_mem_proj(ts, self.scope, &mut self.nodes); // Insert memory edges
         self.parse_statement()
     }
 
