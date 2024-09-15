@@ -142,7 +142,8 @@ return bar.a;
 
 #[test]
 fn test_if() {
-    test_error_iterate(
+    // NOTE we don't call iterate because this is a parse error
+    test_error(
         "\
 struct Bar { int a; }
 Bar bar = new Bar;

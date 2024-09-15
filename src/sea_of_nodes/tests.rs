@@ -31,7 +31,6 @@ fn test_error_iterate(source: &str, error: &str) {
     let mut parser = Parser::new(source, &types);
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.type_check(stop).unwrap();
     assert_eq!(parser.type_check(stop), Err(error.to_string()),);
 }
 
