@@ -1,5 +1,5 @@
 use crate::datastructures::id::Id;
-use crate::sea_of_nodes::nodes::index::Phi;
+use crate::sea_of_nodes::nodes::index::{If, Phi};
 use crate::sea_of_nodes::nodes::node::{MemOp, MemOpKind, PhiOp};
 use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes, Op};
 use crate::sea_of_nodes::types::{Int, Ty, Type};
@@ -345,10 +345,32 @@ impl<'t> Nodes<'t> {
                 ); // We are dead
             }
             // Only true for IfNodes
-            if ts[1 - index] == self.types.ty_xctrl {
+            if node.inputs(self)[0].unwrap().to_if(self).is_some()
+                && ts[1 - index] == self.types.ty_xctrl
+            {
                 return self.inputs[self.inputs[node][0].unwrap()][0]; // We become our input control
             }
         }
+
+        // Flip a negating if-test, to remove the not
+        if let Some(iff) = node.inputs(self)[0]?.to_if(self) {
+            let pred = iff.inputs(self)[1].unwrap();
+            self.add_dep(pred, node);
+            if let Some(not) = pred.to_not(self) {
+                let i = If::new(
+                    iff.inputs(self)[0].unwrap(),
+                    not.inputs(self)[1].unwrap(),
+                    self,
+                )
+                .peephole(self);
+                return Some(self.create(Op::make_proj(
+                    i,
+                    1 - index,
+                    if index == 0 { "False" } else { "True" },
+                )));
+            }
+        }
+
         None
     }
 
