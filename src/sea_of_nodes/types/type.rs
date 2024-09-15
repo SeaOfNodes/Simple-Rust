@@ -136,7 +136,7 @@ impl<'t> Display for Type<'t> {
                 write!(f, "[")?;
                 for (i, ty) in types.iter().enumerate() {
                     if i > 0 {
-                        write!(f, ", ")?;
+                        write!(f, ",")?;
                     }
                     write!(f, "{ty}")?;
                 }
