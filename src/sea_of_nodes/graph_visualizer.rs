@@ -67,9 +67,8 @@ pub fn generate_dot_output(
     let mut sb = String::new();
     writeln!(sb, "digraph \"{}\" {{", source.replace("\"", "\\\""))?;
 
-    // TODO write /* file.ro */
     writeln!(sb, "\trankdir=BT;")?;
-    writeln!(sb, "\tordering=\"in\";")?;
+    // writeln!(sb, "\tordering=\"in\";")?;
     writeln!(sb, "\tconcentrate=\"true\";")?;
     do_nodes(&mut sb, nodes, &all, separate_control_cluster)?;
     for &scope in x_scopes {
@@ -250,6 +249,14 @@ fn node_edges(sb: &mut String, nodes: &Nodes, all: &HashSet<Node>) -> fmt::Resul
             write!(sb, "\t{} -> {}", nodes.unique_name(n), def_name(nodes, def))?;
 
             write!(sb, "[taillabel={i}")?;
+
+            if n.to_new(nodes).is_some() {
+                write!(sb, " color=green")?;
+            } else if nodes.is_cfg(def) {
+                write!(sb, " color=red")?;
+            } else if def.to_mem_op(nodes).is_some() {
+                write!(sb, " color=blue")?;
+            }
 
             if matches!(nodes[n], Op::Constant(_)) && matches!(nodes[def], Op::Start { .. }) {
                 write!(sb, " style=dotted")?;
