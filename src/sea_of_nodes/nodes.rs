@@ -531,7 +531,7 @@ impl Start {
 
         // For each of the fields we now add a mem projection.  Note that the
         // alias matches the slot of the field in the tuple
-        for (alias, &alias_ty) in args[len..].iter().enumerate() {
+        for (alias, &alias_ty) in args.iter().enumerate().skip(len) {
             let name = sea.types.get_str(&Parser::mem_name(alias as u32));
             let n = sea.create_peepholed(Op::make_proj(self, alias, name));
             scope.define(name, alias_ty, n, sea).unwrap()
