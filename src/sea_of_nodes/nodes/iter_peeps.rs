@@ -124,7 +124,7 @@ impl<'t> Nodes<'t> {
                 self.move_deps_to_worklist(n);
                 debug_assert!(self.progress_on_list(*stop)); // Very expensive assert
             }
-            if self.is_unused(n) && self.to_stop(n).is_some() {
+            if self.is_unused(n) && self.to_stop(n).is_none() {
                 self.kill(n); // just plain dead
             }
         }
