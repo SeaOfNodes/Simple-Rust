@@ -25,6 +25,7 @@ return arg;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
 
     assert_eq!(
         "return Phi(Region36,Phi(Region25,Phi(Loop6,arg,(Phi_arg+1)),Add),Add);",
@@ -59,6 +60,7 @@ return a;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
 
     assert_eq!(
         "return Phi(Loop7,1,Phi(Region42,Phi_a,(Phi_a+1)));",
@@ -88,6 +90,7 @@ return arg;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
 
     assert_eq!(
         "return Phi(Region34,Phi(Loop6,arg,(Phi_arg+1)),Add);",
@@ -114,6 +117,7 @@ return arg;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
 
     assert_eq!(
         "return Phi(Region25,Phi(Loop6,arg,(Phi_arg+1)),Add);",
@@ -142,6 +146,7 @@ return arg;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
 
     assert_eq!("return Phi(Loop6,arg,(Phi_arg+1));", parser.print(stop));
     assert!(matches!(parser.nodes.ret_ctrl(stop), Op::Proj(_)));
@@ -165,6 +170,7 @@ return arg;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
 
     assert_eq!("return Phi(Loop6,arg,(Phi_arg+1));", parser.print(stop));
     assert!(matches!(parser.nodes.ret_ctrl(stop), Op::Proj(_)));
@@ -188,6 +194,7 @@ return arg;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
 
     assert_eq!("return arg;", parser.print(stop));
     println!("{}", ir_printer::pretty_print(&parser.nodes, stop, 99));
@@ -203,7 +210,7 @@ fn test_regress2() {
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-
+    parser.type_check(stop).unwrap();
     parser.show_graph();
 
     assert_eq!(parser.print(stop), "return 0;");
@@ -238,7 +245,7 @@ return arg;
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-
+    parser.type_check(stop).unwrap();
     parser.show_graph();
 
     assert_eq!(parser.print(stop), "return arg;");
@@ -265,6 +272,7 @@ return a;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
 
     assert_eq!(
         "return Phi(Region28,Phi(Loop7,1,(Phi_a+1)),Add);",
@@ -292,6 +300,7 @@ return a;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
 
     assert_eq!("return (Phi(Loop7,1,Add)+1);", parser.print(stop));
     assert!(matches!(

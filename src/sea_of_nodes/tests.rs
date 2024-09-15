@@ -28,7 +28,11 @@ fn test_error_iterate(source: &str, error: &str) {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
 
-    assert_eq!(Parser::new(source, &types).parse(), Err(error.to_string()),);
+    let mut parser = Parser::new(source, &types);
+    let stop = parser.parse().unwrap();
+    parser.iterate(stop);
+    parser.type_check(stop).unwrap();
+    assert_eq!(parser.type_check(stop), Err(error.to_string()),);
 }
 
 impl<'t> Nodes<'t> {

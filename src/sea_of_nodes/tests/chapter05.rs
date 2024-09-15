@@ -23,6 +23,7 @@ return a;",
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!(parser.print(stop), "return Phi(Region18,(arg+2),(arg-3));");
 }
 
@@ -44,6 +45,7 @@ return c;",
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!(parser.print(stop), "return Phi(Region16,4,3);");
 }
 #[test]
@@ -80,6 +82,7 @@ return a+b;",
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!(parser.print(stop), "return ((arg*2)+Phi(Region21,2,3));");
 }
 #[test]
@@ -100,6 +103,7 @@ return a+b;",
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!(
         parser.print(stop),
         "return ((Phi(Region32,(arg*2),arg)+arg)+Phi(Region,4,5));"
@@ -127,6 +131,7 @@ return a;
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
+    parser.type_check(stop).unwrap();
     assert_eq!(
         parser.print(stop),
         "return Phi(Region36,Phi(Region22,2,3),Phi(Region34,4,5));"
@@ -170,6 +175,7 @@ return a;",
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
+    parser.type_check(stop).unwrap();
     assert_eq!(parser.print(stop), "return (arg==Phi(Region16,3,2));");
 }
 #[test]

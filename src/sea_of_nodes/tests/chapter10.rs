@@ -33,6 +33,7 @@ return p-r;
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
+    parser.type_check(stop).unwrap();
     assert_eq!(parser.print(stop), "return 0;");
 }
 
@@ -60,6 +61,7 @@ return bar.a;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     println!("{}", pretty_print_llvm(&parser.nodes, stop, 99));
     assert_eq!(parser.print(stop), "return 2;");
 }
@@ -85,6 +87,7 @@ return v;
     parser.show_graph();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     println!("{}", pretty_print_llvm(&parser.nodes, stop, 99));
     assert_eq!(parser.print(stop), "return new Vector2D;");
 }
@@ -133,6 +136,7 @@ return bar.a;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!(parser.print(stop), "return Phi(Loop10,0,(Phi_a+2));");
 }
 
@@ -195,6 +199,7 @@ return bar;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!(parser.print(stop), "return Phi(Region15,null,new Bar);");
 }
 
@@ -217,6 +222,7 @@ return rez;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!(parser.print(stop), "return Phi(Region32,4,3);");
 }
 
@@ -277,6 +283,7 @@ return sum;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!(
         parser.print(stop),
         "return Phi(Loop14,0,(Phi(Loop,0,(Phi_x+1))+Phi_sum));"
@@ -306,6 +313,7 @@ return ret;
     parser.show_graph();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     println!("{}", pretty_print_llvm(&parser.nodes, stop, 99));
     assert_eq!(
         parser.print(stop),
@@ -336,6 +344,7 @@ return ret;
     parser.show_graph();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     println!("{}", pretty_print_llvm(&parser.nodes, stop, 99));
     assert_eq!(
         parser.print(stop),
@@ -364,6 +373,7 @@ return ret;
     parser.show_graph();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     println!("{}", pretty_print_llvm(&parser.nodes, stop, 99));
     assert_eq!(
         parser.print(stop),
@@ -407,6 +417,7 @@ if(0) {
     parser.show_graph();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!(parser.print(stop), "Stop[ ]");
 }
 
@@ -429,6 +440,7 @@ if(new s0.f0) return 0;
     parser.show_graph();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!(parser.print(stop), "return new s0;");
 }
 
@@ -452,6 +464,7 @@ return 0;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
 }
 
 #[test]
@@ -471,6 +484,7 @@ return v1;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!(parser.print(stop), "return new s0;");
 }
 
@@ -509,6 +523,7 @@ while(0) {}
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!(parser.print(stop), "Stop[ ]");
 }
 
@@ -527,5 +542,6 @@ return 0;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!(parser.print(stop), "return 0;");
 }

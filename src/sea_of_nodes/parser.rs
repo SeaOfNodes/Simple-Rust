@@ -139,6 +139,10 @@ impl<'s, 't> Parser<'s, 't> {
         self.nodes.iterate(stop)
     }
 
+    pub fn type_check(&mut self, stop: Stop) -> Result<(), String> {
+        self.nodes.type_check(stop)
+    }
+
     /// <pre>
     ///     '{' statements '}'
     /// </pre>

@@ -130,6 +130,13 @@ impl<'t> Nodes<'t> {
         }
     }
 
+    pub fn type_check(&mut self, stop: Stop) -> Result<(), String> {
+        match self.walk_non_reentrant(*stop, |sea, n| sea.err(n)) {
+            Some(err) => Err(err),
+            None => Ok(()),
+        }
+    }
+
     /// Visit ALL nodes and confirm the invariant:
     ///   Either you are on the WORK worklist OR running `iter()` makes no progress.
     ///

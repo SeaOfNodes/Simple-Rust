@@ -457,7 +457,7 @@ impl<'t> Nodes<'t> {
 
     /// Utility to walk the entire graph applying a function; return the first
     /// not-null result.
-    fn walk_non_reentrant<T, F: FnMut(&mut Self, Node) -> Option<T>>(
+    pub(crate) fn walk_non_reentrant<T, F: FnMut(&mut Self, Node) -> Option<T>>(
         &mut self,
         node: Node,
         mut f: F,

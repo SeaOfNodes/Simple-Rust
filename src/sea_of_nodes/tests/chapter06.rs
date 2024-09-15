@@ -17,6 +17,7 @@ return 1;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!("return 2;", parser.print(stop));
 
     let ret = parser.nodes.unique_input(*stop).unwrap();
@@ -40,6 +41,7 @@ return (arg < a) < 3;
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
+    parser.type_check(stop).unwrap();
     assert_eq!(parser.print(stop), "return ((arg<Phi(Region12,2,1))<3);");
 }
 
@@ -61,6 +63,7 @@ return a;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!("return 2;", parser.print(stop));
 
     let ret = parser.nodes.unique_input(*stop).unwrap();
@@ -91,6 +94,7 @@ return b;",
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!(parser.print(stop), "return Phi(Region37,42,5);");
 }
 
@@ -116,6 +120,7 @@ return b;",
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!(parser.print(stop), "return Phi(Region30,2,5);");
 }
 
@@ -169,6 +174,7 @@ return a;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!(parser.print(stop), "return 3;");
 }
 
@@ -194,6 +200,7 @@ fn test_merge3_peephole() {
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!(
         parser.print(stop),
         "return Phi(Region41,3,Phi(Region39,4,5));"
@@ -208,6 +215,7 @@ fn test_merge3_peephole1() {
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!(parser.print(stop), "return 3;");
 }
 
@@ -219,6 +227,7 @@ fn test_merge3_peephole3() {
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!(parser.print(stop), "return 4;");
 }
 
@@ -241,6 +250,7 @@ fn test_demo1_non_const() {
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!(parser.print(stop), "return Phi(Region24,4,1);");
 }
 
@@ -252,6 +262,7 @@ fn test_demo1_true() {
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!(parser.print(stop), "return 4;");
 }
 
@@ -263,6 +274,7 @@ fn test_demo1_false() {
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!(parser.print(stop), "return 1;");
 }
 
@@ -287,6 +299,7 @@ fn test_demo2_non_const() {
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!(
         parser.print(stop),
         "return (Phi(Region36,Phi(Region23,2,3),0)+Phi(Region,3,1));"
@@ -301,6 +314,7 @@ fn test_demo2_true() {
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!(parser.print(stop), "return 6;");
 }
 
@@ -312,5 +326,6 @@ fn test_demo2_arg2() {
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!(parser.print(stop), "return 5;");
 }

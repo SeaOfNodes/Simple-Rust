@@ -23,6 +23,7 @@ return 0;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
 }
 
 #[test]
@@ -96,6 +97,7 @@ return arg;
     parser.show_graph();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!("return Phi(Loop7,arg,(Phi_arg+2));", parser.print(stop));
     assert_eq!(
         11,
@@ -123,6 +125,7 @@ return arg;
     parser.show_graph();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!("return Phi(Loop8,arg,(Phi_arg+4));", parser.print(stop));
     assert_eq!(
         13,
@@ -161,6 +164,7 @@ return arg;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!("return Phi(Loop14,arg,(Phi_arg+1));", parser.print(stop));
 }
 
@@ -185,6 +189,7 @@ while(v1+arg) {
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!("Stop[ ]", parser.print(stop));
 }
 
@@ -196,6 +201,7 @@ fn test_while0() {
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!("Stop[ ]", parser.print(stop));
 }
 
@@ -215,6 +221,7 @@ if(0) while(0) {
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!("Stop[ ]", parser.print(stop));
 }
 
@@ -226,6 +233,7 @@ fn test_precedence() {
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!("return 4;", parser.print(stop));
 }
 
@@ -237,6 +245,7 @@ fn test_swap2() {
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!("return 3;", parser.print(stop));
 }
 
@@ -261,6 +270,7 @@ return a;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!("return Phi(Loop9,0,(-(Phi_a+3)));", parser.print(stop));
 }
 
@@ -282,6 +292,7 @@ return -0+0+0;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!("Stop[ ]", parser.print(stop));
 }
 
@@ -293,6 +304,7 @@ fn test_fuzz2() {
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!("return 0;", parser.print(stop));
 }
 
@@ -304,6 +316,7 @@ fn test_fuzz3() {
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!("Stop[ ]", parser.print(stop));
 }
 
@@ -323,6 +336,7 @@ while(1) {
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!("Stop[ ]", parser.print(stop));
 }
 
@@ -352,6 +366,7 @@ return 0!=0;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!("Stop[ ]", parser.print(stop));
 }
 
@@ -370,6 +385,7 @@ while(0==1) while(v0)
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!("Stop[ ]", parser.print(stop));
 }
 
@@ -393,6 +409,7 @@ return v1+v0;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!("Stop[ ]", parser.print(stop));
 }
 
@@ -404,6 +421,7 @@ fn test_fuzz8() {
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!("return Phi(Loop6,arg,(Phi_arg-1));", parser.print(stop));
 }
 

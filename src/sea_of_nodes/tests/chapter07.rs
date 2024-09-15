@@ -50,6 +50,7 @@ return a;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!(
         parser.print(stop),
         "return Phi(Region24,1,Phi(Loop13,1,(Phi_a+1)));"
@@ -79,6 +80,7 @@ return sum;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!(
         parser.print(stop),
         "return Phi(Loop8,0,Phi(Loop20,Phi_sum,(Phi_sum+Phi(Loop,0,(Phi_j+1)))));"
@@ -135,6 +137,7 @@ return b;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!(
         parser.print(stop),
         "return Phi(Loop8,2,(Phi(Region27,Phi_b,4)+1));"
@@ -183,6 +186,7 @@ return a;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!(parser.print(stop), "return Phi(Loop7,1,(Phi_a+3));");
     assert_ret_ctrl_is_proj(&parser.nodes, stop);
 }
@@ -222,6 +226,7 @@ return a;
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
+    parser.type_check(stop).unwrap();
     assert_eq!(parser.print(stop), "return Phi(Loop7,1,2);");
     assert_ret_ctrl_is_proj(&parser.nodes, stop);
     println!("{}", ir_printer::pretty_print(&parser.nodes, stop, 99));
@@ -267,6 +272,7 @@ return a;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!(parser.print(stop), "return Phi(Loop7,1,(Phi_a+3));");
     assert_ret_ctrl_is_proj(&parser.nodes, stop);
 }
@@ -313,6 +319,7 @@ return a;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.show_graph();
+    parser.type_check(stop).unwrap();
     assert_eq!(parser.print(stop), "return Phi(Loop8,1,(Phi_a+3));");
     assert_ret_ctrl_is_proj(&parser.nodes, stop);
 }
