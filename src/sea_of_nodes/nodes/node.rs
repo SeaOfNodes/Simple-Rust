@@ -10,7 +10,7 @@ pub struct StartOp<'t> {
     pub alias_starts: HashMap<&'t str, u32>,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum BoolOp {
     EQ,
     LT,

@@ -186,10 +186,32 @@ impl<'t> Nodes<'t> {
             return Some(self.create(Op::make_constant(self.start, value)));
         }
 
+        // Equals pushes constant to the right; 5==X becomes X==5.
+        if op == BoolOp::EQ {
+            let lhs = node.inputs(self)[1].unwrap();
+            let rhs = node.inputs(self)[2].unwrap();
+
+            if rhs.to_constant(self).is_none() {
+                // con==noncon becomes noncon==con
+                if lhs.to_constant(self).is_some() {
+                    return Some(self.create(Op::make_bool([rhs, lhs], op)));
+                } else if lhs.index() > rhs.index() {
+                    // Equals sorts by NID otherwise: non.high == non.low becomes non.low == non.high
+                    return Some(self.create(Op::make_bool([rhs, lhs], op)));
+                }
+            }
+            // Equals X==0 becomes a !X
+            if rhs.ty(self) == Some(self.types.ty_int_zero)
+                || rhs.ty(self) == Some(self.types.ty_pointer_null)
+            {
+                return Some(self.create(Op::make_not(lhs)));
+            }
+        }
+
         // Do we have ((x * (phi cons)) * con) ?
         // Do we have ((x * (phi cons)) * (phi cons)) ?
         // Push constant up through the phi: x * (phi con0*con0 con1*con1...)
-        let phicon = self.phi_con(node, false);
+        let phicon = self.phi_con(node, op == BoolOp::EQ);
         phicon
     }
 
