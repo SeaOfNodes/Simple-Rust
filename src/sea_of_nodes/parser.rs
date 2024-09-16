@@ -1,6 +1,6 @@
 use crate::sea_of_nodes::graph_visualizer;
-use crate::sea_of_nodes::nodes::index::{If, Scope, Stop};
-use crate::sea_of_nodes::nodes::{BoolOp, Node, NodeCreation, Nodes, Op, ScopeOp};
+use crate::sea_of_nodes::nodes::index::{Constant, If, Return, Scope, Start, Stop};
+use crate::sea_of_nodes::nodes::{BoolOp, Node, NodeCreation, Nodes, Op};
 use crate::sea_of_nodes::types::{Struct, Ty, Type, Types};
 use std::collections::HashMap;
 
@@ -65,10 +65,7 @@ impl<'s, 't> Parser<'s, 't> {
         let scope = nodes.create(Op::make_scope()).to_scope(&nodes).unwrap();
         nodes.ty[scope] = Some(types.ty_bot); // in java this is done by the constructor
 
-        let args = types.get_tuple_from_array([types.ty_ctrl, arg]);
-        let start = nodes.create(Op::make_start(args)).to_start(&nodes).unwrap();
-        nodes.ty[start] = Some(args);
-        nodes.start = start;
+        nodes.start = Start::new(&[types.ty_ctrl, arg], &mut nodes);
 
         let stop = nodes.create(Op::make_stop()).to_stop(&nodes).unwrap();
         nodes.ty[stop] = Some(types.ty_bot); // differs from java; ensures that it isn't dead
@@ -109,13 +106,13 @@ impl<'s, 't> Parser<'s, 't> {
 
         // project ctrl and arg0 from start
         let start = self.nodes.start;
-        let ctrl = self.peephole(Op::make_proj(start, 0, ScopeOp::CTRL));
+        let ctrl = self.peephole(Op::make_proj(start, 0, Scope::CTRL));
         self.scope
-            .define(ScopeOp::CTRL, self.types.ty_ctrl, ctrl, &mut self.nodes)
+            .define(Scope::CTRL, self.types.ty_ctrl, ctrl, &mut self.nodes)
             .expect("not in scope");
-        let arg0 = self.peephole(Op::make_proj(start, 1, ScopeOp::ARG0));
+        let arg0 = self.peephole(Op::make_proj(start, 1, Scope::ARG0));
         self.scope
-            .define(ScopeOp::ARG0, self.types.ty_int_bot, arg0, &mut self.nodes)
+            .define(Scope::ARG0, self.types.ty_int_bot, arg0, &mut self.nodes)
             .expect("not in scope");
 
         self.parse_block()?;
@@ -340,7 +337,7 @@ impl<'s, 't> Parser<'s, 't> {
     fn jump_to(&mut self, to_scope: Option<Scope>) -> Scope {
         let cur = self.scope.dup(false, &mut self.nodes);
 
-        let ctrl = self.peephole(Op::make_constant(self.nodes.start, self.types.ty_xctrl));
+        let ctrl = Constant::new(self.types.ty_xctrl, &mut self.nodes).peephole(&mut self.nodes);
         self.set_ctrl(ctrl); // Kill current scope
 
         // Prune nested lexical scopes that have depth > than the loop head
@@ -455,20 +452,10 @@ impl<'s, 't> Parser<'s, 't> {
         let expr = self.parse_expression()?;
         self.require(";")?;
         let ctrl = self.ctrl();
-        let ret = self.peephole(Op::make_return(ctrl, expr));
-
-        // We lookup memory slices by the naming convention that they start with $
-        // We could also use implicit knowledge that all memory projects are at offset >= 2
-        let names = self.scope.reverse_names(&self.nodes);
-        for name in names.into_iter().map(Option::unwrap) {
-            if name.starts_with("$") && name != "$ctrl" {
-                let v = self.scope.lookup(name, &mut self.nodes).unwrap();
-                self.nodes.add_def(ret, Some(v));
-            }
-        }
+        let ret = Return::new(ctrl, expr, self.scope, &mut self.nodes).peephole(&mut self.nodes);
 
         self.nodes.add_def(*self.stop, Some(ret));
-        let ctrl = self.peephole(Op::make_constant(self.nodes.start, self.types.ty_xctrl));
+        let ctrl = Constant::new(self.types.ty_xctrl, &mut self.nodes).peephole(&mut self.nodes);
         self.set_ctrl(ctrl);
         Ok(())
     }
@@ -515,7 +502,7 @@ impl<'s, 't> Parser<'s, 't> {
             // Assign a default value
             if let Some(t) = t {
                 let init = self.types.make_init(t).unwrap();
-                expr = self.peephole(Op::make_constant(self.nodes.start, init))
+                expr = Constant::new(init, &mut self.nodes).peephole(&mut self.nodes)
             } else {
                 // No type and no expr is an error
                 return Err("expression".to_string());
@@ -578,7 +565,7 @@ impl<'s, 't> Parser<'s, 't> {
         let expr = if self.peek(';') {
             // Assign a null value
             let v = self.types.make_init(t).unwrap();
-            self.peephole(Op::make_constant(self.nodes.start, v))
+            Constant::new(v, &mut self.nodes).peephole(&mut self.nodes)
         } else {
             // Assign "= expr;"
             self.require("=")?;
@@ -716,14 +703,14 @@ impl<'s, 't> Parser<'s, 't> {
             self.require(")")?;
             Ok(e)
         } else if self.matchx("true") {
-            Ok(self.peephole(Op::make_constant(self.nodes.start, self.types.ty_int_one)))
+            Ok(Constant::new(self.types.ty_int_one, &mut self.nodes).peephole(&mut self.nodes))
         } else if self.matchx("false") {
-            Ok(self.peephole(Op::make_constant(self.nodes.start, self.types.ty_int_zero)))
+            Ok(Constant::new(self.types.ty_int_zero, &mut self.nodes).peephole(&mut self.nodes))
         } else if self.matchx("null") {
-            Ok(self.peephole(Op::make_constant(
-                self.nodes.start,
-                self.types.ty_pointer_null,
-            )))
+            Ok(
+                Constant::new(self.types.ty_pointer_null, &mut self.nodes)
+                    .peephole(&mut self.nodes),
+            )
         } else if self.matchx("new") {
             let ty_name = self.require_id()?;
             let ty = self.name_to_type.get(ty_name);
@@ -748,7 +735,8 @@ impl<'s, 't> Parser<'s, 't> {
         let n = self.peephole(Op::make_new(ptr_ty, ctrl));
         self.nodes.keep(n);
 
-        let init_value = self.peephole(Op::make_constant(self.nodes.start, self.types.ty_int_zero));
+        let init_value =
+            Constant::new(self.types.ty_int_zero, &mut self.nodes).peephole(&mut self.nodes);
 
         let Type::Struct(Struct::Struct { name, fields }) = *obj else {
             unreachable!()
@@ -847,7 +835,7 @@ impl<'s, 't> Parser<'s, 't> {
     fn parse_integer_literal(&mut self) -> PResult<Node> {
         self.lexer
             .parse_number(self.types)
-            .map(|ty| self.peephole(Op::make_constant(self.nodes.start, ty)))
+            .map(|ty| Constant::new(ty, &mut self.nodes).peephole(&mut self.nodes))
     }
 
     //

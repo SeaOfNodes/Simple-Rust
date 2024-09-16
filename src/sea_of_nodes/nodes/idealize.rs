@@ -1,5 +1,5 @@
 use crate::datastructures::id::Id;
-use crate::sea_of_nodes::nodes::index::{If, Phi};
+use crate::sea_of_nodes::nodes::index::{Constant, If, Phi};
 use crate::sea_of_nodes::nodes::node::{MemOp, MemOpKind, PhiOp};
 use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes, Op};
 use crate::sea_of_nodes::types::{Int, Ty, Type};
@@ -43,7 +43,7 @@ impl<'t> Nodes<'t> {
 
         // Add of same to a multiply by 2
         if lhs == rhs {
-            let two = self.create_peepholed(Op::make_constant(self.start, self.types.ty_int_two));
+            let two = Constant::new(self.types.ty_int_two, self).peephole(self);
             return Some(self.create(Op::make_mul([lhs, two])));
         }
 
@@ -134,7 +134,7 @@ impl<'t> Nodes<'t> {
     fn idealize_sub(&mut self, node: Node) -> Option<Node> {
         // Sub of same is 0
         if self.inputs[node][1]? == self.inputs[node][2]? {
-            return Some(self.create(Op::make_constant(self.start, self.types.ty_int_zero)));
+            return Some(*Constant::new(self.types.ty_int_zero, self));
         }
 
         // x - (-y) is x+y
@@ -183,7 +183,7 @@ impl<'t> Nodes<'t> {
             } else {
                 self.types.ty_int_zero
             };
-            return Some(self.create(Op::make_constant(self.start, value)));
+            return Some(*Constant::new(value, self));
         }
 
         // Equals pushes constant to the right; 5==X becomes X==5.
@@ -340,9 +340,7 @@ impl<'t> Nodes<'t> {
     fn idealize_proj(&mut self, node: Node, index: usize) -> Option<Node> {
         if let Some(Type::Tuple { types: ts }) = self.ty[self.inputs[node][0]?].as_deref() {
             if ts[index] == self.types.ty_xctrl {
-                return Some(
-                    self.create_peepholed(Op::make_constant(self.start, self.types.ty_xctrl)),
-                ); // We are dead
+                return Some(*Constant::new(self.types.ty_xctrl, self)); // We are dead
             }
             // Only true for IfNodes
             if node.inputs(self)[0].unwrap().to_if(self).is_some()
@@ -413,7 +411,7 @@ impl<'t> Nodes<'t> {
                 }
 
                 return if self.is_dead(node) {
-                    Some(self.create(Op::make_constant(self.start, self.types.ty_xctrl)))
+                    Some(*Constant::new(self.types.ty_xctrl, self))
                 } else {
                     self.del_def(node, path);
                     Some(node)
@@ -468,8 +466,7 @@ impl<'t> Nodes<'t> {
                             } else {
                                 self.types.ty_int_zero
                             };
-                            let new_constant =
-                                self.create_peepholed(Op::make_constant(self.start, value));
+                            let new_constant = Constant::new(value, self).peephole(self);
                             self.set_def(node, 1, Some(new_constant));
                             return Some(node);
                         }

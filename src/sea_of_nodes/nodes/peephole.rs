@@ -1,3 +1,4 @@
+use crate::sea_of_nodes::nodes::index::Constant;
 use crate::sea_of_nodes::nodes::node::MemOpKind;
 use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
 use crate::sea_of_nodes::types::{Int, Ty, Type};
@@ -48,9 +49,7 @@ impl<'t> Node {
 
         // Replace constant computations from non-constants with a constant node
         if self.to_constant(sea).is_none() && ty.is_high_or_constant() {
-            return sea
-                .create(Op::make_constant(sea.start, ty))
-                .peephole_opt(sea);
+            return Constant::new(ty, sea).peephole_opt(sea);
         }
 
         // Global Value Numbering

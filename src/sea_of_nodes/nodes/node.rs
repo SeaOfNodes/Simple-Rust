@@ -1,6 +1,6 @@
-use crate::sea_of_nodes::nodes::index::{If, Start};
+use crate::sea_of_nodes::nodes::index::{Constant, If, Return, Scope, Start};
 use crate::sea_of_nodes::nodes::{Node, NodeCreation, Nodes, Op, ScopeOp};
-use crate::sea_of_nodes::types::{Ty, Type};
+use crate::sea_of_nodes::types::Ty;
 use std::borrow::Cow;
 use std::collections::HashMap;
 
@@ -191,25 +191,49 @@ impl<'t> Op<'t> {
             }) => 22,
         }
     }
+}
 
-    pub fn make_start(args: Ty<'t>) -> NodeCreation<'t> {
-        debug_assert!(matches!(&*args, Type::Tuple { .. }));
-        (
+impl Start {
+    pub fn new<'t>(args: &[Ty<'t>], sea: &mut Nodes<'t>) -> Self {
+        let args = sea.types.get_tuple_from_slice(args);
+        let this = sea.create((
             Op::Start(StartOp {
                 args,
                 alias_starts: HashMap::new(),
             }),
             vec![],
-        )
+        ));
+        sea.ty[this] = Some(args);
+        this.to_start(sea).unwrap()
     }
-    pub fn make_return(ctrl: Node, data: Node) -> NodeCreation<'t> {
-        (Op::Return, vec![Some(ctrl), Some(data)])
-    }
+}
 
-    pub fn make_constant(start: Start, ty: Ty<'t>) -> NodeCreation<'t> {
-        (Op::Constant(ty), vec![Some(*start)])
-    }
+impl Return {
+    pub fn new(ctrl: Node, data: Node, scope: Scope, sea: &mut Nodes) -> Self {
+        let this = sea.create((Op::Return, vec![Some(ctrl), Some(data)]));
 
+        // We lookup memory slices by the naming convention that they start with $
+        // We could also use implicit knowledge that all memory projects are at offset >= 2
+        let names = scope.reverse_names(sea);
+        for name in names.into_iter().map(Option::unwrap) {
+            if name.starts_with("$") && name != Scope::CTRL {
+                let v = scope.lookup(name, sea).unwrap();
+                sea.add_def(this, Some(v));
+            }
+        }
+
+        this.to_return(sea).unwrap()
+    }
+}
+impl Constant {
+    pub fn new<'t>(ty: Ty<'t>, sea: &mut Nodes<'t>) -> Self {
+        let start = sea.start;
+        let this = sea.create((Op::Constant(ty), vec![Some(*start)]));
+        this.to_constant(sea).unwrap()
+    }
+}
+
+impl<'t> Op<'t> {
     pub fn make_add([left, right]: [Node; 2]) -> NodeCreation<'t> {
         (Op::Add, vec![None, Some(left), Some(right)])
     }

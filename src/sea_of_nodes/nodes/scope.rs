@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::sea_of_nodes::nodes::index::Scope;
+use crate::sea_of_nodes::nodes::index::{Constant, Scope};
 use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
 use crate::sea_of_nodes::types::{Ty, Type};
 
@@ -10,15 +10,15 @@ pub struct ScopeOp<'t> {
 }
 
 impl<'t> ScopeOp<'t> {
-    pub const CTRL: &'static str = "$ctrl";
-    pub const ARG0: &'static str = "arg";
-
     pub fn lookup(&self, name: &str) -> Option<&(usize, Ty<'t>)> {
         self.scopes.iter().rev().flat_map(|x| x.get(name)).next()
     }
 }
 
 impl<'t> Scope {
+    pub const CTRL: &'static str = "$ctrl";
+    pub const ARG0: &'static str = "arg";
+
     pub fn push(self, sea: &mut Nodes<'t>) {
         sea[self].scopes.push(HashMap::new());
     }
@@ -278,7 +278,7 @@ impl<'t> Scope {
                 return if sea.types.isa(t, tinit) {
                     None // Already zero/null, no reason to upcast
                 } else {
-                    let c = sea.create_peepholed(Op::make_constant(sea.start, tinit));
+                    let c = Constant::new(tinit, sea).peephole(sea);
                     self.replace(not_in_1, Some(c), sea);
                     Some(c)
                 };
