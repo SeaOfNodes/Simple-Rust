@@ -218,7 +218,7 @@ impl Return {
         for name in names.into_iter().map(Option::unwrap) {
             if name.starts_with("$") && name != Scope::CTRL {
                 let v = scope.lookup(name, sea).unwrap();
-                sea.add_def(this, Some(v));
+                this.add_def(Some(v), sea);
             }
         }
 

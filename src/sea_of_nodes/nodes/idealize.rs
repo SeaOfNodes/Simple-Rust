@@ -51,7 +51,7 @@ impl<'t> Nodes<'t> {
 
         // Move non-adds to RHS
         if !matches!(self[lhs], Op::Add) && matches!(self[rhs], Op::Add) {
-            return Some(self.swap_12(node));
+            return Some(node.swap_12(self));
         }
 
         // x+(-y) becomes x-y
@@ -76,7 +76,7 @@ impl<'t> Nodes<'t> {
         // Now we might see (add add non) or (add non non) but never (add non add) nor (add add add)
         if !matches!(self[lhs], Op::Add) {
             return if self.spine_cmp(lhs, rhs, node) {
-                Some(self.swap_12(node))
+                Some(node.swap_12(self))
             } else {
                 self.phi_con(node, true)
             };
@@ -166,7 +166,7 @@ impl<'t> Nodes<'t> {
         if matches!(&*right_ty, Type::Int(Int::Constant(1))) {
             Some(left)
         } else if left_ty.is_constant() && !right_ty.is_constant() {
-            self.swap_12(node);
+            node.swap_12(self);
             Some(node)
         } else {
             // Do we have ((x * (phi cons)) * con) ?
@@ -324,7 +324,7 @@ impl<'t> Nodes<'t> {
         let mut i = 0;
         while i < self.inputs[node].len() {
             if self.ty[self.inputs[node][i].unwrap()] == Some(self.types.ty_xctrl) {
-                self.del_def(node, i);
+                node.del_def(i, self);
                 result = Some(node);
             } else {
                 i += 1;
@@ -402,7 +402,7 @@ impl<'t> Nodes<'t> {
                         if matches!(&self[phi], Op::Phi(_))
                             && self.inputs[node].len() == self.inputs[phi].len()
                         {
-                            self.del_def(phi, path);
+                            phi.del_def(path, self);
                             for &o in &self.outputs[phi] {
                                 self.iter_peeps.add(o);
                             }
@@ -410,10 +410,10 @@ impl<'t> Nodes<'t> {
                     }
                 }
 
-                return if self.is_dead(node) {
+                return if node.is_dead(self) {
                     Some(*Constant::new(self.types.ty_xctrl, self))
                 } else {
-                    self.del_def(node, path);
+                    node.del_def(path, self);
                     Some(node)
                 };
             }
@@ -467,7 +467,7 @@ impl<'t> Nodes<'t> {
                                 self.types.ty_int_zero
                             };
                             let new_constant = Constant::new(value, self).peephole(self);
-                            self.set_def(node, 1, Some(new_constant));
+                            node.set_def(1, Some(new_constant), self);
                             return Some(node);
                         }
                     }
@@ -593,7 +593,7 @@ impl<'t> Nodes<'t> {
                             self[x].name == self[y].name // Equiv class aliasing is perfect
                         });
                         let st_mem = mem.inputs(self)[1];
-                        self.set_def(node, 1, st_mem);
+                        node.set_def(1, st_mem, self);
                         return Some(node);
                     }
                 }

@@ -66,26 +66,26 @@ fn print_line(nodes: &Nodes, n: Node, sb: &mut String, llvm_format: bool) -> fmt
 /// Print a node on 1 line, columnar aligned, as:
 /// NNID NNAME DDEF DDEF  [[  UUSE UUSE  ]]  TYPE
 /// 1234 sssss 1234 1234 1234 1234 1234 1234 tttttt
-fn print_line_(nodes: &Nodes, n: Node, sb: &mut String) -> fmt::Result {
-    write!(sb, "{n:4} {: <7.7} ", nodes[n].label())?;
+fn print_line_(sea: &Nodes, n: Node, sb: &mut String) -> fmt::Result {
+    write!(sb, "{n:4} {: <7.7} ", sea[n].label())?;
 
-    if nodes.is_dead(n) {
+    if n.is_dead(sea) {
         return writeln!(sb, "DEAD");
     }
 
-    for def in &nodes.inputs[n] {
+    for def in &sea.inputs[n] {
         if let Some(def) = def {
             write!(sb, "{def:4} ")?;
         } else {
             write!(sb, "____ ")?;
         }
     }
-    for _ in nodes.inputs[n].len()..3 {
+    for _ in sea.inputs[n].len()..3 {
         sb.push_str("     ");
     }
     sb.push_str(" [[  ");
 
-    for use_ in &nodes.outputs[n] {
+    for use_ in &sea.outputs[n] {
         if *use_ != Node::DUMMY {
             write!(sb, "{use_:4} ")?;
         } else {
@@ -93,14 +93,14 @@ fn print_line_(nodes: &Nodes, n: Node, sb: &mut String) -> fmt::Result {
         }
     }
 
-    let lim = 5 - nodes.inputs[n].len().max(3);
-    for _ in nodes.outputs[n].len()..lim {
+    let lim = 5 - sea.inputs[n].len().max(3);
+    for _ in sea.outputs[n].len()..lim {
         sb.push_str("     ");
     }
 
     sb.push_str(" ]]  ");
 
-    if let Some(ty) = nodes.ty[n] {
+    if let Some(ty) = sea.ty[n] {
         write!(sb, "{}", ty.str())?;
     }
     writeln!(sb)

@@ -56,14 +56,14 @@ pub fn run_graphviz_and_chromium(input: String) {
 }
 
 pub fn generate_dot_output(
-    nodes: &Nodes,
+    sea: &Nodes,
     stop: Stop,
     scope: Option<Scope>,
     x_scopes: &[Scope],
     source: &str,
     separate_control_cluster: bool,
 ) -> Result<String, fmt::Error> {
-    let all = find_all(nodes, &[Some(*stop), scope.as_deref().copied()]);
+    let all = find_all(sea, &[Some(*stop), scope.as_deref().copied()]);
 
     let mut sb = String::new();
     writeln!(sb, "digraph \"{}\" {{", source.replace("\"", "\\\""))?;
@@ -71,16 +71,16 @@ pub fn generate_dot_output(
     writeln!(sb, "\trankdir=BT;")?;
     // writeln!(sb, "\tordering=\"in\";")?;
     writeln!(sb, "\tconcentrate=\"true\";")?;
-    do_nodes(&mut sb, nodes, &all, separate_control_cluster)?;
+    do_nodes(&mut sb, sea, &all, separate_control_cluster)?;
     for &scope in x_scopes {
-        if !nodes.is_dead(*scope) {
-            do_scope(&mut sb, nodes, scope)?;
+        if !scope.is_dead(sea) {
+            do_scope(&mut sb, sea, scope)?;
         }
     }
-    node_edges(&mut sb, nodes, &all)?;
+    node_edges(&mut sb, sea, &all)?;
     for &scope in x_scopes {
-        if !nodes.is_dead(*scope) {
-            scope_edges(&mut sb, nodes, scope)?;
+        if !scope.is_dead(sea) {
+            scope_edges(&mut sb, sea, scope)?;
         }
     }
     writeln!(sb, "}}")?;

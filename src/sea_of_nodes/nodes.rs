@@ -138,7 +138,7 @@ impl<'t> Nodes<'t> {
         self.hash.push(None);
         for i in 0..self.inputs[id].len() {
             if let Some(input) = self.inputs[id][i] {
-                self.add_use(input, id);
+                input.add_use(id, self);
             }
         }
 
@@ -151,136 +151,137 @@ impl<'t> Nodes<'t> {
     pub fn create_peepholed(&mut self, c: NodeCreation<'t>) -> Node {
         self.create(c).peephole(self)
     }
+}
 
-    pub fn is_dead(&self, node: Node) -> bool {
-        self.is_unused(node) && self.inputs[node].is_empty() && self.ty[node].is_none()
+impl Node {
+    pub fn is_dead(self, sea: &Nodes) -> bool {
+        self.is_unused(sea) && self.inputs(sea).is_empty() && self.ty(sea).is_none()
     }
 
-    pub fn pop_n(&mut self, node: Node, n: usize) {
-        node.unlock(self);
+    pub fn pop_n(self, n: usize, sea: &mut Nodes) {
+        self.unlock(sea);
         for _ in 0..n {
-            let old_def = self.inputs[node].pop().unwrap();
+            let old_def = sea.inputs[self].pop().unwrap();
             if let Some(old_def) = old_def {
-                self.del_use(old_def, node);
-                if self.is_unused(old_def) {
-                    self.kill(old_def);
+                old_def.del_use(self, sea);
+                if old_def.is_unused(sea) {
+                    old_def.kill(sea);
                 }
             }
         }
     }
 
-    pub fn kill(&mut self, node: Node) {
-        node.unlock(self);
-        debug_assert!(self.is_unused(node));
-        for _ in 0..self.inputs[node].len() {
+    pub fn kill(self, sea: &mut Nodes) {
+        self.unlock(sea);
+        debug_assert!(self.is_unused(sea));
+        for _ in 0..self.inputs(sea).len() {
             // Set all inputs to null, recursively killing unused Nodes
-            let old_def = self.inputs[node].pop().unwrap();
+            let old_def = sea.inputs[self].pop().unwrap();
             if let Some(old_def) = old_def {
-                self.iter_peeps.add(old_def); // Revisit neighbor because removed use
-                self.del_use(old_def, node);
-                if self.is_unused(old_def) {
-                    self.kill(old_def); // If we removed the last use, the old def is now dead
+                sea.iter_peeps.add(old_def); // Revisit neighbor because removed use
+                old_def.del_use(self, sea);
+                if old_def.is_unused(sea) {
+                    old_def.kill(sea); // If we removed the last use, the old def is now dead
                 }
             }
         }
-        self.inputs[node] = vec![]; // deallocate
-        self.ty[node] = None; // flag as dead
-        debug_assert!(self.is_dead(node));
+        sea.inputs[self] = vec![]; // deallocate
+        sea.ty[self] = None; // flag as dead
+        debug_assert!(self.is_dead(sea));
     }
 
     /// Replace 'this' with nnn in the graph, making 'this' go dead
-    pub fn subsume(&mut self, this: Node, that: Node) {
-        assert_ne!(this, that);
-        while let Some(n) = self.outputs[this].pop() {
-            n.unlock(self);
-            let idx = self.inputs[n]
-                .iter()
-                .position(|&x| x == Some(this))
-                .unwrap();
-            self.inputs[n][idx] = Some(that);
-            self.add_use(that, n);
+    pub fn subsume(self, that: Node, sea: &mut Nodes) {
+        assert_ne!(self, that);
+        while let Some(n) = sea.outputs[self].pop() {
+            n.unlock(sea);
+            let idx = n.inputs(sea).iter().position(|&x| x == Some(self)).unwrap();
+            sea.inputs[n][idx] = Some(that);
+            that.add_use(n, sea);
         }
-        self.kill(this);
+        self.kill(sea);
     }
 
-    pub fn set_def(&mut self, this: Node, index: usize, new_def: Option<Node>) {
-        this.unlock(self);
+    pub fn set_def(self, index: usize, new_def: Option<Node>, sea: &mut Nodes) {
+        self.unlock(sea);
 
-        let old_def = self.inputs[this][index];
+        let old_def = self.inputs(sea)[index];
         if old_def == new_def {
             return;
         }
 
         if let Some(new_def) = new_def {
-            self.add_use(new_def, this);
+            new_def.add_use(self, sea);
         }
 
         if let Some(old_def) = old_def {
-            self.del_use(old_def, this);
-            if self.is_unused(old_def) {
-                self.kill(old_def);
+            old_def.del_use(self, sea);
+            if old_def.is_unused(sea) {
+                old_def.kill(sea);
             }
         }
 
-        self.inputs[this][index] = new_def;
-        self.move_deps_to_worklist(this);
+        sea.inputs[self][index] = new_def;
+        sea.move_deps_to_worklist(self);
     }
 
-    pub fn add_def(&mut self, node: Node, new_def: Option<Node>) {
-        node.unlock(self);
-        self.inputs[node].push(new_def);
+    pub fn add_def(self, new_def: Option<Node>, sea: &mut Nodes) {
+        self.unlock(sea);
+        sea.inputs[self].push(new_def);
         if let Some(new_def) = new_def {
-            self.add_use(new_def, node);
+            new_def.add_use(self, sea);
         }
     }
 
     /// Remove the numbered input, compressing the inputs in-place.  This
     /// shuffles the order deterministically - which is suitable for Region and
     /// Phi, but not for every Node.
-    fn del_def(&mut self, node: Node, index: usize) {
-        node.unlock(self);
-        let old_def = self.inputs[node][index];
+    fn del_def(self, index: usize, sea: &mut Nodes) {
+        self.unlock(sea);
+        let old_def = self.inputs(sea)[index];
         if let Some(old_def) = old_def {
-            self.del_use(old_def, node);
-            if self.is_unused(old_def) {
-                self.kill(old_def);
+            old_def.del_use(self, sea);
+            if old_def.is_unused(sea) {
+                old_def.kill(sea);
             }
-            self.move_deps_to_worklist(old_def);
+            sea.move_deps_to_worklist(old_def);
         }
-        self.inputs[node].swap_remove(index);
+        sea.inputs[self].swap_remove(index);
     }
 
-    pub fn add_use(&mut self, node: Node, use_: Node) {
-        self.outputs[node].push(use_)
+    pub fn add_use(self, use_: Node, sea: &mut Nodes) {
+        sea.outputs[self].push(use_)
     }
 
-    pub fn del_use(&mut self, node: Node, use_: Node) {
-        if let Some(pos) = self.outputs[node].iter().rposition(|n| *n == use_) {
-            self.outputs[node].swap_remove(pos);
+    pub fn del_use(self, use_: Node, sea: &mut Nodes) {
+        if let Some(pos) = sea.outputs[self].iter().rposition(|n| *n == use_) {
+            sea.outputs[self].swap_remove(pos);
         }
     }
 
-    pub fn is_unused(&self, node: Node) -> bool {
-        self.outputs[node].is_empty()
+    pub fn is_unused(self, sea: &Nodes) -> bool {
+        sea.outputs[self].is_empty()
     }
 
-    pub fn swap_12(&mut self, node: Node) -> Node {
-        node.unlock(self);
-        self.inputs[node].swap(1, 2);
-        node
+    pub fn swap_12(self, sea: &mut Nodes) -> Node {
+        self.unlock(sea);
+        sea.inputs[self].swap(1, 2);
+        self
     }
-    pub fn keep(&mut self, node: Node) {
-        self.add_use(node, Node::DUMMY);
-    }
-
-    pub fn unkeep(&mut self, node: Node) {
-        self.del_use(node, Node::DUMMY);
+    pub fn keep(self, sea: &mut Nodes) {
+        self.add_use(Node::DUMMY, sea);
     }
 
-    pub fn is_keep(&self, node: Node) -> bool {
-        self.outputs[node].contains(&Node::DUMMY)
+    pub fn unkeep(self, sea: &mut Nodes) {
+        self.del_use(Node::DUMMY, sea);
     }
 
+    pub fn is_keep(self, sea: &Nodes) -> bool {
+        sea.outputs[self].contains(&Node::DUMMY)
+    }
+}
+
+impl<'t> Nodes<'t> {
     pub fn err(&self, node: Node) -> Option<String> {
         if let Some(memop) = self.to_mem_op(node) {
             let ptr = node.inputs(self)[2]?.ty(self)?;

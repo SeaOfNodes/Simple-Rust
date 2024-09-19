@@ -96,10 +96,10 @@ impl<'t> Node {
     }
 
     fn dead_code_elimination(self, new: Node, sea: &mut Nodes) {
-        if new != self && sea.is_unused(self) && !sea.is_dead(self) {
-            sea.keep(new);
-            sea.kill(self);
-            sea.unkeep(new);
+        if new != self && self.is_unused(sea) && !self.is_dead(sea) {
+            new.keep(sea);
+            self.kill(sea);
+            new.unkeep(sea);
         }
     }
 

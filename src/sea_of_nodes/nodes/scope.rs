@@ -25,7 +25,7 @@ impl<'t> Scope {
 
     pub fn pop(self, sea: &mut Nodes<'t>) {
         let last = sea[self].scopes.pop().unwrap();
-        sea.pop_n(*self, last.len());
+        self.pop_n(last.len(), sea);
     }
 
     pub fn define(
@@ -40,7 +40,7 @@ impl<'t> Scope {
         if let Some(_old) = syms.insert(name, (len, declared_ty)) {
             return Err(());
         }
-        sea.add_def(*self, Some(value));
+        self.add_def(Some(value), sea);
         Ok(())
     }
 
@@ -88,16 +88,16 @@ impl<'t> Scope {
                             vec![loop_.inputs(sea)[0], recursive, None],
                         ));
 
-                        sea.set_def(*loop_, index, Some(new_phi));
+                        loop_.set_def(index, Some(new_phi), sea);
                         Some(new_phi)
                     };
-                    sea.set_def(*self, index, old);
+                    self.set_def(index, old, sea);
                 }
             }
 
             // Not lazy, so this is the answer
             if value.is_some() {
-                sea.set_def(*self, index, value);
+                self.set_def(index, value, sea);
                 value
             } else {
                 old
@@ -116,17 +116,17 @@ impl<'t> Scope {
             .to_scope(sea)
             .unwrap();
 
-        sea.add_def(*dup, self.inputs(sea)[0]); // ctrl
+        dup.add_def(self.inputs(sea)[0], sea); // ctrl
         for i in 1..self.inputs(sea).len() {
             // For lazy phis on loops we use a sentinel
             // that will trigger phi creation on update
-            sea.add_def(
-                *dup,
+            dup.add_def(
                 if lazy_loop_phis {
                     Some(*self)
                 } else {
                     self.inputs(sea)[i]
                 },
+                sea,
             );
         }
         dup
@@ -147,8 +147,8 @@ impl<'t> Scope {
         let c1 = self.inputs(sea)[0];
         let c2 = that.inputs(sea)[0];
         let region = sea.create(Op::make_region(vec![None, c1, c2]));
-        sea.keep(region);
-        sea.set_def(*self, 0, Some(region)); // set ctrl
+        region.keep(sea);
+        self.set_def(0, Some(region), sea); // set ctrl
 
         let names = self.reverse_names(sea);
 
@@ -169,14 +169,14 @@ impl<'t> Scope {
                     declared_ty,
                     vec![Some(region), Some(this_l), Some(that_l)],
                 ));
-                sea.set_def(*self, i, Some(phi));
+                self.set_def(i, Some(phi), sea);
             }
         }
 
-        sea.kill(*that);
+        that.kill(sea);
         sea.iter_peeps.add(region);
 
-        sea.unkeep(region);
+        region.unkeep(sea);
         region.peephole(sea)
     }
 
@@ -187,22 +187,22 @@ impl<'t> Scope {
         assert!(matches!(&sea[ctrl], Op::Loop));
         assert!(Nodes::in_progress(&sea.ops, &sea.inputs, ctrl));
 
-        sea.set_def(ctrl, 2, back.inputs(sea)[0]);
+        ctrl.set_def(2, back.inputs(sea)[0], sea);
 
         for i in 1..self.inputs(sea).len() {
             if back.inputs(sea)[i] != Some(*self) {
                 let phi = self.inputs(sea)[i].unwrap();
                 assert_eq!(phi.inputs(sea)[0], Some(ctrl));
                 assert_eq!(phi.inputs(sea)[2], None);
-                sea.set_def(phi, 2, back.inputs(sea)[i]);
+                phi.set_def(2, back.inputs(sea)[i], sea);
             }
             if exit.inputs(sea)[i] == Some(*self) {
                 // Replace a lazy-phi on the exit path also
-                sea.set_def(*exit, i, self.inputs(sea)[i])
+                exit.set_def(i, self.inputs(sea)[i], sea)
             }
         }
 
-        sea.kill(*back); // Loop backedge is dead
+        back.kill(sea); // Loop backedge is dead
 
         // Now one-time do a useless-phi removal
         for i in 1..self.inputs(sea).len() {
@@ -216,10 +216,10 @@ impl<'t> Scope {
                     sea.move_deps_to_worklist(phi);
                     if in_ != phi {
                         // Keeping phi around for parser elsewhere
-                        if !sea.is_keep(phi) {
-                            sea.subsume(phi, in_);
+                        if !phi.is_keep(sea) {
+                            phi.subsume(in_, sea);
                         }
-                        sea.set_def(*self, i, Some(in_)); // Set the update back into Scope
+                        self.set_def(i, Some(in_), sea); // Set the update back into Scope
                     }
                 }
             }
@@ -297,7 +297,7 @@ impl<'t> Scope {
         debug_assert_ne!(Some(old), cast);
         for i in 0..self.inputs(sea).len() {
             if self.inputs(sea)[i] == Some(old) {
-                sea.set_def(*self, i, cast);
+                self.set_def(i, cast, sea);
             }
         }
     }

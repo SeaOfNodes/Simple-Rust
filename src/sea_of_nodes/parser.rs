@@ -91,7 +91,7 @@ impl<'s, 't> Parser<'s, 't> {
         self.nodes.inputs[self.scope][0].expect("has ctrl")
     }
     fn set_ctrl(&mut self, node: Node) {
-        self.nodes.set_def(*self.scope, 0, Some(node));
+        self.scope.set_def(0, Some(node), &mut self.nodes);
     }
 
     fn peephole(&mut self, c: NodeCreation<'t>) -> Node {
@@ -263,7 +263,7 @@ impl<'s, 't> Parser<'s, 't> {
 
         // Save the current scope as the loop head
         let head = self.scope;
-        self.nodes.keep(*head);
+        head.keep(&mut self.nodes);
 
         // Clone the head Scope to create a new Scope for the body.
         // Create phis eagerly as part of cloning
@@ -278,10 +278,10 @@ impl<'s, 't> Parser<'s, 't> {
         let if_node = If::new(ctrl, pred, &mut self.nodes).peephole(&mut self.nodes);
 
         // Setup projection nodes
-        self.nodes.keep(if_node);
+        if_node.keep(&mut self.nodes);
         let if_true = self.peephole(Op::make_proj(if_node, 0, "True"));
-        self.nodes.unkeep(if_node);
-        self.nodes.keep(if_true);
+        if_node.unkeep(&mut self.nodes);
+        if_true.keep(&mut self.nodes);
         let if_false = self.peephole(Op::make_proj(if_node, 1, "False"));
 
         // Clone the body Scope to create the break/exit Scope which accounts for any
@@ -298,14 +298,14 @@ impl<'s, 't> Parser<'s, 't> {
 
         // Parse the true side, which corresponds to loop body
         // Our current scope is the body Scope
-        self.nodes.unkeep(if_true);
+        if_true.unkeep(&mut self.nodes);
         self.set_ctrl(if_true);
         self.parse_statement()?; // Parse loop body
 
         // Merge the loop bottom into other continue statements
         if self.continue_scope.is_some() {
             self.continue_scope = Some(self.jump_to(self.continue_scope));
-            self.nodes.kill(*self.scope);
+            self.scope.kill(&mut self.nodes);
             self.scope = self.continue_scope.unwrap();
         }
 
@@ -316,8 +316,8 @@ impl<'s, 't> Parser<'s, 't> {
         // edge.  If the phi is redundant, it is replaced by its sole input.
         let exit = self.break_scope.unwrap();
         head.end_loop(self.scope, exit, &mut self.nodes);
-        self.nodes.unkeep(*head);
-        self.nodes.kill(*head);
+        head.unkeep(&mut self.nodes);
+        head.kill(&mut self.nodes);
 
         // Cleanup
         self.x_scopes.pop();
@@ -357,7 +357,7 @@ impl<'s, 't> Parser<'s, 't> {
         // toScope is either the break scope, or a scope that was created here
         debug_assert!(self.nodes[to_scope].scopes.len() <= break_scopes_len);
         let region = to_scope.merge(cur, &mut self.nodes);
-        self.nodes.set_def(*to_scope, 0, Some(region)); // set ctrl
+        to_scope.set_def(0, Some(region), &mut self.nodes); // set ctrl
         to_scope
     }
 
@@ -390,18 +390,18 @@ impl<'s, 't> Parser<'s, 't> {
         // Parse predicate
         let pred = self.parse_expression()?;
         self.require(")")?;
-        self.nodes.keep(pred);
+        pred.keep(&mut self.nodes);
 
         // IfNode takes current control and predicate
         let if_node = If::new(self.ctrl(), pred, &mut self.nodes).peephole(&mut self.nodes);
 
         // Setup projection nodes
-        self.nodes.keep(if_node);
+        if_node.keep(&mut self.nodes);
         let if_true = self.peephole(Op::make_proj(if_node, 0, "True"));
-        self.nodes.unkeep(if_node);
-        self.nodes.keep(if_true);
+        if_node.unkeep(&mut self.nodes);
+        if_true.keep(&mut self.nodes);
         let if_false = self.peephole(Op::make_proj(if_node, 1, "False"));
-        self.nodes.keep(if_false);
+        if_false.keep(&mut self.nodes);
 
         // In if true branch, the ifT proj node becomes the ctrl
         // But first clone the scope and set it as current
@@ -410,7 +410,7 @@ impl<'s, 't> Parser<'s, 't> {
         self.x_scopes.push(false_scope);
 
         // Parse the true side
-        self.nodes.unkeep(if_true);
+        if_true.unkeep(&mut self.nodes);
         self.set_ctrl(if_true);
         self.scope.upcast(if_true, pred, false, &mut self.nodes); // Up-cast predicate
         self.parse_statement()?;
@@ -418,14 +418,14 @@ impl<'s, 't> Parser<'s, 't> {
 
         // Parse the false side
         self.scope = false_scope;
-        self.nodes.unkeep(if_false);
+        if_false.unkeep(&mut self.nodes);
         self.set_ctrl(if_false);
         if self.matchx("else") {
             self.scope.upcast(if_false, pred, true, &mut self.nodes); // Up-cast predicate
             self.parse_statement()?;
             false_scope = self.scope;
         }
-        self.nodes.unkeep(pred);
+        pred.unkeep(&mut self.nodes);
 
         if self.nodes.inputs[true_scope].len() != n_defs
             || self.nodes.inputs[false_scope].len() != n_defs
@@ -454,7 +454,7 @@ impl<'s, 't> Parser<'s, 't> {
         let ctrl = self.ctrl();
         let ret = Return::new(ctrl, expr, self.scope, &mut self.nodes).peephole(&mut self.nodes);
 
-        self.nodes.add_def(*self.stop, Some(ret));
+        self.stop.add_def(Some(ret), &mut self.nodes);
         let ctrl = Constant::new(self.types.ty_xctrl, &mut self.nodes).peephole(&mut self.nodes);
         self.set_ctrl(ctrl);
         Ok(())
@@ -628,7 +628,7 @@ impl<'s, 't> Parser<'s, 't> {
                 },
             ));
             let rhs = self.parse_addition()?;
-            self.nodes.set_def(lhs, idx, Some(rhs));
+            lhs.set_def(idx, Some(rhs), &mut self.nodes);
             lhs = lhs.peephole(&mut self.nodes);
             if negate {
                 lhs = self.peephole(Op::make_not(lhs));
@@ -651,7 +651,7 @@ impl<'s, 't> Parser<'s, 't> {
             };
             lhs = self.nodes.create((op, vec![None, Some(lhs), None]));
             let rhs = self.parse_multiplication()?;
-            self.nodes.set_def(lhs, 2, Some(rhs));
+            lhs.set_def(2, Some(rhs), &mut self.nodes);
             lhs = lhs.peephole(&mut self.nodes);
         }
     }
@@ -671,7 +671,7 @@ impl<'s, 't> Parser<'s, 't> {
             };
             lhs = self.nodes.create((op, vec![None, Some(lhs), None]));
             let rhs = self.parse_unary()?;
-            self.nodes.set_def(lhs, 2, Some(rhs));
+            lhs.set_def(2, Some(rhs), &mut self.nodes);
             lhs = lhs.peephole(&mut self.nodes);
         }
     }
@@ -733,7 +733,7 @@ impl<'s, 't> Parser<'s, 't> {
         let ptr_ty = self.types.get_pointer(obj, false);
         let ctrl = self.ctrl();
         let n = self.peephole(Op::make_new(ptr_ty, ctrl));
-        self.nodes.keep(n);
+        n.keep(&mut self.nodes);
 
         let init_value =
             Constant::new(self.types.ty_int_zero, &mut self.nodes).peephole(&mut self.nodes);
@@ -749,7 +749,7 @@ impl<'s, 't> Parser<'s, 't> {
             self.mem_alias_update(alias, store).unwrap();
             alias += 1;
         }
-        self.nodes.unkeep(n);
+        n.unkeep(&mut self.nodes);
         n
     }
 

@@ -10,7 +10,7 @@ use crate::sea_of_nodes::types::Type;
 
 pub struct PrintNodes<'a, 't> {
     node: Option<Node>,
-    nodes: &'a Nodes<'t>,
+    sea: &'a Nodes<'t>,
     visited: RefCell<IdSet<Node>>,
 }
 
@@ -18,7 +18,7 @@ impl Display for PrintNodes<'_, '_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         PrintNodes2 {
             node: self.node,
-            nodes: self.nodes,
+            sea: self.sea,
             visited: &self.visited,
         }
         .fmt(f)
@@ -27,7 +27,7 @@ impl Display for PrintNodes<'_, '_> {
 
 pub struct PrintNodes2<'a, 'b, 't> {
     node: Option<Node>,
-    nodes: &'a Nodes<'t>,
+    sea: &'a Nodes<'t>,
     visited: &'b RefCell<IdSet<Node>>,
 }
 
@@ -35,7 +35,7 @@ impl<'t> Nodes<'t> {
     pub(crate) fn print(&self, node: Option<Node>) -> PrintNodes<'_, 't> {
         PrintNodes {
             node,
-            nodes: self,
+            sea: self,
             visited: RefCell::new(IdSet::zeros(self.len())),
         }
     }
@@ -57,24 +57,24 @@ impl Display for PrintNodes2<'_, '_, '_> {
             return write!(f, "<?>");
         };
 
-        let nodes = self.nodes;
-        let inputs = &nodes.inputs[node];
+        let sea = self.sea;
+        let inputs = &sea.inputs[node];
 
-        if self.visited.borrow().get(node) && !matches!(&nodes[node], Op::Constant(_)) {
-            return write!(f, "{}", nodes[node].label());
+        if self.visited.borrow().get(node) && !matches!(&sea[node], Op::Constant(_)) {
+            return write!(f, "{}", sea[node].label());
         }
         self.visited.borrow_mut().add(node);
 
         let print = |node| Self {
             node,
-            nodes,
+            sea,
             visited: self.visited,
         };
         let input = |index| print(inputs[index]);
         let mut binary = |op: &str| write!(f, "({}{}{})", input(1), op, input(2));
 
-        match &nodes[node] {
-            _ if nodes.is_dead(node) => write!(f, "{}:DEAD", nodes.unique_name(node)),
+        match &sea[node] {
+            _ if node.is_dead(sea) => write!(f, "{}:DEAD", sea.unique_name(node)),
             Op::Add => binary("+"),
             Op::Sub => binary("-"),
             Op::Mul => binary("*"),
@@ -86,7 +86,7 @@ impl Display for PrintNodes2<'_, '_, '_> {
             Op::Minus => write!(f, "(-{})", input(1)),
             Op::Scope(_) => {
                 write!(f, "Scope[ ")?;
-                let names = nodes.to_scope(node).unwrap().reverse_names(nodes);
+                let names = sea.to_scope(node).unwrap().reverse_names(sea);
 
                 for (i, &n) in names.iter().enumerate() {
                     if i > 0 {
@@ -94,9 +94,9 @@ impl Display for PrintNodes2<'_, '_, '_> {
                     }
                     write!(f, "{}:", n.unwrap())?;
                     let mut node = inputs[i];
-                    while node.is_some_and(|n| matches!(&nodes[n], Op::Scope(_))) {
+                    while node.is_some_and(|n| matches!(&sea[n], Op::Scope(_))) {
                         write!(f, "Lazy_")?;
-                        node = nodes.inputs[node.unwrap()][i];
+                        node = sea.inputs[node.unwrap()][i];
                     }
                     write!(f, "{}", print(node))?;
                 }
@@ -106,8 +106,8 @@ impl Display for PrintNodes2<'_, '_, '_> {
             Op::Proj(proj) => write!(f, "{}", proj.label),
             Op::If => write!(f, "if( {} )", input(1)),
             Op::Phi(_) => {
-                if !nodes.instanceof_region(inputs[0])
-                    || Nodes::in_progress(&nodes.ops, &nodes.inputs, nodes.inputs[node][0].unwrap())
+                if !sea.instanceof_region(inputs[0])
+                    || Nodes::in_progress(&sea.ops, &sea.inputs, sea.inputs[node][0].unwrap())
                 {
                     write!(f, "Z")?;
                 }
@@ -126,7 +126,7 @@ impl Display for PrintNodes2<'_, '_, '_> {
             }
             n @ Op::Region { .. } | n @ Op::Loop => write!(f, "{}{}", n.label(), node.index()),
             Op::Stop => {
-                if let ret @ Some(_) = nodes.unique_input(node) {
+                if let ret @ Some(_) = sea.unique_input(node) {
                     write!(f, "{}", print(ret))
                 } else {
                     write!(f, "Stop[ ")?;

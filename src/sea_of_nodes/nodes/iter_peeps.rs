@@ -84,12 +84,12 @@ impl<'t> Nodes<'t> {
     pub fn iterate(&mut self, stop: Stop) {
         debug_assert!(self.progress_on_list(*stop));
         while let Some(n) = self.iter_peeps.work.pop() {
-            if self.is_dead(n) {
+            if n.is_dead(self) {
                 continue;
             }
 
             if let Some(x) = n.peephole_opt(self) {
-                if self.is_dead(x) {
+                if x.is_dead(self) {
                     continue;
                 }
 
@@ -116,7 +116,7 @@ impl<'t> Nodes<'t> {
                         for &z in self.inputs[n].iter().flatten() {
                             self.iter_peeps.add(z);
                         }
-                        self.subsume(n, x);
+                        n.subsume(x, self);
                     }
                 }
 
@@ -124,8 +124,8 @@ impl<'t> Nodes<'t> {
                 self.move_deps_to_worklist(n);
                 debug_assert!(self.progress_on_list(*stop)); // Very expensive assert
             }
-            if self.is_unused(n) && self.to_stop(n).is_none() {
-                self.kill(n); // just plain dead
+            if n.is_unused(self) && self.to_stop(n).is_none() {
+                n.kill(self); // just plain dead
             }
         }
     }
