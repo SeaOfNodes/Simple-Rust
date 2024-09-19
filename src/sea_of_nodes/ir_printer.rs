@@ -15,16 +15,16 @@ pub fn pretty_print(nodes: &Nodes, node: impl Into<Node>, depth: usize) -> Strin
     pretty_print_(nodes, node.into(), depth, false)
 }
 
-fn pretty_print_(nodes: &Nodes, node: Node, depth: usize, llvm_format: bool) -> String {
+fn pretty_print_(sea: &Nodes, node: Node, depth: usize, llvm_format: bool) -> String {
     // First, a Breadth First Search at a fixed depth.
-    let bfs = BFS::run(nodes, node, depth);
+    let bfs = BFS::run(sea, node, depth);
 
     // Convert just that set to a post-order
     let mut rpos = Vec::with_capacity(bfs._bfs.len());
-    let mut visit = IdSet::zeros(nodes.len());
+    let mut visit = IdSet::zeros(sea.len());
 
     for i in bfs._lim..bfs._bfs.len() {
-        post_ord(bfs._bfs[i], &mut rpos, &mut visit, &bfs._bs, nodes);
+        post_ord(bfs._bfs[i], &mut rpos, &mut visit, &bfs._bs, sea);
     }
 
     // Reverse the post-order walk
@@ -33,22 +33,22 @@ fn pretty_print_(nodes: &Nodes, node: Node, depth: usize, llvm_format: bool) -> 
 
     let mut iter = rpos.iter().rev().peekable();
     while let Some(&n) = iter.next() {
-        if nodes.is_cfg(n) || nodes.is_multi_head(n) {
+        if n.is_cfg(sea) || sea.is_multi_head(n) {
             if !gap {
                 sb.push('\n'); // Blank before multihead
             };
-            print_line(nodes, n, &mut sb, llvm_format).unwrap(); // Print head
+            print_line(sea, n, &mut sb, llvm_format).unwrap(); // Print head
             while let Some(&&t) = iter.peek() {
-                if nodes.is_multi_tail(t) {
+                if sea.is_multi_tail(t) {
                     break;
                 }
                 iter.next();
-                print_line(nodes, t, &mut sb, llvm_format).unwrap();
+                print_line(sea, t, &mut sb, llvm_format).unwrap();
             }
             sb.push('\n'); // Blank after multitail
             gap = true;
         } else {
-            print_line(nodes, n, &mut sb, llvm_format).unwrap();
+            print_line(sea, n, &mut sb, llvm_format).unwrap();
             gap = false;
         }
     }
@@ -220,7 +220,7 @@ fn post_ord(
     rpos: &mut Vec<Node>,
     visit: &mut IdSet<Node>,
     bfs: &IdSet<Node>,
-    nodes: &Nodes,
+    sea: &Nodes,
 ) {
     if !bfs.get(n) {
         return; // Not in the BFS visit
@@ -231,25 +231,25 @@ fn post_ord(
     visit.add(n);
 
     // First walk the CFG, then everything
-    if nodes.is_cfg(n) {
-        for &use_ in &nodes.outputs[n] {
+    if n.is_cfg(sea) {
+        for &use_ in &sea.outputs[n] {
             if use_ != Node::DUMMY
-                && nodes.is_cfg(use_)
-                && nodes.outputs[use_].len() >= 1
-                && !matches!(nodes[nodes.outputs[use_][0]], Op::Loop)
+                && use_.is_cfg(sea)
+                && sea.outputs[use_].len() >= 1
+                && !matches!(sea[sea.outputs[use_][0]], Op::Loop)
             {
-                post_ord(use_, rpos, visit, bfs, nodes);
+                post_ord(use_, rpos, visit, bfs, sea);
             }
         }
-        for &use_ in &nodes.outputs[n] {
-            if use_ != Node::DUMMY && nodes.is_cfg(use_) {
-                post_ord(use_, rpos, visit, bfs, nodes);
+        for &use_ in &sea.outputs[n] {
+            if use_ != Node::DUMMY && use_.is_cfg(sea) {
+                post_ord(use_, rpos, visit, bfs, sea);
             }
         }
     }
-    for &use_ in &nodes.outputs[n] {
+    for &use_ in &sea.outputs[n] {
         if use_ != Node::DUMMY {
-            post_ord(use_, rpos, visit, bfs, nodes);
+            post_ord(use_, rpos, visit, bfs, sea);
         }
     }
     rpos.push(n); // Post-order

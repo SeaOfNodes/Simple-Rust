@@ -54,32 +54,34 @@ impl IterPeeps {
     }
 }
 
-impl<'t> Nodes<'t> {
+impl Node {
     /// Add a node to the list of dependencies.  Only add it if its not an input
     /// or output of this node, that is, it is at least one step away.  The node
     /// being added must benefit from this node being peepholed.
-    pub fn add_dep(&mut self, this: Node, dep: Node) {
+    pub fn add_dep(self, dep: Node, sea: &mut Nodes) {
         // Running peepholes during the big assert cannot have side effects
         // like adding dependencies.
-        if self.iter_peeps.mid_assert {
+        if sea.iter_peeps.mid_assert {
             return;
         }
-        if !self.deps[this].contains(&dep)
-            && !self.inputs[this].contains(&Some(dep))
-            && !self.outputs[this].contains(&dep)
+        if !sea.deps[self].contains(&dep)
+            && !self.inputs(sea).contains(&Some(dep))
+            && !sea.outputs[self].contains(&dep)
         {
             // Not on list and not an immediate neighbor
-            self.deps[this].push(dep);
+            sea.deps[self].push(dep);
         }
     }
 
     /// Move the dependents onto a worklist, and clear for future dependents.
-    pub fn move_deps_to_worklist(&mut self, node: Node) {
-        for dep in self.deps[node].drain(..) {
-            self.iter_peeps.add(dep);
+    pub fn move_deps_to_worklist(self, sea: &mut Nodes) {
+        for dep in sea.deps[self].drain(..) {
+            sea.iter_peeps.add(dep);
         }
     }
+}
 
+impl<'t> Nodes<'t> {
     /// Iterate peepholes to a fixed point
     pub fn iterate(&mut self, stop: Stop) {
         debug_assert!(self.progress_on_list(*stop));
@@ -121,7 +123,7 @@ impl<'t> Nodes<'t> {
                 }
 
                 // If there are distant neighbors, move to worklist
-                self.move_deps_to_worklist(n);
+                n.move_deps_to_worklist(self);
                 debug_assert!(self.progress_on_list(*stop)); // Very expensive assert
             }
             if n.is_unused(self) && self.to_stop(n).is_none() {
@@ -131,7 +133,7 @@ impl<'t> Nodes<'t> {
     }
 
     pub fn type_check(&mut self, stop: Stop) -> Result<(), String> {
-        match self.walk_non_reentrant(*stop, |sea, n| sea.err(n)) {
+        match self.walk_non_reentrant(*stop, |sea, n| n.err(sea)) {
             Some(err) => Err(err),
             None => Ok(()),
         }

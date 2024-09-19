@@ -96,7 +96,7 @@ impl<'t> Nodes<'t> {
         // If lhs.in(2) is not a constant, we add ourselves as a dependency
         // because if it later became a constant then we could make this
         // transformation.
-        self.add_dep(self.inputs[lhs][2]?, node);
+        lhs.inputs(self)[2]?.add_dep(node, self);
         if self.ty[self.inputs[lhs][2]?]?.is_constant() && t2.is_constant() {
             let x = self.inputs[lhs][1]?;
             let con1 = self.inputs[lhs][2]?;
@@ -227,7 +227,7 @@ impl<'t> Nodes<'t> {
         }
 
         // If we have only a single unique input, become it.
-        if let live @ Some(_) = self.single_unique_input(*node) {
+        if let live @ Some(_) = node.single_unique_input(self) {
             return live;
         }
 
@@ -238,8 +238,8 @@ impl<'t> Nodes<'t> {
         let op = self.inputs[node][1].expect("not same_inputs");
         if self.inputs[op].len() == 3
             && self.inputs[op][0].is_none()
-            && !self.is_cfg(op)
-            && self.same_op(*node)
+            && !op.is_cfg(self)
+            && node.same_op(self)
         {
             let n_in = &self.inputs[node];
 
@@ -266,14 +266,14 @@ impl<'t> Nodes<'t> {
         if self.inputs[node].len() == 3 {
             if let Some(cast) = self.to_cast(self.inputs[node][1]) {
                 let in_1 = self.inputs[cast][1];
-                self.add_dep(in_1.unwrap(), *node);
+                in_1.unwrap().add_dep(*node, self);
                 if in_1 == self.inputs[node][2] {
                     return self.inputs[node][2];
                 }
             }
             if let Some(cast) = self.to_cast(self.inputs[node][2]) {
                 let in_1 = self.inputs[cast][1];
-                self.add_dep(in_1.unwrap(), *node);
+                in_1.unwrap().add_dep(*node, self);
                 if in_1 == self.inputs[node][1] {
                     return self.inputs[node][1];
                 }
@@ -301,7 +301,7 @@ impl<'t> Nodes<'t> {
                 let idom = self.idom(region);
                 if let Some(iff) = self.to_if(idom) {
                     let pred = iff.inputs(self)[1].unwrap();
-                    self.add_dep(pred, *node);
+                    pred.add_dep(*node, self);
                     if pred == val {
                         // Must walk the idom on the null side to make sure we hit False.
                         let mut idom = region.inputs(self)[nullx].unwrap();
@@ -353,7 +353,7 @@ impl<'t> Nodes<'t> {
         // Flip a negating if-test, to remove the not
         if let Some(iff) = node.inputs(self)[0]?.to_if(self) {
             let pred = iff.inputs(self)[1].unwrap();
-            self.add_dep(pred, node);
+            pred.add_dep(node, self);
             if let Some(not) = pred.to_not(self) {
                 let i = If::new(
                     iff.inputs(self)[0].unwrap(),
@@ -455,10 +455,10 @@ impl<'t> Nodes<'t> {
             let mut prior = node;
             let mut dom = self.idom(node);
             while let Some(d) = dom {
-                self.add_dep(d, node);
+                d.add_dep(node, self);
                 if matches!(&self[d], Op::If) {
                     let if_pred = self.inputs[d][1]?;
-                    self.add_dep(if_pred, node);
+                    if_pred.add_dep(node, self);
                     if if_pred == pred {
                         if let Op::Proj(p) = &self[prior] {
                             let value = if p.index == 0 {
@@ -555,7 +555,7 @@ impl<'t> Nodes<'t> {
     fn profit(&mut self, this: Node, phi_node: Node, idx: usize) -> bool {
         let px = self.inputs[phi_node][idx];
         px.is_some_and(|px| {
-            self.add_dep(px, this);
+            px.add_dep(this, self);
             if let Op::Mem(MemOp {
                 kind: MemOpKind::Store,
                 ..
@@ -613,7 +613,7 @@ impl<'t> Nodes<'t> {
         for i in 0..n_outs {
             let use_ = sea.outputs[this][i];
             if use_ != that {
-                sea.add_dep(use_, that);
+                use_.add_dep(that, sea);
             }
         }
         false
@@ -657,10 +657,10 @@ impl<'t> Nodes<'t> {
             return false;
         }
 
-        if matches!(self[lo], Op::Phi(_)) && self.all_cons(lo, dep) {
+        if matches!(self[lo], Op::Phi(_)) && lo.all_cons(dep, self) {
             return false;
         }
-        if matches!(self[hi], Op::Phi(_)) && self.all_cons(hi, dep) {
+        if matches!(self[hi], Op::Phi(_)) && hi.all_cons(dep, self) {
             return true;
         }
 
@@ -753,6 +753,6 @@ impl<'t> Nodes<'t> {
     /// a dependency to the phi's non-const input, because if later the input turn into a constant
     /// dep can make progress.
     fn pcon(&mut self, op: Option<Node>, dep: Node) -> Option<Node> {
-        op.filter(|op| matches!(&self[*op], Op::Phi(_)) && self.all_cons(*op, dep))
+        op.filter(|op| matches!(&self[*op], Op::Phi(_)) && op.all_cons(dep, self))
     }
 }

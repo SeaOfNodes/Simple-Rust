@@ -9,7 +9,7 @@ pub use scope::ScopeOp;
 use crate::datastructures::id_set::IdSet;
 use crate::datastructures::id_vec::IdVec;
 use crate::sea_of_nodes::nodes::gvn::GvnEntry;
-use crate::sea_of_nodes::nodes::index::{Scope, Start};
+use crate::sea_of_nodes::nodes::index::{Phi, Scope, Start};
 use crate::sea_of_nodes::parser::Parser;
 use crate::sea_of_nodes::types::{MemPtr, Struct, Ty, Type, Types};
 use iter_peeps::IterPeeps;
@@ -222,7 +222,7 @@ impl Node {
         }
 
         sea.inputs[self][index] = new_def;
-        sea.move_deps_to_worklist(self);
+        self.move_deps_to_worklist(sea);
     }
 
     pub fn add_def(self, new_def: Option<Node>, sea: &mut Nodes) {
@@ -244,7 +244,7 @@ impl Node {
             if old_def.is_unused(sea) {
                 old_def.kill(sea);
             }
-            sea.move_deps_to_worklist(old_def);
+            old_def.move_deps_to_worklist(sea);
         }
         sea.inputs[self].swap_remove(index);
     }
@@ -279,25 +279,23 @@ impl Node {
     pub fn is_keep(self, sea: &Nodes) -> bool {
         sea.outputs[self].contains(&Node::DUMMY)
     }
-}
 
-impl<'t> Nodes<'t> {
-    pub fn err(&self, node: Node) -> Option<String> {
-        if let Some(memop) = self.to_mem_op(node) {
-            let ptr = node.inputs(self)[2]?.ty(self)?;
-            if ptr == self.types.ty_bot || matches!(*ptr, Type::Pointer(MemPtr { nil: true, .. })) {
-                return Some(format!("Might be null accessing '{}'", self[memop].name));
+    pub fn err(self, sea: &Nodes) -> Option<String> {
+        if let Some(memop) = self.to_mem_op(sea) {
+            let ptr = self.inputs(sea)[2]?.ty(sea)?;
+            if ptr == sea.types.ty_bot || matches!(*ptr, Type::Pointer(MemPtr { nil: true, .. })) {
+                return Some(format!("Might be null accessing '{}'", sea[memop].name));
             }
         }
         None
     }
 
-    pub fn is_cfg(&self, node: Node) -> bool {
-        match &self[node] {
+    pub fn is_cfg(self, sea: &Nodes) -> bool {
+        match &sea[self] {
             Op::Start { .. } | Op::Return | Op::Stop => true,
             Op::If | Op::Region { .. } | Op::Loop => true,
             Op::Proj(p) => {
-                p.index == 0 || self.inputs[node][0].is_some_and(|n| matches!(&self[n], Op::If))
+                p.index == 0 || self.inputs(sea)[0].is_some_and(|n| n.to_if(sea).is_some())
             }
             Op::Constant(_)
             | Op::Add
@@ -315,9 +313,9 @@ impl<'t> Nodes<'t> {
         }
     }
 
-    pub fn unique_input(&self, stop: Node) -> Option<Node> {
-        if self.inputs[stop].len() == 1 {
-            self.inputs[stop][0]
+    pub fn unique_input(self, sea: &Nodes) -> Option<Node> {
+        if self.inputs(sea).len() == 1 {
+            self.inputs(sea)[0]
         } else {
             None // ambiguous
         }
@@ -331,59 +329,63 @@ impl<'t> Nodes<'t> {
     /// It is sufficient for one of the non-const
     /// inputs to have the dependency so we don't bother
     /// checking the rest.
-    pub fn all_cons(&mut self, node: Node, dep: Node) -> bool {
-        if matches!(&self[node], Op::Phi(_)) {
-            let region = self.inputs[node][0];
-            if !self.instanceof_region(region) {
+    pub fn all_cons(self, dep: Node, sea: &mut Nodes) -> bool {
+        if let Some(phi) = self.to_phi(sea) {
+            let region = phi.inputs(sea)[0];
+            if !sea.instanceof_region(region) {
                 return false;
             }
             // When the region completes (is no longer in progress) the Phi can
             // become a "all constants" Phi, and the "dep" might make progress.
-            self.add_dep(node, dep);
-            if Self::in_progress(&self.ops, &self.inputs, region.unwrap()) {
+            self.add_dep(dep, sea);
+            if Nodes::in_progress(&sea.ops, &sea.inputs, region.unwrap()) {
                 return false;
             }
         }
-        if let Some(non_const) = self.inputs[node]
+        if let Some(non_const) = self
+            .inputs(sea)
             .iter()
             .skip(1)
-            .find(|n| !self.ty[n.unwrap()].unwrap().is_constant())
+            .find(|n| !n.unwrap().ty(sea).unwrap().is_constant())
         {
-            self.add_dep(non_const.unwrap(), dep); // If in(i) becomes a constant later, will trigger some peephole
+            non_const.unwrap().add_dep(dep, sea); // If in(i) becomes a constant later, will trigger some peephole
             false
         } else {
             true
         }
     }
 
-    fn same_op(&self, node: Node) -> bool {
-        for i in 2..self.inputs[node].len() {
-            if self[self.inputs[node][1].unwrap()].operation()
-                != self[self.inputs[node][i].unwrap()].operation()
+    fn same_op(self, sea: &Nodes) -> bool {
+        for i in 2..self.inputs(sea).len() {
+            if sea[self.inputs(sea)[1].unwrap()].operation()
+                != sea[self.inputs(sea)[i].unwrap()].operation()
             {
                 return false;
             }
         }
         true
     }
-    fn single_unique_input(&mut self, phi: Node) -> Option<Node> {
-        let region = self.inputs[phi][0].unwrap();
-        if matches!(&self[region], Op::Loop)
-            && self.ty[self.inputs[region][1].unwrap()] == Some(self.types.ty_xctrl)
+}
+
+impl Phi {
+    fn single_unique_input(self, sea: &mut Nodes) -> Option<Node> {
+        let region = self.inputs(sea)[0].unwrap();
+        if region.to_loop(sea).is_some()
+            && region.inputs(sea)[1].unwrap().ty(sea) == Some(sea.types.ty_xctrl)
         {
             return None; // Dead entry loops just ignore and let the loop collapse
         }
 
         let mut live = None;
-        for i in 1..self.inputs[phi].len() {
+        for i in 1..self.inputs(sea).len() {
             // If the region's control input is live, add this as a dependency
             // to the control because we can be peeped should it become dead.
-            let region_in_i = self.inputs[region][i].unwrap();
-            self.add_dep(region_in_i, phi);
-            if self.ty[region_in_i] != Some(self.types.ty_xctrl) && self.inputs[phi][i] != Some(phi)
+            let region_in_i = region.inputs(sea)[i].unwrap();
+            region_in_i.add_dep(*self, sea);
+            if region_in_i.ty(sea) != Some(sea.types.ty_xctrl) && self.inputs(sea)[i] != Some(*self)
             {
-                if live.is_none() || live == self.inputs[phi][i] {
-                    live = self.inputs[phi][i];
+                if live.is_none() || live == self.inputs(sea)[i] {
+                    live = self.inputs(sea)[i];
                 } else {
                     return None;
                 }
@@ -391,7 +393,9 @@ impl<'t> Nodes<'t> {
         }
         live
     }
+}
 
+impl<'t> Nodes<'t> {
     /// Return the immediate dominator of this Node and compute dom tree depth.
     fn idom(&mut self, node: Node) -> Option<Node> {
         match &self[node] {

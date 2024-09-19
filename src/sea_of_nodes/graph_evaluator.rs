@@ -64,7 +64,7 @@ impl<'t> Nodes<'t> {
     fn find_control(&self, control: Node) -> Option<Node> {
         self.outputs[control]
             .iter()
-            .find(|&&use_| self.is_cfg(use_))
+            .find(|&&use_| use_.is_cfg(self))
             .copied()
     }
 

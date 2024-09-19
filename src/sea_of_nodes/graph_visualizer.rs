@@ -107,10 +107,10 @@ fn nodes_by_cluster(
         if matches!(&nodes[n], Op::Proj(_) | Op::Scope(_)) {
             continue;
         }
-        if separate_control_cluster && do_ctrl && !nodes.is_cfg(n) {
+        if separate_control_cluster && do_ctrl && !n.is_cfg(nodes) {
             continue;
         }
-        if separate_control_cluster && !do_ctrl && nodes.is_cfg(n) {
+        if separate_control_cluster && !do_ctrl && n.is_cfg(nodes) {
             continue;
         }
 
@@ -138,7 +138,7 @@ fn nodes_by_cluster(
                         write!(sb, "\t\t\t\t<TR>")?;
                     }
                     write!(sb, "<TD PORT=\"p{}\"", p.index)?;
-                    if nodes.is_cfg(*use_) {
+                    if use_.is_cfg(nodes) {
                         write!(sb, " BGCOLOR=\"yellow\"")?;
                     };
                     write!(sb, ">{}</TD>", proj.glabel())?;
@@ -152,7 +152,7 @@ fn nodes_by_cluster(
             writeln!(sb, "</TR>")?;
             write!(sb, "\t\t\t</TABLE>>\n\t\t")?;
         } else {
-            if nodes.is_cfg(n) {
+            if n.is_cfg(nodes) {
                 write!(sb, "shape=box style=filled fillcolor=yellow ")?;
             } else if matches!(&nodes[n], Op::Phi(_)) {
                 write!(sb, "style=filled fillcolor=lightyellow ")?;
@@ -220,8 +220,8 @@ fn do_scope(sb: &mut String, nodes: &Nodes, scope: Scope) -> fmt::Result {
     Ok(())
 }
 
-fn make_scope_name(nodes: &Nodes, scope: Scope, level: usize) -> String {
-    format!("{}_{level}", nodes.unique_name(*scope))
+fn make_scope_name(sea: &Nodes, scope: Scope, level: usize) -> String {
+    format!("{}_{level}", sea.unique_name(*scope))
 }
 
 fn make_port_name(scope_name: &str, var_name: &str) -> String {
@@ -239,44 +239,44 @@ impl Node {
     }
 }
 
-fn node_edges(sb: &mut String, nodes: &Nodes, all: &HashSet<Node>) -> fmt::Result {
+fn node_edges(sb: &mut String, sea: &Nodes, all: &HashSet<Node>) -> fmt::Result {
     writeln!(sb, "\tedge [ fontname=Helvetica, fontsize=8 ];")?;
     for &n in all.iter() {
-        if matches!(&nodes[n], Op::Constant(_) | Op::Proj(_) | Op::Scope(_)) {
+        if matches!(&sea[n], Op::Constant(_) | Op::Proj(_) | Op::Scope(_)) {
             continue;
         }
-        for (i, def) in nodes.inputs[n].iter().enumerate() {
+        for (i, def) in sea.inputs[n].iter().enumerate() {
             let Some(def) = *def else { continue };
 
-            if let (Op::Phi(_), Op::Region { .. } | Op::Loop) = (&nodes[n], &nodes[def]) {
+            if let (Op::Phi(_), Op::Region { .. } | Op::Loop) = (&sea[n], &sea[def]) {
                 writeln!(
                     sb,
                     "\t{} -> {} [style=dotted taillabel={i}];",
-                    nodes.unique_name(n),
-                    nodes.unique_name(def)
+                    sea.unique_name(n),
+                    sea.unique_name(def)
                 )?;
                 continue;
             }
 
-            write!(sb, "\t{} -> {}", nodes.unique_name(n), def_name(nodes, def))?;
+            write!(sb, "\t{} -> {}", sea.unique_name(n), def_name(sea, def))?;
 
             write!(sb, "[taillabel={i}")?;
 
-            if n.to_new(nodes).is_some() {
+            if n.to_new(sea).is_some() {
                 write!(sb, " color=green")?;
-            } else if nodes.is_cfg(def) {
+            } else if def.is_cfg(sea) {
                 write!(sb, " color=red")?;
-            } else if def.is_mem(nodes) {
+            } else if def.is_mem(sea) {
                 write!(sb, " color=blue")?;
             }
 
-            if matches!(nodes[n], Op::Constant(_)) && matches!(nodes[def], Op::Start { .. }) {
+            if matches!(sea[n], Op::Constant(_)) && matches!(sea[def], Op::Start { .. }) {
                 write!(sb, " style=dotted")?;
-            } else if nodes.is_cfg(def) {
+            } else if def.is_cfg(sea) {
                 write!(sb, " color=red")?;
             }
 
-            if i == 2 && matches!(&nodes[n], Op::Phi(_) | Op::Loop) {
+            if i == 2 && matches!(&sea[n], Op::Phi(_) | Op::Loop) {
                 write!(sb, " constraint=false")?;
             }
 
@@ -286,19 +286,19 @@ fn node_edges(sb: &mut String, nodes: &Nodes, all: &HashSet<Node>) -> fmt::Resul
     Ok(())
 }
 
-fn scope_edges(sb: &mut String, nodes: &Nodes, scope: Scope) -> fmt::Result {
+fn scope_edges(sb: &mut String, sea: &Nodes, scope: Scope) -> fmt::Result {
     writeln!(sb, "\tedge [style=dashed color=cornflowerblue];")?;
-    for (level, s) in nodes[scope].scopes.iter().rev().enumerate() {
-        let scope_name = make_scope_name(nodes, scope, level + 1);
+    for (level, s) in sea[scope].scopes.iter().rev().enumerate() {
+        let scope_name = make_scope_name(sea, scope, level + 1);
 
         for (name, (index, _ty)) in s {
-            let mut def = nodes.inputs[scope][*index];
-            while def.is_some() && matches!(&nodes[def.unwrap()], Op::Scope(_)) {
-                def = nodes.inputs[def.unwrap()][*index]; // lazy
+            let mut def = sea.inputs[scope][*index];
+            while def.is_some() && matches!(&sea[def.unwrap()], Op::Scope(_)) {
+                def = sea.inputs[def.unwrap()][*index]; // lazy
             }
             if let Some(def) = def {
                 let port_name = make_port_name(&scope_name, name);
-                let def_name = def_name(nodes, def);
+                let def_name = def_name(sea, def);
                 writeln!(sb, "\t{scope_name}:\"{port_name}\" -> {def_name};")?;
             }
         }
@@ -306,13 +306,13 @@ fn scope_edges(sb: &mut String, nodes: &Nodes, scope: Scope) -> fmt::Result {
     Ok(())
 }
 
-fn def_name(nodes: &Nodes, def: Node) -> String {
-    match &nodes[def] {
+fn def_name(sea: &Nodes, def: Node) -> String {
+    match &sea[def] {
         Op::Proj(p) => {
-            let mname = nodes.unique_name(nodes.inputs[def][0].unwrap());
+            let mname = sea.unique_name(sea.inputs[def][0].unwrap());
             format!("{mname}:p{}", p.index)
         }
-        _ => nodes.unique_name(def),
+        _ => sea.unique_name(def),
     }
 }
 

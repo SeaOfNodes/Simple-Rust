@@ -91,7 +91,7 @@ impl<'t> Node {
         for o in &sea.outputs[self] {
             sea.iter_peeps.add(*o);
         }
-        sea.move_deps_to_worklist(self);
+        self.move_deps_to_worklist(sea);
         old
     }
 
@@ -249,7 +249,7 @@ impl<'t> Node {
                         // If the region's control input is live, add this as a dependency
                         // to the control because we can be peeped should it become dead.
                         let r_in_i = region.inputs(sea)[i].unwrap();
-                        sea.add_dep(r_in_i, self);
+                        r_in_i.add_dep(self, sea);
                         let in_i = self.inputs(sea)[i].unwrap();
                         if r_in_i.ty(sea) != Some(types.ty_xctrl) {
                             t = types.meet(t, in_i.ty(sea).unwrap())

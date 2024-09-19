@@ -20,7 +20,7 @@ return 1;
     parser.type_check(stop).unwrap();
     assert_eq!("return 2;", parser.print(stop));
 
-    let ret = parser.nodes.unique_input(*stop).unwrap();
+    let ret = stop.unique_input(&mut parser.nodes).unwrap();
     assert!(matches!(parser.nodes[ret], Op::Return));
     let ret_ctrl = parser.nodes.inputs[ret][0].unwrap();
     assert!(matches!(parser.nodes[ret_ctrl], Op::Proj(_)));
@@ -66,7 +66,7 @@ return a;
     parser.type_check(stop).unwrap();
     assert_eq!("return 2;", parser.print(stop));
 
-    let ret = parser.nodes.unique_input(*stop).unwrap();
+    let ret = stop.unique_input(&mut parser.nodes).unwrap();
     assert!(matches!(parser.nodes[ret], Op::Return));
     let ret_ctrl = parser.nodes.inputs[ret][0].unwrap();
     assert!(matches!(parser.nodes[ret_ctrl], Op::Proj(_)));

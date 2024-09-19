@@ -36,7 +36,7 @@ fn test_error_iterate(source: &str, error: &str) {
 
 impl<'t> Nodes<'t> {
     pub fn ret_ctrl(&self, stop: Stop) -> &Op<'t> {
-        let ret = self.unique_input(*stop).unwrap();
+        let ret = stop.unique_input(self).unwrap();
         assert!(matches!(&self[ret], Op::Return));
         &self[self.inputs[ret][0].unwrap()]
     }

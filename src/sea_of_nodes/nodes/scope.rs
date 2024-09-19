@@ -213,7 +213,7 @@ impl<'t> Scope {
                     for &o in &sea.outputs[phi] {
                         sea.iter_peeps.add(o);
                     }
-                    sea.move_deps_to_worklist(phi);
+                    phi.move_deps_to_worklist(sea);
                     if in_ != phi {
                         // Keeping phi around for parser elsewhere
                         if !phi.is_keep(sea) {
