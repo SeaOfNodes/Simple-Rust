@@ -64,7 +64,7 @@ impl<'t> Node {
         }
 
         // Ask each node for a better replacement
-        if let idealized @ Some(_) = sea.idealize(self) {
+        if let idealized @ Some(_) = self.idealize(sea) {
             return idealized; // Something changes, report progress
         }
 

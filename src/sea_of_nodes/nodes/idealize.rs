@@ -1,35 +1,43 @@
 use crate::datastructures::id::Id;
-use crate::sea_of_nodes::nodes::index::{Constant, If, Minus, Phi};
-use crate::sea_of_nodes::nodes::node::{MemOp, MemOpKind, PhiOp};
+use crate::sea_of_nodes::nodes::index::{
+    Bool, Cast, Constant, If, Minus, Phi, Proj, Return, Stop, TypedNode,
+};
+use crate::sea_of_nodes::nodes::node::{MemOp, MemOpKind};
 use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes, Op};
 use crate::sea_of_nodes::types::{Int, Ty, Type};
 
-impl<'t> Nodes<'t> {
+impl Node {
     /// do not peephole directly returned values!
-    pub(super) fn idealize(&mut self, node: Node) -> Option<Node> {
-        match &self[node] {
-            Op::Add => self.idealize_add(node),
-            Op::Sub => self.idealize_sub(node),
-            Op::Mul => self.idealize_mul(node),
-            Op::Bool(op) => self.idealize_bool(*op, node),
-            Op::Phi(PhiOp { ty, .. }) => self.idealize_phi(self.to_phi(node).unwrap(), *ty),
-            Op::Stop => self.idealize_stop(node),
-            Op::Return => self.idealize_return(node),
-            Op::Proj(p) => self.idealize_proj(node, p.index),
-            Op::Region { .. } | Op::Loop => self.idealize_region(node),
-            Op::If => self.idealize_if(node),
-            Op::Cast(t) => self.idealize_cast(node, *t),
-            Op::Mem(m) => match m.kind {
-                MemOpKind::Load { declared_type } => self.idealize_load(node, declared_type),
-                MemOpKind::Store => self.idealize_store(node),
+    pub(super) fn idealize(self, sea: &mut Nodes) -> Option<Node> {
+        let s = self;
+        match self.downcast(&sea.ops) {
+            TypedNode::Add(_) => sea.idealize_add(s),
+            TypedNode::Sub(_) => sea.idealize_sub(s),
+            TypedNode::Mul(_) => sea.idealize_mul(s),
+            TypedNode::Bool(n) => n.idealize_bool(sea),
+            TypedNode::Phi(n) => n.idealize_phi(sea),
+            TypedNode::Stop(n) => n.idealize_stop(sea),
+            TypedNode::Return(n) => n.idealize_return(sea),
+            TypedNode::Proj(n) => n.idealize_proj(sea),
+            TypedNode::Region(_) | TypedNode::Loop(_) => sea.idealize_region(s),
+            TypedNode::If(_) => sea.idealize_if(s),
+            TypedNode::Cast(n) => n.idealize_cast(sea),
+            TypedNode::Mem(m) => match sea[m].kind {
+                MemOpKind::Load { declared_type } => sea.idealize_load(s, declared_type),
+                MemOpKind::Store => sea.idealize_store(s),
             },
-            Op::Minus => node.to_minus(self).unwrap().idealize_minus(self),
-            Op::Constant(_) | Op::Start { .. } | Op::Div | Op::Scope(_) | Op::New(_) | Op::Not => {
-                None
-            }
+            TypedNode::Minus(n) => n.idealize_minus(sea),
+            TypedNode::Constant(_)
+            | TypedNode::Start(_)
+            | TypedNode::Div(_)
+            | TypedNode::Scope(_)
+            | TypedNode::New(_)
+            | TypedNode::Not(_) => None,
         }
     }
+}
 
+impl<'t> Nodes<'t> {
     fn idealize_add(&mut self, node: Node) -> Option<Node> {
         let lhs = self.inputs[node][1]?;
         let rhs = self.inputs[node][2]?;
@@ -175,59 +183,63 @@ impl<'t> Nodes<'t> {
             self.phi_con(node, true)
         }
     }
+}
 
-    fn idealize_bool(&mut self, op: BoolOp, node: Node) -> Option<Node> {
-        if self.inputs[node][1]? == self.inputs[node][2]? {
+impl Bool {
+    fn idealize_bool(self, sea: &mut Nodes) -> Option<Node> {
+        let op = sea[self];
+        if self.inputs(sea)[1]? == self.inputs(sea)[2]? {
             let value = if op.compute(3, 3) {
-                self.types.ty_int_one
+                sea.types.ty_int_one
             } else {
-                self.types.ty_int_zero
+                sea.types.ty_int_zero
             };
-            return Some(*Constant::new(value, self));
+            return Some(*Constant::new(value, sea));
         }
 
         // Equals pushes constant to the right; 5==X becomes X==5.
         if op == BoolOp::EQ {
-            let lhs = node.inputs(self)[1].unwrap();
-            let rhs = node.inputs(self)[2].unwrap();
+            let lhs = self.inputs(sea)[1].unwrap();
+            let rhs = self.inputs(sea)[2].unwrap();
 
-            if rhs.to_constant(self).is_none() {
+            if rhs.to_constant(sea).is_none() {
                 // con==noncon becomes noncon==con
-                if lhs.to_constant(self).is_some() {
-                    return Some(self.create(Op::make_bool([rhs, lhs], op)));
+                if lhs.to_constant(sea).is_some() {
+                    return Some(sea.create(Op::make_bool([rhs, lhs], op)));
                 } else if lhs.index() > rhs.index() {
                     // Equals sorts by NID otherwise: non.high == non.low becomes non.low == non.high
-                    return Some(self.create(Op::make_bool([rhs, lhs], op)));
+                    return Some(sea.create(Op::make_bool([rhs, lhs], op)));
                 }
             }
             // Equals X==0 becomes a !X
-            if rhs.ty(self) == Some(self.types.ty_int_zero)
-                || rhs.ty(self) == Some(self.types.ty_pointer_null)
+            if rhs.ty(sea) == Some(sea.types.ty_int_zero)
+                || rhs.ty(sea) == Some(sea.types.ty_pointer_null)
             {
-                return Some(self.create(Op::make_not(lhs)));
+                return Some(sea.create(Op::make_not(lhs)));
             }
         }
 
         // Do we have ((x * (phi cons)) * con) ?
         // Do we have ((x * (phi cons)) * (phi cons)) ?
         // Push constant up through the phi: x * (phi con0*con0 con1*con1...)
-        let phicon = self.phi_con(node, op == BoolOp::EQ);
-        phicon
+        sea.phi_con(*self, op == BoolOp::EQ)
     }
+}
 
-    fn idealize_phi(&mut self, node: Phi, declared_ty: Ty<'t>) -> Option<Node> {
-        let region = self.inputs[node][0];
-        if !self.instanceof_region(region) {
-            return self.inputs[node][1]; // Input has collapse to e.g. starting control.
+impl Phi {
+    fn idealize_phi(self, sea: &mut Nodes) -> Option<Node> {
+        let region = self.inputs(sea)[0];
+        if !sea.instanceof_region(region) {
+            return self.inputs(sea)[1]; // Input has collapse to e.g. starting control.
         }
-        if Self::in_progress(&self.ops, &self.inputs, *node)
-            || self.inputs[region.unwrap()].is_empty()
+        if Nodes::in_progress(&sea.ops, &sea.inputs, *self)
+            || region.unwrap().inputs(sea).is_empty()
         {
             return None; // Input is in-progress
         }
 
         // If we have only a single unique input, become it.
-        if let live @ Some(_) = node.single_unique_input(self) {
+        if let live @ Some(_) = self.single_unique_input(sea) {
             return live;
         }
 
@@ -235,13 +247,13 @@ impl<'t> Nodes<'t> {
         // Phi, but Phis do not make code.
         //   Phi(op(A,B),op(Q,R),op(X,Y)) becomes
         //     op(Phi(A,Q,X), Phi(B,R,Y)).
-        let op = self.inputs[node][1].expect("not same_inputs");
-        if self.inputs[op].len() == 3
-            && self.inputs[op][0].is_none()
-            && !op.is_cfg(self)
-            && node.same_op(self)
+        let op = self.inputs(sea)[1].expect("not same_inputs");
+        if op.inputs(sea).len() == 3
+            && op.inputs(sea)[0].is_none()
+            && !op.is_cfg(sea)
+            && self.same_op(sea)
         {
-            let n_in = &self.inputs[node];
+            let n_in = &self.inputs(sea);
 
             let mut lhss = vec![None; n_in.len()];
             let mut rhss = vec![None; n_in.len()];
@@ -251,31 +263,32 @@ impl<'t> Nodes<'t> {
             rhss[0] = n_in[0];
 
             for i in 1..n_in.len() {
-                lhss[i] = self.inputs[n_in[i].unwrap()][1];
-                rhss[i] = self.inputs[n_in[i].unwrap()][2];
+                lhss[i] = n_in[i].unwrap().inputs(sea)[1];
+                rhss[i] = n_in[i].unwrap().inputs(sea)[2];
             }
 
-            let label = self[node].label;
-            let phi_lhs = self.create_peepholed(Op::make_phi(label, declared_ty, lhss));
-            let phi_rhs = self.create_peepholed(Op::make_phi(label, declared_ty, rhss));
+            let label = sea[self].label;
+            let declared_ty = sea[self].ty;
+            let phi_lhs = sea.create_peepholed(Op::make_phi(label, declared_ty, lhss));
+            let phi_rhs = sea.create_peepholed(Op::make_phi(label, declared_ty, rhss));
 
-            return Some(self.create((self[op].clone(), vec![None, Some(phi_lhs), Some(phi_rhs)])));
+            return Some(sea.create((sea[op].clone(), vec![None, Some(phi_lhs), Some(phi_rhs)])));
         }
 
         // If merging Phi(N, cast(N)) - we are losing the cast JOIN effects, so just remove.
-        if self.inputs[node].len() == 3 {
-            if let Some(cast) = self.to_cast(self.inputs[node][1]) {
-                let in_1 = self.inputs[cast][1];
-                in_1.unwrap().add_dep(*node, self);
-                if in_1 == self.inputs[node][2] {
-                    return self.inputs[node][2];
+        if self.inputs(sea).len() == 3 {
+            if let Some(cast) = self.inputs(sea)[1].unwrap().to_cast(sea) {
+                let in_1 = cast.inputs(sea)[1];
+                in_1.unwrap().add_dep(*self, sea);
+                if in_1 == self.inputs(sea)[2] {
+                    return self.inputs(sea)[2];
                 }
             }
-            if let Some(cast) = self.to_cast(self.inputs[node][2]) {
-                let in_1 = self.inputs[cast][1];
-                in_1.unwrap().add_dep(*node, self);
-                if in_1 == self.inputs[node][1] {
-                    return self.inputs[node][1];
+            if let Some(cast) = self.inputs(sea)[2].unwrap().to_cast(sea) {
+                let in_1 = cast.inputs(sea)[1];
+                in_1.unwrap().add_dep(*self, sea);
+                if in_1 == self.inputs(sea)[1] {
+                    return self.inputs(sea)[1];
                 }
             }
         }
@@ -283,32 +296,32 @@ impl<'t> Nodes<'t> {
         // If merging a null-checked null and the checked value, just use the value.
         // if( val ) ..; phi(Region,False=0/null,True=val);
         // then replace with plain val.
-        if self.inputs[node].len() == 3 {
+        if self.inputs(sea).len() == 3 {
             let mut nullx = 0;
 
-            let t1 = node.inputs(self)[1].unwrap().ty(self).unwrap();
-            if Some(t1) == self.types.make_init(t1) {
+            let t1 = self.inputs(sea)[1].unwrap().ty(sea).unwrap();
+            if Some(t1) == sea.types.make_init(t1) {
                 nullx = 1;
             }
-            let t2 = node.inputs(self)[2].unwrap().ty(self).unwrap();
-            if Some(t2) == self.types.make_init(t2) {
+            let t2 = self.inputs(sea)[2].unwrap().ty(sea).unwrap();
+            if Some(t2) == sea.types.make_init(t2) {
                 nullx = 2;
             }
 
             if nullx != 0 {
-                let val = node.inputs(self)[3 - nullx].unwrap();
-                let region = node.inputs(self)[0].unwrap();
-                let idom = self.idom(region);
-                if let Some(iff) = self.to_if(idom) {
-                    let pred = iff.inputs(self)[1].unwrap();
-                    pred.add_dep(*node, self);
+                let val = self.inputs(sea)[3 - nullx].unwrap();
+                let region = self.inputs(sea)[0].unwrap();
+                let idom = sea.idom(region);
+                if let Some(iff) = sea.to_if(idom) {
+                    let pred = iff.inputs(sea)[1].unwrap();
+                    pred.add_dep(*self, sea);
                     if pred == val {
                         // Must walk the idom on the null side to make sure we hit False.
-                        let mut idom = region.inputs(self)[nullx].unwrap();
-                        while idom.inputs(self)[0] != Some(*iff) {
-                            idom = self.idom(idom).unwrap();
+                        let mut idom = region.inputs(sea)[nullx].unwrap();
+                        while idom.inputs(sea)[0] != Some(*iff) {
+                            idom = sea.idom(idom).unwrap();
                         }
-                        if self.to_proj(idom).is_some_and(|p| self[p].index == 1) {
+                        if sea.to_proj(idom).is_some_and(|p| sea[p].index == 1) {
                             return Some(val);
                         }
                     }
@@ -318,50 +331,58 @@ impl<'t> Nodes<'t> {
 
         None
     }
+}
 
-    fn idealize_stop(&mut self, node: Node) -> Option<Node> {
+impl Stop {
+    fn idealize_stop(self, sea: &mut Nodes) -> Option<Node> {
         let mut result = None;
         let mut i = 0;
-        while i < self.inputs[node].len() {
-            if self.ty[self.inputs[node][i].unwrap()] == Some(self.types.ty_xctrl) {
-                node.del_def(i, self);
-                result = Some(node);
+        while i < self.inputs(sea).len() {
+            if self.inputs(sea)[i].unwrap().ty(sea) == Some(sea.types.ty_xctrl) {
+                self.del_def(i, sea);
+                result = Some(*self);
             } else {
                 i += 1;
             }
         }
         result
     }
+}
 
-    fn idealize_return(&mut self, node: Node) -> Option<Node> {
-        self.inputs[node][0].filter(|ctrl| self.ty[*ctrl] == Some(self.types.ty_xctrl))
+impl Return {
+    fn idealize_return(self, sea: &mut Nodes) -> Option<Node> {
+        self.inputs(sea)[0].filter(|ctrl| ctrl.ty(sea) == Some(sea.types.ty_xctrl))
     }
+}
 
-    fn idealize_proj(&mut self, node: Node, index: usize) -> Option<Node> {
-        if let Some(Type::Tuple { types: ts }) = self.ty[self.inputs[node][0]?].as_deref() {
-            if ts[index] == self.types.ty_xctrl {
-                return Some(*Constant::new(self.types.ty_xctrl, self)); // We are dead
+impl Proj {
+    fn idealize_proj(self, sea: &mut Nodes) -> Option<Node> {
+        let index = sea[self].index;
+
+        if let Some(Type::Tuple { types: ts }) = self.inputs(sea)[0].unwrap().ty(sea).as_deref() {
+            if ts[index] == sea.types.ty_xctrl {
+                return Some(*Constant::new(sea.types.ty_xctrl, sea)); // We are dead
             }
             // Only true for IfNodes
-            if node.inputs(self)[0].unwrap().to_if(self).is_some()
-                && ts[1 - index] == self.types.ty_xctrl
+            if self.inputs(sea)[0].unwrap().to_if(sea).is_some()
+                && ts[1 - index] == sea.types.ty_xctrl
             {
-                return self.inputs[self.inputs[node][0].unwrap()][0]; // We become our input control
+                return self.inputs(sea)[0].unwrap().inputs(sea)[0]; // We become our input control
             }
         }
 
         // Flip a negating if-test, to remove the not
-        if let Some(iff) = node.inputs(self)[0]?.to_if(self) {
-            let pred = iff.inputs(self)[1].unwrap();
-            pred.add_dep(node, self);
-            if let Some(not) = pred.to_not(self) {
+        if let Some(iff) = self.inputs(sea)[0]?.to_if(sea) {
+            let pred = iff.inputs(sea)[1].unwrap();
+            pred.add_dep(*self, sea);
+            if let Some(not) = pred.to_not(sea) {
                 let i = If::new(
-                    iff.inputs(self)[0].unwrap(),
-                    not.inputs(self)[1].unwrap(),
-                    self,
+                    iff.inputs(sea)[0].unwrap(),
+                    not.inputs(sea)[1].unwrap(),
+                    sea,
                 )
-                .peephole(self);
-                return Some(self.create(Op::make_proj(
+                .peephole(sea);
+                return Some(sea.create(Op::make_proj(
                     i,
                     1 - index,
                     if index == 0 { "False" } else { "True" },
@@ -371,7 +392,9 @@ impl<'t> Nodes<'t> {
 
         None
     }
+}
 
+impl<'t> Nodes<'t> {
     fn idealize_region(&mut self, node: Node) -> Option<Node> {
         if Self::in_progress(&self.ops, &self.inputs, node) {
             return None;
@@ -478,11 +501,14 @@ impl<'t> Nodes<'t> {
         }
         None
     }
-
-    fn idealize_cast(&mut self, node: Node, ty: Ty<'t>) -> Option<Node> {
-        self.inputs[node][1].filter(|&n| self.ty[n].is_some_and(|t| self.types.isa(t, ty)))
+}
+impl Cast {
+    fn idealize_cast(self, sea: &mut Nodes) -> Option<Node> {
+        self.inputs(sea)[1].filter(|&n| n.ty(sea).is_some_and(|t| sea.types.isa(t, sea[self])))
     }
+}
 
+impl<'t> Nodes<'t> {
     fn idealize_load(&mut self, node: Node, declared_ty: Ty<'t>) -> Option<Node> {
         let mem = self.inputs[node][1]?;
         let ptr = self.inputs[node][2]?;
@@ -679,9 +705,9 @@ impl<'t> Nodes<'t> {
         lo.index() > hi.index()
     }
 
-    //     // Rotation is only valid for associative ops, e.g. Add, Mul, And, Or.
-    //     // Do we have ((phi cons)|(x + (phi cons)) + con|(phi cons)) ?
-    //     // Push constant up through the phi: x + (phi con0+con0 con1+con1...)
+    // Rotation is only valid for associative ops, e.g. Add, Mul, And, Or.
+    // Do we have ((phi cons)|(x + (phi cons)) + con|(phi cons)) ?
+    // Push constant up through the phi: x + (phi con0+con0 con1+con1...)
     fn phi_con(&mut self, op: Node, rotate: bool) -> Option<Node> {
         let lhs = self.inputs[op][1]?;
         let rhs = self.inputs[op][2]?;
