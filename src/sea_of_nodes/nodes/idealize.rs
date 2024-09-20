@@ -1,5 +1,5 @@
 use crate::datastructures::id::Id;
-use crate::sea_of_nodes::nodes::index::{Constant, If, Phi};
+use crate::sea_of_nodes::nodes::index::{Constant, If, Minus, Phi};
 use crate::sea_of_nodes::nodes::node::{MemOp, MemOpKind, PhiOp};
 use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes, Op};
 use crate::sea_of_nodes::types::{Int, Ty, Type};
@@ -23,7 +23,7 @@ impl<'t> Nodes<'t> {
                 MemOpKind::Load { declared_type } => self.idealize_load(node, declared_type),
                 MemOpKind::Store => self.idealize_store(node),
             },
-            Op::Minus => self.idealize_minus(node),
+            Op::Minus => node.to_minus(self).unwrap().idealize_minus(self),
             Op::Constant(_) | Op::Start { .. } | Op::Div | Op::Scope(_) | Op::New(_) | Op::Not => {
                 None
             }
@@ -378,7 +378,7 @@ impl<'t> Nodes<'t> {
         }
 
         // Delete dead paths into a Region
-        if let Some(path) = self.find_dead_input(node) {
+        if let Some(path) = node.find_dead_input(self) {
             // Do not delete the entry path of a loop (ok to remove the back
             // edge and make the loop a single-entry Region which folds away
             // the Loop).  Folding the entry path confused the loop structure,
@@ -618,21 +618,26 @@ impl<'t> Nodes<'t> {
         }
         false
     }
+}
 
-    fn idealize_minus(&mut self, node: Node) -> Option<Node> {
+impl Minus {
+    fn idealize_minus(self, sea: &mut Nodes) -> Option<Node> {
         // -(-x) is x
-        let in_1 = self.inputs[node][1]?;
-        if self.to_minus(in_1).is_some() {
-            return self.inputs[in_1][1];
+        if let Some(m) = self.inputs(sea)[1]?.to_minus(sea) {
+            return m.inputs(sea)[1];
         }
         None
     }
+}
 
-    fn find_dead_input(&self, node: Node) -> Option<usize> {
-        (1..self.inputs[node].len())
-            .find(|&i| self.ty[self.inputs[node][i].unwrap()].unwrap() == self.types.ty_xctrl)
+impl Node {
+    fn find_dead_input(self, sea: &Nodes) -> Option<usize> {
+        (1..self.inputs(sea).len())
+            .find(|&i| self.inputs(sea)[i].unwrap().ty(sea).unwrap() == sea.types.ty_xctrl)
     }
+}
 
+impl<'t> Nodes<'t> {
     // Compare two off-spine nodes and decide what order they should be in.
     // Do we rotate ((x + hi) + lo) into ((x + lo) + hi) ?
     // Generally constants always go right, then Phi-of-constants, then muls, then others.
@@ -692,7 +697,6 @@ impl<'t> Nodes<'t> {
         }
 
         let lphi = lphi?;
-        let lphi = self.to_phi(lphi).unwrap();
 
         // RHS is a constant or a Phi of constants
         if !matches!(&self[rhs], Op::Constant(_)) && self.pcon(Some(rhs), op).is_none() {
@@ -752,7 +756,7 @@ impl<'t> Nodes<'t> {
     /// If op is a phi, but its inputs are not all constants, then dep is added as
     /// a dependency to the phi's non-const input, because if later the input turn into a constant
     /// dep can make progress.
-    fn pcon(&mut self, op: Option<Node>, dep: Node) -> Option<Node> {
-        op.filter(|op| matches!(&self[*op], Op::Phi(_)) && op.all_cons(dep, self))
+    fn pcon(&mut self, op: Option<Node>, dep: Node) -> Option<Phi> {
+        op?.to_phi(self).filter(|phi| phi.all_cons(dep, self))
     }
 }
