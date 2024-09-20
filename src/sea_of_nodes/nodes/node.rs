@@ -150,14 +150,6 @@ impl<'t> Op<'t> {
         }
     }
 
-    pub fn phi_label(&self) -> Option<&str> {
-        if let Op::Phi(p) = self {
-            Some(&p.label)
-        } else {
-            None
-        }
-    }
-
     pub fn operation(&self) -> usize {
         match self {
             Op::Constant(_) => 0,
