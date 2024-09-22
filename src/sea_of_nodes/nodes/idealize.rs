@@ -1,6 +1,6 @@
 use crate::datastructures::id::Id;
 use crate::sea_of_nodes::nodes::index::{
-    Add, Bool, Cast, Constant, If, Minus, Mul, Phi, Proj, Return, Stop, Sub, TypedNode,
+    Add, Bool, Cast, Constant, If, Minus, Mul, Not, Phi, Proj, Return, Stop, Sub, TypedNode,
 };
 use crate::sea_of_nodes::nodes::node::{MemOp, MemOpKind};
 use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes, Op};
@@ -52,7 +52,7 @@ impl Add {
         // Add of same to a multiply by 2
         if lhs == rhs {
             let two = Constant::new(sea.types.ty_int_two, sea).peephole(sea);
-            return Some(sea.create(Op::make_mul([lhs, two])));
+            return Some(*Mul::new(lhs, two, sea));
         }
 
         // Goal: a left-spine set of adds, with constants on the rhs (which then fold).
@@ -65,7 +65,7 @@ impl Add {
         // x+(-y) becomes x-y
         if matches!(&sea[rhs], Op::Minus) {
             let y = rhs.inputs(sea)[1].unwrap();
-            return Some(sea.create(Op::make_sub([lhs, y])));
+            return Some(*Sub::new(lhs, y, sea));
         }
 
         // Now we might see (add add non) or (add non non) or (add add add) but never (add non add)
@@ -77,8 +77,7 @@ impl Add {
             let x = lhs;
             let y = rhs.inputs(sea)[1]?;
             let z = rhs.inputs(sea)[2]?;
-            let new_lhs = sea.create_peepholed(Op::make_add([x, y]));
-            return Some(sea.create(Op::make_add([new_lhs, z])));
+            return Some(*Add::new(Add::new(x, y, sea).peephole(sea), z, sea));
         }
 
         // Now we might see (add add non) or (add non non) but never (add non add) nor (add add add)
@@ -109,9 +108,7 @@ impl Add {
             let x = lhs.inputs(sea)[1]?;
             let con1 = lhs.inputs(sea)[2]?;
             let con2 = rhs;
-
-            let new_rhs = sea.create_peepholed(Op::make_add([con1, con2]));
-            return Some(sea.create(Op::make_add([x, new_rhs])));
+            return Some(*Add::new(x, Add::new(con1, con2, sea).peephole(sea), sea));
         }
 
         // Do we have ((x + (phi cons)) + con) ?
@@ -131,9 +128,7 @@ impl Add {
             let x = lhs.inputs(sea)[1]?;
             let y = lhs.inputs(sea)[2]?;
             let z = rhs;
-
-            let new_lhs = sea.create_peepholed(Op::make_add([x, z]));
-            return Some(sea.create(Op::make_add([new_lhs, y])));
+            return Some(*Add::new(Add::new(x, z, sea).peephole(sea), y, sea));
         }
 
         None
@@ -149,19 +144,24 @@ impl Sub {
 
         // x - (-y) is x+y
         if let Some(minus) = self.inputs(sea)[2].and_then(|n| n.to_minus(sea)) {
-            return Some(sea.create(Op::make_add([
+            return Some(*Add::new(
                 self.inputs(sea)[1].unwrap(),
                 minus.inputs(sea)[1].unwrap(),
-            ])));
+                sea,
+            ));
         }
 
         // (-x) - y is -(x+y)
         if let Some(minus) = self.inputs(sea)[1].and_then(|n| n.to_minus(sea)) {
-            let add = sea.create_peepholed(Op::make_add([
-                minus.inputs(sea)[1].unwrap(),
-                self.inputs(sea)[2].unwrap(),
-            ]));
-            return Some(sea.create(Op::make_minus(add)));
+            return Some(*Minus::new(
+                Add::new(
+                    minus.inputs(sea)[1].unwrap(),
+                    self.inputs(sea)[2].unwrap(),
+                    sea,
+                )
+                .peephole(sea),
+                sea,
+            ));
         }
 
         None
@@ -209,17 +209,17 @@ impl Bool {
             if rhs.to_constant(sea).is_none() {
                 // con==noncon becomes noncon==con
                 if lhs.to_constant(sea).is_some() {
-                    return Some(sea.create(Op::make_bool([rhs, lhs], op)));
+                    return Some(*Bool::new(rhs, lhs, op, sea));
                 } else if lhs.index() > rhs.index() {
                     // Equals sorts by NID otherwise: non.high == non.low becomes non.low == non.high
-                    return Some(sea.create(Op::make_bool([rhs, lhs], op)));
+                    return Some(*Bool::new(rhs, lhs, op, sea));
                 }
             }
             // Equals X==0 becomes a !X
             if rhs.ty(sea) == Some(sea.types.ty_int_zero)
                 || rhs.ty(sea) == Some(sea.types.ty_pointer_null)
             {
-                return Some(sea.create(Op::make_not(lhs)));
+                return Some(*Not::new(lhs, sea));
             }
         }
 
@@ -380,17 +380,17 @@ impl Proj {
             let pred = iff.inputs(sea)[1].unwrap();
             pred.add_dep(*self, sea);
             if let Some(not) = pred.to_not(sea) {
-                let i = If::new(
-                    iff.inputs(sea)[0].unwrap(),
-                    not.inputs(sea)[1].unwrap(),
-                    sea,
-                )
-                .peephole(sea);
-                return Some(sea.create(Op::make_proj(
-                    i,
+                return Some(*Proj::new(
+                    If::new(
+                        iff.inputs(sea)[0].unwrap(),
+                        not.inputs(sea)[1].unwrap(),
+                        sea,
+                    )
+                    .peephole(sea),
                     1 - index,
                     if index == 0 { "False" } else { "True" },
-                )));
+                    sea,
+                ));
             }
         }
 

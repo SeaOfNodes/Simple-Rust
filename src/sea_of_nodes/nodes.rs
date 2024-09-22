@@ -9,7 +9,7 @@ pub use scope::ScopeOp;
 use crate::datastructures::id_set::IdSet;
 use crate::datastructures::id_vec::IdVec;
 use crate::sea_of_nodes::nodes::gvn::GvnEntry;
-use crate::sea_of_nodes::nodes::index::{Phi, Scope, Start};
+use crate::sea_of_nodes::nodes::index::{Phi, Proj, Scope, Start};
 use crate::sea_of_nodes::parser::Parser;
 use crate::sea_of_nodes::types::{MemPtr, Struct, Ty, Type, Types};
 use iter_peeps::IterPeeps;
@@ -538,7 +538,7 @@ impl Start {
         // alias matches the slot of the field in the tuple
         for (alias, &alias_ty) in args.iter().enumerate().skip(len) {
             let name = sea.types.get_str(&Parser::mem_name(alias as u32));
-            let n = sea.create_peepholed(Op::make_proj(self, alias, name));
+            let n = Proj::new(self, alias, name, sea).peephole(sea);
             scope.define(name, alias_ty, n, sea).unwrap()
         }
     }

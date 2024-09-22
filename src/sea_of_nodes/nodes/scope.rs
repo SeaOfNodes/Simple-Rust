@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::sea_of_nodes::nodes::index::{Constant, Scope};
+use crate::sea_of_nodes::nodes::index::{Constant, Not, Scope};
 use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
 use crate::sea_of_nodes::types::{Ty, Type};
 
@@ -246,7 +246,7 @@ impl<'t> Scope {
             if pred.to_not(sea).is_some() {
                 pred = pred.inputs(sea)[1].unwrap()
             } else {
-                pred = sea.create_peepholed(Op::make_not(pred));
+                pred = Not::new(pred, sea).peephole(sea);
                 sea.iter_peeps.add(pred);
             }
         }

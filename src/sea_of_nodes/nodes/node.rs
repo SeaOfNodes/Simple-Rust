@@ -1,4 +1,6 @@
-use crate::sea_of_nodes::nodes::index::{Constant, If, Return, Scope, Start};
+use crate::sea_of_nodes::nodes::index::{
+    Add, Bool, Constant, Div, If, Minus, Mul, Not, Proj, Return, Scope, Start, Sub,
+};
 use crate::sea_of_nodes::nodes::{Node, NodeCreation, Nodes, Op, ScopeOp};
 use crate::sea_of_nodes::types::Ty;
 use std::borrow::Cow;
@@ -225,38 +227,68 @@ impl Constant {
     }
 }
 
-impl<'t> Op<'t> {
-    pub fn make_add([left, right]: [Node; 2]) -> NodeCreation<'t> {
-        (Op::Add, vec![None, Some(left), Some(right)])
+impl Add {
+    pub fn new(left: Node, right: Node, sea: &mut Nodes) -> Self {
+        let this = sea.create((Op::Add, vec![None, Some(left), Some(right)]));
+        this.to_add(sea).unwrap()
     }
-    pub fn make_sub([left, right]: [Node; 2]) -> NodeCreation<'t> {
-        (Op::Sub, vec![None, Some(left), Some(right)])
+}
+impl Sub {
+    pub fn new(left: Node, right: Node, sea: &mut Nodes) -> Self {
+        let this = sea.create((Op::Sub, vec![None, Some(left), Some(right)]));
+        this.to_sub(sea).unwrap()
     }
-    pub fn make_mul([left, right]: [Node; 2]) -> NodeCreation<'t> {
-        (Op::Mul, vec![None, Some(left), Some(right)])
+}
+impl Mul {
+    pub fn new(left: Node, right: Node, sea: &mut Nodes) -> Self {
+        let this = sea.create((Op::Mul, vec![None, Some(left), Some(right)]));
+        this.to_mul(sea).unwrap()
     }
-    pub fn make_div([left, right]: [Node; 2]) -> NodeCreation<'t> {
-        (Op::Div, vec![None, Some(left), Some(right)])
+}
+impl Div {
+    pub fn new(left: Node, right: Node, sea: &mut Nodes) -> Self {
+        let this = sea.create((Op::Div, vec![None, Some(left), Some(right)]));
+        this.to_div(sea).unwrap()
     }
+}
 
-    pub fn make_minus(expr: Node) -> NodeCreation<'t> {
-        (Op::Minus, vec![None, Some(expr)])
+impl Minus {
+    pub fn new(expr: Node, sea: &mut Nodes) -> Self {
+        let this = sea.create((Op::Minus, vec![None, Some(expr)]));
+        this.to_minus(sea).unwrap()
     }
+}
 
-    pub fn make_scope() -> NodeCreation<'t> {
-        (Op::Scope(ScopeOp { scopes: vec![] }), vec![])
+impl Scope {
+    pub fn new(sea: &mut Nodes) -> Self {
+        let this = sea.create((Op::Scope(ScopeOp { scopes: vec![] }), vec![]));
+        this.to_scope(sea).unwrap()
     }
+}
 
-    pub fn make_bool([left, right]: [Node; 2], op: BoolOp) -> NodeCreation<'t> {
-        (Op::Bool(op), vec![None, Some(left), Some(right)])
+impl Bool {
+    pub fn new(left: Node, right: Node, op: BoolOp, sea: &mut Nodes) -> Self {
+        let this = sea.create((Op::Bool(op), vec![None, Some(left), Some(right)]));
+        this.to_bool(sea).unwrap()
     }
+}
 
-    pub fn make_not(expr: Node) -> NodeCreation<'t> {
-        (Op::Not, vec![None, Some(expr)])
+impl Not {
+    pub fn new(expr: Node, sea: &mut Nodes) -> Self {
+        let this = sea.create((Op::Not, vec![None, Some(expr)]));
+        this.to_not(sea).unwrap()
     }
+}
 
-    pub fn make_proj<N: Into<Node>>(ctrl: N, index: usize, label: &'t str) -> NodeCreation<'t> {
-        (Op::Proj(ProjOp { index, label }), vec![Some(ctrl.into())])
+impl Proj {
+    pub fn new<'t, N: Into<Node>>(
+        ctrl: N,
+        index: usize,
+        label: &'t str,
+        sea: &mut Nodes<'t>,
+    ) -> Self {
+        let this = sea.create((Op::Proj(ProjOp { index, label }), vec![Some(ctrl.into())]));
+        this.to_proj(sea).unwrap()
     }
 }
 

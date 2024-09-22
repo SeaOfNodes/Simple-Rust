@@ -1,5 +1,7 @@
 use crate::sea_of_nodes::graph_visualizer;
-use crate::sea_of_nodes::nodes::index::{Constant, If, Return, Scope, Start, Stop};
+use crate::sea_of_nodes::nodes::index::{
+    Constant, If, Minus, Not, Proj, Return, Scope, Start, Stop,
+};
 use crate::sea_of_nodes::nodes::{BoolOp, Node, NodeCreation, Nodes, Op};
 use crate::sea_of_nodes::types::{Struct, Ty, Type, Types};
 use std::collections::HashMap;
@@ -62,7 +64,7 @@ impl<'s, 't> Parser<'s, 't> {
     pub fn new_with_arg(source: &'s str, types: &'t Types<'t>, arg: Ty<'t>) -> Self {
         let mut nodes = Nodes::new(types);
 
-        let scope = nodes.create(Op::make_scope()).to_scope(&nodes).unwrap();
+        let scope = Scope::new(&mut nodes);
         nodes.ty[scope] = Some(types.ty_bot); // in java this is done by the constructor
 
         nodes.start = Start::new(&[types.ty_ctrl, arg], &mut nodes);
@@ -106,11 +108,11 @@ impl<'s, 't> Parser<'s, 't> {
 
         // project ctrl and arg0 from start
         let start = self.nodes.start;
-        let ctrl = self.peephole(Op::make_proj(start, 0, Scope::CTRL));
+        let ctrl = Proj::new(start, 0, Scope::CTRL, &mut self.nodes).peephole(&mut self.nodes);
         self.scope
             .define(Scope::CTRL, self.types.ty_ctrl, ctrl, &mut self.nodes)
             .expect("not in scope");
-        let arg0 = self.peephole(Op::make_proj(start, 1, Scope::ARG0));
+        let arg0 = Proj::new(start, 1, Scope::ARG0, &mut self.nodes).peephole(&mut self.nodes);
         self.scope
             .define(Scope::ARG0, self.types.ty_int_bot, arg0, &mut self.nodes)
             .expect("not in scope");
@@ -279,10 +281,10 @@ impl<'s, 't> Parser<'s, 't> {
 
         // Setup projection nodes
         if_node.keep(&mut self.nodes);
-        let if_true = self.peephole(Op::make_proj(if_node, 0, "True"));
+        let if_true = Proj::new(if_node, 0, "True", &mut self.nodes).peephole(&mut self.nodes);
         if_node.unkeep(&mut self.nodes);
         if_true.keep(&mut self.nodes);
-        let if_false = self.peephole(Op::make_proj(if_node, 1, "False"));
+        let if_false = Proj::new(if_node, 1, "False", &mut self.nodes).peephole(&mut self.nodes);
 
         // Clone the body Scope to create the break/exit Scope which accounts for any
         // side effects in the predicate.  The break/exit Scope will be the final
@@ -397,10 +399,10 @@ impl<'s, 't> Parser<'s, 't> {
 
         // Setup projection nodes
         if_node.keep(&mut self.nodes);
-        let if_true = self.peephole(Op::make_proj(if_node, 0, "True"));
+        let if_true = Proj::new(if_node, 0, "True", &mut self.nodes).peephole(&mut self.nodes);
         if_node.unkeep(&mut self.nodes);
         if_true.keep(&mut self.nodes);
-        let if_false = self.peephole(Op::make_proj(if_node, 1, "False"));
+        let if_false = Proj::new(if_node, 1, "False", &mut self.nodes).peephole(&mut self.nodes);
         if_false.keep(&mut self.nodes);
 
         // In if true branch, the ifT proj node becomes the ctrl
@@ -631,7 +633,7 @@ impl<'s, 't> Parser<'s, 't> {
             lhs.set_def(idx, Some(rhs), &mut self.nodes);
             lhs = lhs.peephole(&mut self.nodes);
             if negate {
-                lhs = self.peephole(Op::make_not(lhs));
+                lhs = Not::new(lhs, &mut self.nodes).peephole(&mut self.nodes);
             }
         }
     }
@@ -682,10 +684,10 @@ impl<'s, 't> Parser<'s, 't> {
     fn parse_unary(&mut self) -> PResult<Node> {
         if self.match_("-") {
             self.parse_unary()
-                .map(|expr| self.peephole(Op::make_minus(expr)))
+                .map(|expr| Minus::new(expr, &mut self.nodes).peephole(&mut self.nodes))
         } else if self.match_("!") {
             self.parse_unary()
-                .map(|expr| self.peephole(Op::make_not(expr)))
+                .map(|expr| Not::new(expr, &mut self.nodes).peephole(&mut self.nodes))
         } else {
             let primary = self.parse_primary()?;
             self.parse_postfix(primary)
