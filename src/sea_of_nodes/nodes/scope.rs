@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::sea_of_nodes::nodes::index::{Constant, Not, Scope};
+use crate::sea_of_nodes::nodes::index::{Cast, Constant, Not, Phi, Region, Scope};
 use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
 use crate::sea_of_nodes::types::{Ty, Type};
 
@@ -82,11 +82,13 @@ impl<'t> Scope {
 
                         let name = sea.types.get_str(name);
                         let recursive = loop_.lookup_update(name, None, nesting_level, sea);
-                        let new_phi = sea.create_peepholed(Op::make_phi(
+                        let new_phi = Phi::new(
                             name,
                             declared_ty,
                             vec![loop_.inputs(sea)[0], recursive, None],
-                        ));
+                            sea,
+                        )
+                        .peephole(sea);
 
                         loop_.set_def(index, Some(new_phi), sea);
                         Some(new_phi)
@@ -146,7 +148,7 @@ impl<'t> Scope {
     pub fn merge(self, that: Scope, sea: &mut Nodes<'t>) -> Node {
         let c1 = self.inputs(sea)[0];
         let c2 = that.inputs(sea)[0];
-        let region = sea.create(Op::make_region(vec![None, c1, c2]));
+        let region = *Region::new(vec![None, c1, c2], sea);
         region.keep(sea);
         self.set_def(0, Some(region), sea); // set ctrl
 
@@ -164,11 +166,13 @@ impl<'t> Scope {
                 let that_l = that.lookup(name, sea).unwrap();
 
                 let declared_ty = sea[self].lookup(name).unwrap().1;
-                let phi = sea.create_peepholed(Op::make_phi(
+                let phi = Phi::new(
                     name,
                     declared_ty,
                     vec![Some(region), Some(this_l), Some(that_l)],
-                ));
+                    sea,
+                )
+                .peephole(sea);
                 self.set_def(i, Some(phi), sea);
             }
         }
@@ -263,7 +267,7 @@ impl<'t> Scope {
                 return None; // Already not-null, no reason to upcast
             }
             // Upcast the ptr to not-null ptr, and replace in scope
-            let c = sea.create_peepholed(Op::make_cast(sea.types.ty_pointer_void, ctrl, pred));
+            let c = Cast::new(sea.types.ty_pointer_void, ctrl, pred, sea).peephole(sea);
             let t = c.compute(sea);
             c.set_type(t, sea);
             self.replace(pred, Some(c), sea);

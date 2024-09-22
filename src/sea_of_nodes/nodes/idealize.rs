@@ -1,6 +1,6 @@
 use crate::datastructures::id::Id;
 use crate::sea_of_nodes::nodes::index::{
-    Add, Bool, Cast, Constant, If, Minus, Mul, Not, Phi, Proj, Return, Stop, Sub, TypedNode,
+    Add, Bool, Cast, Constant, If, Mem, Minus, Mul, Not, Phi, Proj, Return, Stop, Sub, TypedNode,
 };
 use crate::sea_of_nodes::nodes::node::{MemOp, MemOpKind};
 use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes, Op};
@@ -273,9 +273,8 @@ impl Phi {
 
             let label = sea[self].label;
             let declared_ty = sea[self].ty;
-            let phi_lhs = sea.create_peepholed(Op::make_phi(label, declared_ty, lhss));
-            let phi_rhs = sea.create_peepholed(Op::make_phi(label, declared_ty, rhss));
-
+            let phi_lhs = Phi::new(label, declared_ty, lhss, sea).peephole(sea);
+            let phi_rhs = Phi::new(label, declared_ty, rhss, sea).peephole(sea);
             return Some(sea.create((sea[op].clone(), vec![None, Some(phi_lhs), Some(phi_rhs)])));
         }
 
@@ -557,24 +556,29 @@ impl<'t> Nodes<'t> {
                 let name = mem_op.name;
                 let alias = mem_op.alias;
 
-                let ld1 = self.create_peepholed(Op::make_load(
+                let ld1 = Mem::new_load(
                     name,
                     alias,
                     declared_ty,
                     [self.inputs[mem][1].unwrap(), ptr],
-                ));
-                let ld2 = self.create_peepholed(Op::make_load(
+                    self,
+                )
+                .peephole(self);
+                let ld2 = Mem::new_load(
                     name,
                     alias,
                     declared_ty,
                     [self.inputs[mem][2].unwrap(), ptr],
-                ));
+                    self,
+                )
+                .peephole(self);
 
-                return Some(self.create_peepholed(Op::make_phi(
+                return Some(*Phi::new(
                     name,
                     self.ty[node].unwrap(),
                     vec![self.inputs[mem][0], Some(ld1), Some(ld2)],
-                )));
+                    self,
+                ));
             }
         }
 
@@ -618,8 +622,8 @@ impl<'t> Nodes<'t> {
                     // non-serializable memory effects in the worse case.
                     if Self::check_no_use_beyond(mem, node, self) {
                         debug_assert!({
-                            let x = node.to_mem_op(self).unwrap();
-                            let y = mem.to_mem_op(self).unwrap();
+                            let x = node.to_mem(self).unwrap();
+                            let y = mem.to_mem(self).unwrap();
                             self[x].name == self[y].name // Equiv class aliasing is perfect
                         });
                         let st_mem = mem.inputs(self)[1];
@@ -747,18 +751,21 @@ impl<'t> Nodes<'t> {
 
         // Push constant up through the phi: x + (phi con0+con0 con1+con1...)
         for i in 1..ns.len() {
-            ns[i] = Some(self.create_peepholed((
-                self[op].clone(),
-                vec![
-                    None,
-                    self.inputs[lphi][i],
-                    if matches!(&self[rhs], Op::Phi(_)) {
-                        self.inputs[rhs][i]
-                    } else {
-                        Some(rhs)
-                    },
-                ],
-            )));
+            ns[i] = Some(
+                self.create((
+                    self[op].clone(),
+                    vec![
+                        None,
+                        self.inputs[lphi][i],
+                        if matches!(&self[rhs], Op::Phi(_)) {
+                            self.inputs[rhs][i]
+                        } else {
+                            Some(rhs)
+                        },
+                    ],
+                ))
+                .peephole(self),
+            );
         }
 
         let label = format!(
@@ -768,7 +775,7 @@ impl<'t> Nodes<'t> {
         );
         let label = self.types.get_str(&label);
         let ty = self[lphi].ty;
-        let phi = self.create_peepholed(Op::make_phi(label, ty, ns));
+        let phi = Phi::new(label, ty, ns, self).peephole(self);
 
         // Rotate needs another op, otherwise just the phi
         Some(if lhs == *lphi {

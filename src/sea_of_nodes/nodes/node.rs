@@ -1,7 +1,8 @@
 use crate::sea_of_nodes::nodes::index::{
-    Add, Bool, Constant, Div, If, Minus, Mul, Not, Proj, Return, Scope, Start, Sub,
+    Add, Bool, Cast, Constant, Div, If, Loop, Mem, Minus, Mul, New, Not, Phi, Proj, Region, Return,
+    Scope, Start, Stop, Sub,
 };
-use crate::sea_of_nodes::nodes::{Node, NodeCreation, Nodes, Op, ScopeOp};
+use crate::sea_of_nodes::nodes::{Node, Nodes, Op, ScopeOp};
 use crate::sea_of_nodes::types::Ty;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -300,59 +301,79 @@ impl If {
     }
 }
 
-impl<'t> Op<'t> {
-    pub fn make_phi(label: &'t str, ty: Ty<'t>, inputs: Vec<Option<Node>>) -> NodeCreation<'t> {
-        (Op::Phi(PhiOp { label, ty }), inputs)
+impl Phi {
+    pub fn new<'t>(
+        label: &'t str,
+        ty: Ty<'t>,
+        inputs: Vec<Option<Node>>,
+        sea: &mut Nodes<'t>,
+    ) -> Self {
+        let this = sea.create((Op::Phi(PhiOp { label, ty }), inputs));
+        this.to_phi(sea).unwrap()
     }
-
-    pub fn make_region(inputs: Vec<Option<Node>>) -> NodeCreation<'t> {
-        (Op::Region, inputs)
+}
+impl Region {
+    pub fn new(inputs: Vec<Option<Node>>, sea: &mut Nodes) -> Self {
+        let this = sea.create((Op::Region, inputs));
+        this.to_region(sea).unwrap()
     }
-
-    pub fn make_stop() -> NodeCreation<'t> {
-        (Op::Stop, vec![])
+}
+impl Stop {
+    pub fn new(sea: &mut Nodes) -> Self {
+        let this = sea.create((Op::Stop, vec![]));
+        this.to_stop(sea).unwrap()
     }
-
-    pub fn make_loop(entry: Node) -> NodeCreation<'t> {
-        (Op::Loop, vec![None, Some(entry), None])
+}
+impl Loop {
+    pub fn new(entry: Node, sea: &mut Nodes) -> Self {
+        let this = sea.create((Op::Loop, vec![None, Some(entry), None]));
+        this.to_loop(sea).unwrap()
     }
-
-    pub fn make_cast(ty: Ty<'t>, ctrl: Node, i: Node) -> NodeCreation<'t> {
-        (Op::Cast(ty), vec![Some(ctrl), Some(i)])
+}
+impl Cast {
+    pub fn new<'t>(ty: Ty<'t>, ctrl: Node, i: Node, sea: &mut Nodes<'t>) -> Self {
+        let this = sea.create((Op::Cast(ty), vec![Some(ctrl), Some(i)]));
+        this.to_cast(sea).unwrap()
     }
-
-    pub fn make_load(
+}
+impl Mem {
+    pub fn new_load<'t>(
         name: &'t str,
         alias: u32,
         declared_type: Ty<'t>,
         [mem_slice, mem_ptr]: [Node; 2],
-    ) -> NodeCreation<'t> {
-        (
+        sea: &mut Nodes<'t>,
+    ) -> Self {
+        let this = sea.create((
             Op::Mem(MemOp {
                 name,
                 alias,
                 kind: MemOpKind::Load { declared_type },
             }),
             vec![None, Some(mem_slice), Some(mem_ptr), None],
-        )
+        ));
+        this.to_mem(sea).unwrap()
     }
-
-    pub fn make_store(
+    pub fn new_store<'t>(
         name: &'t str,
         alias: u32,
         [mem_slice, mem_ptr, value]: [Node; 3],
-    ) -> NodeCreation<'t> {
-        (
+        sea: &mut Nodes<'t>,
+    ) -> Self {
+        let this = sea.create((
             Op::Mem(MemOp {
                 name,
                 alias,
                 kind: MemOpKind::Store,
             }),
             vec![None, Some(mem_slice), Some(mem_ptr), Some(value)],
-        )
+        ));
+        this.to_mem(sea).unwrap()
     }
-
-    pub fn make_new(ptr: Ty<'t>, ctrl: Node) -> NodeCreation<'t> {
-        (Op::New(ptr), vec![Some(ctrl)])
+}
+impl New {
+    pub fn new<'t>(ptr: Ty<'t>, ctrl: Node, sea: &mut Nodes<'t>) -> Self {
+        let this = sea.create((Op::New(ptr), vec![Some(ctrl)]));
+        this.to_new(sea).unwrap()
     }
 }

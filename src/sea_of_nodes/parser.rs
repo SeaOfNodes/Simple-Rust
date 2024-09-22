@@ -1,8 +1,8 @@
 use crate::sea_of_nodes::graph_visualizer;
 use crate::sea_of_nodes::nodes::index::{
-    Constant, If, Minus, Not, Proj, Return, Scope, Start, Stop,
+    Constant, If, Loop, Mem, Minus, New, Not, Proj, Return, Scope, Start, Stop,
 };
-use crate::sea_of_nodes::nodes::{BoolOp, Node, NodeCreation, Nodes, Op};
+use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes, Op};
 use crate::sea_of_nodes::types::{Struct, Ty, Type, Types};
 use std::collections::HashMap;
 
@@ -69,7 +69,7 @@ impl<'s, 't> Parser<'s, 't> {
 
         nodes.start = Start::new(&[types.ty_ctrl, arg], &mut nodes);
 
-        let stop = nodes.create(Op::make_stop()).to_stop(&nodes).unwrap();
+        let stop = Stop::new(&mut nodes);
         nodes.ty[stop] = Some(types.ty_bot); // differs from java; ensures that it isn't dead
 
         Self {
@@ -94,10 +94,6 @@ impl<'s, 't> Parser<'s, 't> {
     }
     fn set_ctrl(&mut self, node: Node) {
         self.scope.set_def(0, Some(node), &mut self.nodes);
-    }
-
-    fn peephole(&mut self, c: NodeCreation<'t>) -> Node {
-        self.nodes.create_peepholed(c)
     }
 
     pub fn parse(&mut self) -> PResult<Stop> {
@@ -255,8 +251,7 @@ impl<'s, 't> Parser<'s, 't> {
         // used as an indicator to switch off peepholes of the region and
         // associated phis; see {@code inProgress()}.
 
-        let ctrl = self.ctrl();
-        let ctrl = self.peephole(Op::make_loop(ctrl)); // Note we set back edge to null here
+        let ctrl = Loop::new(self.ctrl(), &mut self.nodes).peephole(&mut self.nodes); // Note we set back edge to null here
         self.set_ctrl(ctrl);
 
         // At loop head, we clone the current Scope (this includes all
@@ -734,7 +729,7 @@ impl<'s, 't> Parser<'s, 't> {
     fn new_struct(&mut self, obj: Ty<'t>) -> Node {
         let ptr_ty = self.types.get_pointer(obj, false);
         let ctrl = self.ctrl();
-        let n = self.peephole(Op::make_new(ptr_ty, ctrl));
+        let n = New::new(ptr_ty, ctrl, &mut self.nodes).peephole(&mut self.nodes);
         n.keep(&mut self.nodes);
 
         let init_value =
@@ -747,7 +742,8 @@ impl<'s, 't> Parser<'s, 't> {
         let mut alias = *self.nodes[self.nodes.start].alias_starts.get(name).unwrap();
         for &(fname, _) in fields {
             let mem_slice = self.mem_alias_lookup(alias).unwrap();
-            let store = self.peephole(Op::make_store(fname, alias, [mem_slice, n, init_value]));
+            let store = Mem::new_store(fname, alias, [mem_slice, n, init_value], &mut self.nodes)
+                .peephole(&mut self.nodes);
             self.mem_alias_update(alias, store).unwrap();
             alias += 1;
         }
@@ -819,7 +815,8 @@ impl<'s, 't> Parser<'s, 't> {
             } else {
                 let val = self.parse_expression()?;
                 let mem_slice = self.mem_alias_lookup(alias).unwrap();
-                let store = self.peephole(Op::make_store(name, alias, [mem_slice, expr, val]));
+                let store = Mem::new_store(name, alias, [mem_slice, expr, val], &mut self.nodes)
+                    .peephole(&mut self.nodes);
                 self.mem_alias_update(alias, store).unwrap();
                 return Ok(expr); // "obj.a = expr" returns the expression while updating memory
             }
@@ -827,7 +824,14 @@ impl<'s, 't> Parser<'s, 't> {
 
         let declared_type = s.fields()[idx].1;
         let mem_slice = self.mem_alias_lookup(alias).unwrap();
-        let load = self.peephole(Op::make_load(name, alias, declared_type, [mem_slice, expr]));
+        let load = Mem::new_load(
+            name,
+            alias,
+            declared_type,
+            [mem_slice, expr],
+            &mut self.nodes,
+        )
+        .peephole(&mut self.nodes);
         self.parse_postfix(load)
     }
 

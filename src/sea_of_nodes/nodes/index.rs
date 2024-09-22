@@ -185,7 +185,7 @@ define_ids!(<'t>
     Loop               to_loop;
     Stop               to_stop;
     Cast(Ty<'t>)       to_cast;
-    Mem(MemOp<'t>)     to_mem_op;
+    Mem(MemOp<'t>)     to_mem;
     New(Ty<'t>)        to_new;
 );
 

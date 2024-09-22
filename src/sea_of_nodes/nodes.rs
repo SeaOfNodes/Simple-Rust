@@ -147,10 +147,6 @@ impl<'t> Nodes<'t> {
         debug_assert_eq!(self.len(), self.ty.len());
         id
     }
-
-    pub fn create_peepholed(&mut self, c: NodeCreation<'t>) -> Node {
-        self.create(c).peephole(self)
-    }
 }
 
 impl Node {
@@ -281,7 +277,7 @@ impl Node {
     }
 
     pub fn err(self, sea: &Nodes) -> Option<String> {
-        if let Some(memop) = self.to_mem_op(sea) {
+        if let Some(memop) = self.to_mem(sea) {
             let ptr = self.inputs(sea)[2]?.ty(sea)?;
             if ptr == sea.types.ty_bot || matches!(*ptr, Type::Pointer(MemPtr { nil: true, .. })) {
                 return Some(format!("Might be null accessing '{}'", sea[memop].name));
