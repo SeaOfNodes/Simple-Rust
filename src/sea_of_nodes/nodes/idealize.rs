@@ -1,6 +1,6 @@
 use crate::datastructures::id::Id;
 use crate::sea_of_nodes::nodes::index::{
-    Bool, Cast, Constant, If, Minus, Phi, Proj, Return, Stop, TypedNode,
+    Add, Bool, Cast, Constant, If, Minus, Mul, Phi, Proj, Return, Stop, Sub, TypedNode,
 };
 use crate::sea_of_nodes::nodes::node::{MemOp, MemOpKind};
 use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes, Op};
@@ -11,9 +11,9 @@ impl Node {
     pub(super) fn idealize(self, sea: &mut Nodes) -> Option<Node> {
         let s = self;
         match self.downcast(&sea.ops) {
-            TypedNode::Add(_) => sea.idealize_add(s),
-            TypedNode::Sub(_) => sea.idealize_sub(s),
-            TypedNode::Mul(_) => sea.idealize_mul(s),
+            TypedNode::Add(n) => n.idealize_add(sea),
+            TypedNode::Sub(n) => n.idealize_sub(sea),
+            TypedNode::Mul(n) => n.idealize_mul(sea),
             TypedNode::Bool(n) => n.idealize_bool(sea),
             TypedNode::Phi(n) => n.idealize_phi(sea),
             TypedNode::Stop(n) => n.idealize_stop(sea),
@@ -37,35 +37,35 @@ impl Node {
     }
 }
 
-impl<'t> Nodes<'t> {
-    fn idealize_add(&mut self, node: Node) -> Option<Node> {
-        let lhs = self.inputs[node][1]?;
-        let rhs = self.inputs[node][2]?;
-        let t2 = self.ty[rhs]?;
+impl Add {
+    fn idealize_add(self, sea: &mut Nodes) -> Option<Node> {
+        let lhs = self.inputs(sea)[1]?;
+        let rhs = self.inputs(sea)[2]?;
+        let t2 = rhs.ty(sea)?;
 
         // Add of 0.  We do not check for (0+x) because this will already
         // canonicalize to (x+0)
-        if t2 == self.types.ty_int_zero {
+        if t2 == sea.types.ty_int_zero {
             return Some(lhs);
         }
 
         // Add of same to a multiply by 2
         if lhs == rhs {
-            let two = Constant::new(self.types.ty_int_two, self).peephole(self);
-            return Some(self.create(Op::make_mul([lhs, two])));
+            let two = Constant::new(sea.types.ty_int_two, sea).peephole(sea);
+            return Some(sea.create(Op::make_mul([lhs, two])));
         }
 
         // Goal: a left-spine set of adds, with constants on the rhs (which then fold).
 
         // Move non-adds to RHS
-        if !matches!(self[lhs], Op::Add) && matches!(self[rhs], Op::Add) {
-            return Some(node.swap_12(self));
+        if !matches!(sea[lhs], Op::Add) && matches!(sea[rhs], Op::Add) {
+            return Some(self.swap_12(sea));
         }
 
         // x+(-y) becomes x-y
-        if matches!(&self[rhs], Op::Minus) {
-            let y = self.inputs[rhs][1].unwrap();
-            return Some(self.create(Op::make_sub([lhs, y])));
+        if matches!(&sea[rhs], Op::Minus) {
+            let y = rhs.inputs(sea)[1].unwrap();
+            return Some(sea.create(Op::make_sub([lhs, y])));
         }
 
         // Now we might see (add add non) or (add non non) or (add add add) but never (add non add)
@@ -73,20 +73,20 @@ impl<'t> Nodes<'t> {
         // Do we have  x + (y + z) ?
         // Swap to    (x + y) + z
         // Rotate (add add add) to remove the add on RHS
-        if let Op::Add = &self[rhs] {
+        if let Op::Add = &sea[rhs] {
             let x = lhs;
-            let y = self.inputs[rhs][1]?;
-            let z = self.inputs[rhs][2]?;
-            let new_lhs = self.create_peepholed(Op::make_add([x, y]));
-            return Some(self.create(Op::make_add([new_lhs, z])));
+            let y = rhs.inputs(sea)[1]?;
+            let z = rhs.inputs(sea)[2]?;
+            let new_lhs = sea.create_peepholed(Op::make_add([x, y]));
+            return Some(sea.create(Op::make_add([new_lhs, z])));
         }
 
         // Now we might see (add add non) or (add non non) but never (add non add) nor (add add add)
-        if !matches!(self[lhs], Op::Add) {
-            return if self.spine_cmp(lhs, rhs, node) {
-                Some(node.swap_12(self))
+        if !matches!(sea[lhs], Op::Add) {
+            return if sea.spine_cmp(lhs, rhs, *self) {
+                Some(self.swap_12(sea))
             } else {
-                self.phi_con(node, true)
+                sea.phi_con(*self, true)
             };
         }
 
@@ -94,7 +94,7 @@ impl<'t> Nodes<'t> {
 
         // Dead data cycle; comes about from dead infinite loops.  Do nothing,
         // the loop will peep as dead after a bit.
-        if self.inputs[lhs][1] == Some(lhs) {
+        if lhs.inputs(sea)[1] == Some(lhs) {
             return None;
         }
 
@@ -104,20 +104,20 @@ impl<'t> Nodes<'t> {
         // If lhs.in(2) is not a constant, we add ourselves as a dependency
         // because if it later became a constant then we could make this
         // transformation.
-        lhs.inputs(self)[2]?.add_dep(node, self);
-        if self.ty[self.inputs[lhs][2]?]?.is_constant() && t2.is_constant() {
-            let x = self.inputs[lhs][1]?;
-            let con1 = self.inputs[lhs][2]?;
+        lhs.inputs(sea)[2]?.add_dep(*self, sea);
+        if lhs.inputs(sea)[2].unwrap().ty(sea).unwrap().is_constant() && t2.is_constant() {
+            let x = lhs.inputs(sea)[1]?;
+            let con1 = lhs.inputs(sea)[2]?;
             let con2 = rhs;
 
-            let new_rhs = self.create_peepholed(Op::make_add([con1, con2]));
-            return Some(self.create(Op::make_add([x, new_rhs])));
+            let new_rhs = sea.create_peepholed(Op::make_add([con1, con2]));
+            return Some(sea.create(Op::make_add([x, new_rhs])));
         }
 
         // Do we have ((x + (phi cons)) + con) ?
         // Do we have ((x + (phi cons)) + (phi cons)) ?
         // Push constant up through the phi: x + (phi con0+con0 con1+con1...)
-        let phicon = self.phi_con(node, true);
+        let phicon = sea.phi_con(*self, true);
         if phicon.is_some() {
             return phicon;
         }
@@ -126,61 +126,65 @@ impl<'t> Nodes<'t> {
 
         // Do we rotate (x + y) + z
         // into         (x + z) + y ?
-        if self.spine_cmp(self.inputs[lhs][2]?, rhs, node) {
+        if sea.spine_cmp(lhs.inputs(sea)[2]?, rhs, *self) {
             // return new AddNode(new AddNode(lhs.in(1), rhs).peephole(), lhs.in(2));
-            let x = self.inputs[lhs][1]?;
-            let y = self.inputs[lhs][2]?;
+            let x = lhs.inputs(sea)[1]?;
+            let y = lhs.inputs(sea)[2]?;
             let z = rhs;
 
-            let new_lhs = self.create_peepholed(Op::make_add([x, z]));
-            return Some(self.create(Op::make_add([new_lhs, y])));
+            let new_lhs = sea.create_peepholed(Op::make_add([x, z]));
+            return Some(sea.create(Op::make_add([new_lhs, y])));
         }
 
         None
     }
+}
 
-    fn idealize_sub(&mut self, node: Node) -> Option<Node> {
+impl Sub {
+    fn idealize_sub(self, sea: &mut Nodes) -> Option<Node> {
         // Sub of same is 0
-        if self.inputs[node][1]? == self.inputs[node][2]? {
-            return Some(*Constant::new(self.types.ty_int_zero, self));
+        if self.inputs(sea)[1]? == self.inputs(sea)[2]? {
+            return Some(*Constant::new(sea.types.ty_int_zero, sea));
         }
 
         // x - (-y) is x+y
-        if let Some(minus) = self.to_minus(self.inputs[node][2]) {
-            return Some(self.create(Op::make_add([
-                node.inputs(self)[1].unwrap(),
-                minus.inputs(self)[1].unwrap(),
+        if let Some(minus) = self.inputs(sea)[2].and_then(|n| n.to_minus(sea)) {
+            return Some(sea.create(Op::make_add([
+                self.inputs(sea)[1].unwrap(),
+                minus.inputs(sea)[1].unwrap(),
             ])));
         }
 
         // (-x) - y is -(x+y)
-        if let Some(minus) = self.to_minus(node.inputs(self)[1]) {
-            let add = self.create_peepholed(Op::make_add([
-                minus.inputs(self)[1].unwrap(),
-                node.inputs(self)[2].unwrap(),
+        if let Some(minus) = self.inputs(sea)[1].and_then(|n| n.to_minus(sea)) {
+            let add = sea.create_peepholed(Op::make_add([
+                minus.inputs(sea)[1].unwrap(),
+                self.inputs(sea)[2].unwrap(),
             ]));
-            return Some(self.create(Op::make_minus(add)));
+            return Some(sea.create(Op::make_minus(add)));
         }
 
         None
     }
+}
 
-    fn idealize_mul(&mut self, node: Node) -> Option<Node> {
-        let left = self.inputs[node][1]?;
-        let right = self.inputs[node][2]?;
-        let left_ty = self.ty[left]?;
-        let right_ty = self.ty[right]?;
+impl Mul {
+    fn idealize_mul(self, sea: &mut Nodes) -> Option<Node> {
+        let left = self.inputs(sea)[1]?;
+        let right = self.inputs(sea)[2]?;
+        let left_ty = left.ty(sea)?;
+        let right_ty = right.ty(sea)?;
 
         if matches!(&*right_ty, Type::Int(Int::Constant(1))) {
             Some(left)
         } else if left_ty.is_constant() && !right_ty.is_constant() {
-            node.swap_12(self);
-            Some(node)
+            self.swap_12(sea);
+            Some(*self)
         } else {
             // Do we have ((x * (phi cons)) * con) ?
             // Do we have ((x * (phi cons)) * (phi cons)) ?
             // Push constant up through the phi: x * (phi con0*con0 con1*con1...)
-            self.phi_con(node, true)
+            sea.phi_con(*self, true)
         }
     }
 }
