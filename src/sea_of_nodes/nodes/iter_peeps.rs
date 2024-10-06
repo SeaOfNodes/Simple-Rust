@@ -58,11 +58,11 @@ impl Node {
     /// Add a node to the list of dependencies.  Only add it if its not an input
     /// or output of this node, that is, it is at least one step away.  The node
     /// being added must benefit from this node being peepholed.
-    pub fn add_dep(self, dep: Node, sea: &mut Nodes) {
+    pub fn add_dep(self, dep: Node, sea: &mut Nodes) -> Node {
         // Running peepholes during the big assert cannot have side effects
         // like adding dependencies.
         if sea.iter_peeps.mid_assert {
-            return;
+            return self;
         }
         if !sea.deps[self].contains(&dep)
             && !self.inputs(sea).contains(&Some(dep))
@@ -71,6 +71,7 @@ impl Node {
             // Not on list and not an immediate neighbor
             sea.deps[self].push(dep);
         }
+        self
     }
 
     /// Move the dependents onto a worklist, and clear for future dependents.

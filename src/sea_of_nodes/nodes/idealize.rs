@@ -1,7 +1,5 @@
 use crate::datastructures::id::Id;
-use crate::sea_of_nodes::nodes::index::{
-    Add, Bool, Cast, Constant, If, Mem, Minus, Mul, Not, Phi, Proj, Return, Stop, Sub, TypedNode,
-};
+use crate::sea_of_nodes::nodes::index::{Add, Bool, Cast, Constant, Div, If, Mem, Minus, Mul, Not, Phi, Proj, Return, Stop, Sub, TypedNode};
 use crate::sea_of_nodes::nodes::node::{MemOp, MemOpKind};
 use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes, Op};
 use crate::sea_of_nodes::types::{Int, Ty, Type};
@@ -27,9 +25,9 @@ impl Node {
                 MemOpKind::Store => sea.idealize_store(s),
             },
             TypedNode::Minus(n) => n.idealize_minus(sea),
+            TypedNode::Div(n) => n.idealize_div(sea),
             TypedNode::Constant(_)
             | TypedNode::Start(_)
-            | TypedNode::Div(_)
             | TypedNode::Scope(_)
             | TypedNode::New(_)
             | TypedNode::Not(_) => None,
@@ -137,11 +135,6 @@ impl Add {
 
 impl Sub {
     fn idealize_sub(self, sea: &mut Nodes) -> Option<Node> {
-        // Sub of same is 0
-        if self.inputs(sea)[1]? == self.inputs(sea)[2]? {
-            return Some(*Constant::new(sea.types.ty_int_zero, sea));
-        }
-
         // x - (-y) is x+y
         if let Some(minus) = self.inputs(sea)[2].and_then(|n| n.to_minus(sea)) {
             return Some(*Add::new(
@@ -159,7 +152,7 @@ impl Sub {
                     self.inputs(sea)[2].unwrap(),
                     sea,
                 )
-                .peephole(sea),
+                    .peephole(sea),
                 sea,
             ));
         }
@@ -361,31 +354,22 @@ impl Return {
 impl Proj {
     fn idealize_proj(self, sea: &mut Nodes) -> Option<Node> {
         let index = sea[self].index;
-
-        if let Some(Type::Tuple { types: ts }) = self.inputs(sea)[0].unwrap().ty(sea).as_deref() {
-            if ts[index] == sea.types.ty_xctrl {
-                return Some(*Constant::new(sea.types.ty_xctrl, sea)); // We are dead
-            }
-            // Only true for IfNodes
-            if self.inputs(sea)[0].unwrap().to_if(sea).is_some()
-                && ts[1 - index] == sea.types.ty_xctrl
-            {
-                return self.inputs(sea)[0].unwrap().inputs(sea)[0]; // We become our input control
-            }
-        }
-
-        // Flip a negating if-test, to remove the not
         if let Some(iff) = self.inputs(sea)[0]?.to_if(sea) {
-            let pred = iff.inputs(sea)[1].unwrap();
-            pred.add_dep(*self, sea);
-            if let Some(not) = pred.to_not(sea) {
+            if let Some(Type::Tuple { types: ts }) = iff.ty(sea).as_deref() {
+                if ts[1 - index] == sea.types.ty_xctrl {
+                    return iff.inputs(sea)[0]; // We become our input control
+                }
+            }
+
+            // Flip a negating if-test, to remove the not
+            if let Some(not) = iff.inputs(sea)[1]?.add_dep(*self, sea).to_not(sea) {
                 return Some(*Proj::new(
                     If::new(
                         iff.inputs(sea)[0].unwrap(),
                         not.inputs(sea)[1].unwrap(),
                         sea,
                     )
-                    .peephole(sea),
+                        .peephole(sea),
                     1 - index,
                     if index == 0 { "False" } else { "True" },
                     sea,
@@ -518,10 +502,10 @@ impl<'t> Nodes<'t> {
 
         // Simple Load-after-Store on same address.
         if let Op::Mem(MemOp {
-            kind: MemOpKind::Store,
-            name,
-            ..
-        }) = &self[mem]
+                           kind: MemOpKind::Store,
+                           name,
+                           ..
+                       }) = &self[mem]
         {
             let store_ptr = self.inputs[mem][2]?;
             // Must check same object
@@ -563,7 +547,7 @@ impl<'t> Nodes<'t> {
                     [self.inputs[mem][1].unwrap(), ptr],
                     self,
                 )
-                .peephole(self);
+                    .peephole(self);
                 let ld2 = Mem::new_load(
                     name,
                     alias,
@@ -571,7 +555,7 @@ impl<'t> Nodes<'t> {
                     [self.inputs[mem][2].unwrap(), ptr],
                     self,
                 )
-                .peephole(self);
+                    .peephole(self);
 
                 return Some(*Phi::new(
                     name,
@@ -591,9 +575,9 @@ impl<'t> Nodes<'t> {
         px.is_some_and(|px| {
             px.add_dep(this, self);
             if let Op::Mem(MemOp {
-                kind: MemOpKind::Store,
-                ..
-            }) = &self[px]
+                               kind: MemOpKind::Store,
+                               ..
+                           }) = &self[px]
             {
                 self.inputs[this][2] == self.inputs[px][2] // same ptr
             } else {
@@ -609,9 +593,9 @@ impl<'t> Nodes<'t> {
         let ptr = node.inputs(self)[2]?;
 
         if let Op::Mem(MemOp {
-            kind: MemOpKind::Store,
-            ..
-        }) = self[mem]
+                           kind: MemOpKind::Store,
+                           ..
+                       }) = self[mem]
         {
             let store_ptr = self.inputs[mem][2]?;
             // Must check same object
@@ -659,6 +643,16 @@ impl Minus {
         // -(-x) is x
         if let Some(m) = self.inputs(sea)[1]?.to_minus(sea) {
             return m.inputs(sea)[1];
+        }
+        None
+    }
+}
+
+impl Div {
+    fn idealize_div(self, sea: &mut Nodes) -> Option<Node> {
+        // Div of 1.
+        if let Some(Type::Int(Int::Constant(1))) = self.inputs(sea)[2].and_then(|n| n.ty(sea)).as_deref() {
+            return self.inputs(sea)[1];
         }
         None
     }
@@ -764,7 +758,7 @@ impl<'t> Nodes<'t> {
                         },
                     ],
                 ))
-                .peephole(self),
+                    .peephole(self),
             );
         }
 
