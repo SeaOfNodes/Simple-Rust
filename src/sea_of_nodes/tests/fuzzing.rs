@@ -1,5 +1,5 @@
 use crate::datastructures::arena::DroplessArena;
-use crate::sea_of_nodes::graph_evaluator;
+use crate::sea_of_nodes::tests::evaluator;
 use crate::sea_of_nodes::parser::Parser;
 use crate::sea_of_nodes::types::Types;
 
@@ -24,9 +24,9 @@ fn test_eval_negate_overflow() {
     assert_eq!("return (-arg);", parser.print(stop));
 
     let nodes = parser.nodes;
-    assert_eq!(-1, graph_evaluator::evaluate(&nodes, stop, Some(1), None));
+    assert_eq!(-1, evaluator::evaluate(&nodes, stop, Some(1), None));
     assert_eq!(
         i64::MIN,
-        graph_evaluator::evaluate(&nodes, stop, Some(i64::MIN), None)
+        evaluator::evaluate(&nodes, stop, Some(i64::MIN), None)
     );
 }

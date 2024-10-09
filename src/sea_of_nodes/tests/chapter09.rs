@@ -1,5 +1,5 @@
 use crate::datastructures::arena::DroplessArena;
-use crate::sea_of_nodes::graph_evaluator;
+use crate::sea_of_nodes::tests::evaluator;
 use crate::sea_of_nodes::parser::Parser;
 use crate::sea_of_nodes::types::Types;
 
@@ -52,11 +52,11 @@ return x;
 
     assert_eq!(
         2,
-        graph_evaluator::evaluate(&parser.nodes, stop, Some(1), None)
+        evaluator::evaluate(&parser.nodes, stop, Some(1), None)
     );
     assert_eq!(
         23,
-        graph_evaluator::evaluate(&parser.nodes, stop, Some(11), None)
+        evaluator::evaluate(&parser.nodes, stop, Some(11), None)
     );
 }
 
@@ -75,7 +75,7 @@ return arg*arg-arg*arg;
     assert_eq!("return 0;", parser.print(stop));
     assert_eq!(
         0,
-        graph_evaluator::evaluate(&parser.nodes, stop, Some(1), None)
+        evaluator::evaluate(&parser.nodes, stop, Some(1), None)
     );
 }
 
@@ -101,7 +101,7 @@ return arg;
     assert_eq!("return Phi(Loop7,arg,(Phi_arg+2));", parser.print(stop));
     assert_eq!(
         11,
-        graph_evaluator::evaluate(&parser.nodes, stop, Some(1), None)
+        evaluator::evaluate(&parser.nodes, stop, Some(1), None)
     );
 }
 
@@ -129,7 +129,7 @@ return arg;
     assert_eq!("return Phi(Loop8,arg,(Phi_arg+4));", parser.print(stop));
     assert_eq!(
         13,
-        graph_evaluator::evaluate(&parser.nodes, stop, Some(1), None)
+        evaluator::evaluate(&parser.nodes, stop, Some(1), None)
     );
 }
 

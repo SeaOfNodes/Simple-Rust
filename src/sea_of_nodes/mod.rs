@@ -1,4 +1,3 @@
-pub mod graph_evaluator;
 pub mod graph_visualizer;
 pub mod ir_printer;
 pub mod location;

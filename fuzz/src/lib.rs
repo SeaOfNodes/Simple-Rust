@@ -1,8 +1,8 @@
 pub mod script_generator;
 
 use simple_rust::datastructures::arena ::DroplessArena;
-use simple_rust::sea_of_nodes::graph_evaluator;
-use simple_rust::sea_of_nodes::graph_evaluator::EResult;
+use simple_rust::sea_of_nodes::tests::evaluator;
+use simple_rust::sea_of_nodes::tests::evaluator::EResult;
 use simple_rust::sea_of_nodes::parser::Parser;
 use simple_rust::sea_of_nodes::types::Types;
 
@@ -32,8 +32,8 @@ pub fn run_and_compare_eval(source: &str, definitely_valid: bool) {
 
     let timeout = 1000;
     for arg in [0, 1, 10] {
-        let er1 = graph_evaluator::evaluate_with_result(&parser1.nodes, stop1, arg, timeout);
-        let er2 = graph_evaluator::evaluate_with_result(&parser2.nodes, stop2, arg, timeout);
+        let er1 = evaluator::evaluate_with_result(&parser1.nodes, stop1, arg, timeout);
+        let er2 = evaluator::evaluate_with_result(&parser2.nodes, stop2, arg, timeout);
         if er1 == EResult::Timeout || er2 == EResult::Timeout {
             continue;
         }
