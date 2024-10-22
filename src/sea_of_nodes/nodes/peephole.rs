@@ -125,7 +125,7 @@ impl<'t> Node {
                 } else {
                     self.compute_binary_int(i64::wrapping_sub, sea)
                 }
-            },
+            }
             Op::Mul => self.compute_binary_int(i64::wrapping_mul, sea),
             Op::Div => {
                 self.compute_binary_int(|a, b| if b == 0 { 0 } else { a.wrapping_div(b) }, sea)

@@ -37,7 +37,6 @@ pub struct Block {
     pub next: Vec<BlockId>,
 }
 
-
 pub type BlockId = usize;
 type BasicBlockId = usize;
 
@@ -129,7 +128,10 @@ impl Scheduler {
         for &i in data.node.inputs(sea) {
             if let Some(i) = i {
                 let d = &self.data[&i];
-                if d.users == 0 && d.block.is_some_and(|d| self.dom(d, data.block.unwrap()) != d) {
+                if d.users == 0
+                    && d.block
+                        .is_some_and(|d| self.dom(d, data.block.unwrap()) != d)
+                {
                     return false;
                 }
             }
@@ -141,7 +143,9 @@ impl Scheduler {
     /// - `node` The node to check.
     /// - returns: true if the node is not XCtrl.
     fn is_not_xctrl(node: Node, sea: &Nodes) -> bool {
-        !node.to_constant(sea).is_some_and(|c| sea[c] == sea.types.ty_xctrl)
+        !node
+            .to_constant(sea)
+            .is_some_and(|c| sea[c] == sea.types.ty_xctrl)
     }
 
     // Return the dominator of <code>a</code> and <code>b</code>
@@ -153,8 +157,12 @@ impl Scheduler {
             let a_ = &self.blocks[a];
             let b_ = &self.blocks[b];
 
-            if a_.depth >= b_.depth { a = a_.dom.unwrap() }
-            if b_.depth > a_.depth { b = b_.dom.unwrap() }
+            if a_.depth >= b_.depth {
+                a = a_.dom.unwrap()
+            }
+            if b_.depth > a_.depth {
+                b = b_.dom.unwrap()
+            }
         }
         a
     }
@@ -232,7 +240,11 @@ impl Scheduler {
                         let r = p.inputs(sea)[0].unwrap();
                         for i in 0..p.inputs(sea).len() {
                             if p.inputs(sea)[i] == Some(mem) {
-                                self.optional_refine_placement(next, r.inputs(sea)[i].unwrap(), sea);
+                                self.optional_refine_placement(
+                                    next,
+                                    r.inputs(sea)[i].unwrap(),
+                                    sea,
+                                );
                             }
                         }
                     } else if !out.is_load(sea) {
@@ -243,7 +255,9 @@ impl Scheduler {
 
             debug_assert!(self.is_valid(next, sea));
 
-            self.blocks[self.data[&next].block.unwrap()].reverse_schedule.push(next);
+            self.blocks[self.data[&next].block.unwrap()]
+                .reverse_schedule
+                .push(next);
 
             for &i in next.inputs(sea).iter().flatten() {
                 self.update(i, self.data[&next].block.unwrap(), sea);
@@ -337,9 +351,19 @@ impl Scheduler {
 
             let block = match &sea[node] {
                 Op::Start(_) => BasicBlock::create(node, vec![], self),
-                Op::Loop => BasicBlock::create(node, vec![self.data[&node.inputs(sea)[1].unwrap()].block.unwrap()], self),
+                Op::Loop => BasicBlock::create(
+                    node,
+                    vec![self.data[&node.inputs(sea)[1].unwrap()].block.unwrap()],
+                    self,
+                ),
                 Op::Region => {
-                    let prev = node.inputs(sea).iter().skip(1).flatten().map(|n| self.data[n].block.unwrap()).collect();
+                    let prev = node
+                        .inputs(sea)
+                        .iter()
+                        .skip(1)
+                        .flatten()
+                        .map(|n| self.data[n].block.unwrap())
+                        .collect();
                     BasicBlock::create(node, prev, self)
                 }
                 Op::If | Op::Return => self.data[&node.inputs(sea)[0].unwrap()].block.unwrap(),
@@ -364,7 +388,10 @@ impl Scheduler {
 
             if node.to_return(sea).is_none() {
                 for &n in &sea.outputs[node] {
-                    if n.is_cfg(sea) && self.is_cfg_node_ready(n, sea) && self.data[&n].block.is_none() {
+                    if n.is_cfg(sea)
+                        && self.is_cfg_node_ready(n, sea)
+                        && self.data[&n].block.is_none()
+                    {
                         queue.push(n);
                     }
                 }
@@ -481,7 +508,10 @@ impl Scheduler {
     /// - returns: THe CFG output of the node.
     fn find_single_cfg_out(node: Node, sea: &Nodes) -> Option<Node> {
         if node.to_start(sea).is_some() {
-            return sea.outputs[node].iter().copied().find(|n| n.to_proj(sea).is_some_and(|p| sea[p].index == 0));
+            return sea.outputs[node]
+                .iter()
+                .copied()
+                .find(|n| n.to_proj(sea).is_some_and(|p| sea[p].index == 0));
         }
         let mut iter = sea.outputs[node].iter().filter(|n| n.is_cfg(sea));
         let result = iter.next().copied();
@@ -504,7 +534,11 @@ impl Scheduler {
             let mut last = Some(first);
             let mut arr = vec![];
             if first.to_region(sea).is_some() {
-                arr.extend(sea.outputs[first].iter().filter(|o| o.to_phi(sea).is_some_and(|p| self.data.contains_key(&*p))));
+                arr.extend(
+                    sea.outputs[first]
+                        .iter()
+                        .filter(|o| o.to_phi(sea).is_some_and(|p| self.data.contains_key(&*p))),
+                );
             }
 
             self.append_nodes(&mut arr, None, self.data[&first].block.unwrap());
@@ -525,7 +559,11 @@ impl Scheduler {
                     break;
                 }
                 if last.to_if(sea).is_some() {
-                    queue.extend(sea.outputs[last].iter().filter(|o| o.is_cfg(sea) && !blocks.contains_key(*o)));
+                    queue.extend(
+                        sea.outputs[last]
+                            .iter()
+                            .filter(|o| o.is_cfg(sea) && !blocks.contains_key(*o)),
+                    );
                     break;
                 }
                 self.append_nodes(&mut arr, Some(last), self.data[&last].block.unwrap());
@@ -533,12 +571,19 @@ impl Scheduler {
             let (exit_id, next) = match last.map(|l| l.downcast(&sea.ops)) {
                 None => (None, vec![]),
                 Some(TypedNode::If(_)) => (None, vec![0; 2]),
-                Some(TypedNode::Region(r)) => (r.inputs(sea).iter().position(|p| *p == prev), vec![0; 1]),
+                Some(TypedNode::Region(r)) => {
+                    (r.inputs(sea).iter().position(|p| *p == prev), vec![0; 1])
+                }
                 Some(TypedNode::Return(_)) => (None, vec![]),
-                Some(n) => unreachable!("Unexpected block exit node {n:?}")
+                Some(n) => unreachable!("Unexpected block exit node {n:?}"),
             };
             blocks.insert(first, block_data.len());
-            block_data.push(Block { nodes: arr, exit: last, exit_id, next });
+            block_data.push(Block {
+                nodes: arr,
+                exit: last,
+                exit_id,
+                next,
+            });
         }
 
         // Update the next pointer of all blocks.
@@ -559,7 +604,6 @@ impl Scheduler {
         // And return the block for the start node.
         (block_data, blocks[&start])
     }
-
 }
 
 /// Create a schedule for the program reachable from start.

@@ -63,7 +63,7 @@ impl<'a> TryFrom<Ty<'a>> for TyStruct<'a> {
     fn try_from(value: Ty<'a>) -> Result<Self, Self::Error> {
         match &*value {
             Type::Struct(_) => Ok(Self(value)),
-            _ => Err(())
+            _ => Err(()),
         }
     }
 }
@@ -73,7 +73,7 @@ impl<'a> Deref for TyStruct<'a> {
     fn deref(&self) -> &Self::Target {
         match &*self.0 {
             Type::Struct(s) => s,
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 }

@@ -4,7 +4,9 @@ use crate::sea_of_nodes::tests::evaluator::{EResult, Evaluator, Heap, Object};
 use crate::sea_of_nodes::types::Types;
 
 fn assert_obj(heap: &Heap, obj: EResult, name: &str, fields: &[Object]) {
-    let EResult::Value(Object::Obj(o)) = obj else { unreachable!() };
+    let EResult::Value(Object::Obj(o)) = obj else {
+        unreachable!()
+    };
     assert_eq!(heap.objs[o].ty.name(), name);
     assert_eq!(heap.objs[o].fields, fields);
 }
@@ -27,10 +29,10 @@ return v0;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     let mut eval = Evaluator::new(*stop, &parser.nodes);
-    
+
     let result = eval.evaluate(0, 10);
     assert_obj(&eval.heap, result, "S", &[Object::Long(0)]);
-    
+
     let result = eval.evaluate(1, 10);
     assert_obj(&eval.heap, result, "S", &[Object::Long(1)]);
 }

@@ -41,7 +41,14 @@ impl<'a, 't> Display for PrintableObject<'a, 't> {
                 let obj = &self.heap.objs[obj];
                 writeln!(f, "Obj<{}> {{", obj.ty.name())?;
                 for ((name, _ty), &val) in obj.ty.fields().iter().zip(&obj.fields) {
-                    writeln!(f, "  {name}={}", Self { object: val, ..*self })?;
+                    writeln!(
+                        f,
+                        "  {name}={}",
+                        Self {
+                            object: val,
+                            ..*self
+                        }
+                    )?;
                 }
                 write!(f, "}}")
             }
@@ -50,9 +57,13 @@ impl<'a, 't> Display for PrintableObject<'a, 't> {
 }
 
 fn get_field_index(s: TyStruct, memop: Mem, sea: &Nodes) -> usize {
-    s.fields().iter().position(|f| f.0 == sea[memop].name).unwrap_or_else(|| unreachable!("Field {} not found in struct {}", sea[memop].name, s.name()))
+    s.fields()
+        .iter()
+        .position(|f| f.0 == sea[memop].name)
+        .unwrap_or_else(|| {
+            unreachable!("Field {} not found in struct {}", sea[memop].name, s.name())
+        })
 }
-
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum EResult {
@@ -105,9 +116,7 @@ impl<'a, 't> Evaluator<'a, 't> {
         Self {
             sea,
             blocks,
-            heap: Heap {
-                objs: vec![],
-            },
+            heap: Heap { objs: vec![] },
             values: IdVec::new(vec![Object::Null; sea.len()]),
             phi_cache: Vec::with_capacity(16),
             start,
@@ -125,7 +134,9 @@ impl<'a, 't> Evaluator<'a, 't> {
     }
 
     fn alloc(&mut self, alloc: New) -> Object {
-        let Type::Pointer(p) = self.sea[alloc].inner() else { unreachable!() };
+        let Type::Pointer(p) = self.sea[alloc].inner() else {
+            unreachable!()
+        };
         let ty = p.to.try_into().unwrap();
 
         let object = Object::Obj(self.heap.objs.len());
@@ -202,31 +213,37 @@ impl<'a, 't> Evaluator<'a, 't> {
         match node.downcast(&self.sea.ops) {
             TypedNode::Constant(n) => self.cons(n),
             TypedNode::Add(_) => self.binary(node, i64::wrapping_add),
-            TypedNode::Bool(b) => {
-                match self.sea[b] {
-                    BoolOp::EQ => {
-                        let a = self.val(self.sea.inputs[node][1].unwrap());
-                        let b = self.val(self.sea.inputs[node][2].unwrap());
-                        Object::Long(if a == b { 1 } else { 0 })
-                    }
-                    op => self.binary(node, |a, b| op.compute(a, b) as i64),
+            TypedNode::Bool(b) => match self.sea[b] {
+                BoolOp::EQ => {
+                    let a = self.val(self.sea.inputs[node][1].unwrap());
+                    let b = self.val(self.sea.inputs[node][2].unwrap());
+                    Object::Long(if a == b { 1 } else { 0 })
                 }
-            }
+                op => self.binary(node, |a, b| op.compute(a, b) as i64),
+            },
             TypedNode::Div(n) => Object::Long(self.div(n)),
-            TypedNode::Minus(_) => Object::Long(self.vall(node.inputs(&self.sea)[1].unwrap()).wrapping_neg()),
+            TypedNode::Minus(_) => {
+                Object::Long(self.vall(node.inputs(&self.sea)[1].unwrap()).wrapping_neg())
+            }
             TypedNode::Mul(_) => self.binary(node, i64::wrapping_mul),
-            TypedNode::Not(_) => Object::Long(if self.is_true(self.val(node.inputs(&self.sea)[1].unwrap())) { 0 } else { 1 }),
+            TypedNode::Not(_) => Object::Long(
+                if self.is_true(self.val(node.inputs(&self.sea)[1].unwrap())) {
+                    0
+                } else {
+                    1
+                },
+            ),
             TypedNode::Sub(_) => self.binary(node, i64::wrapping_sub),
             TypedNode::Cast(_) => self.val(node.inputs(&self.sea)[1].unwrap()),
-            TypedNode::Mem(n) => {
-                match self.sea[n].kind {
-                    MemOpKind::Load { .. } => self.load(n),
-                    MemOpKind::Store => self.store(n),
-                }
-            }
+            TypedNode::Mem(n) => match self.sea[n].kind {
+                MemOpKind::Load { .. } => self.load(n),
+                MemOpKind::Store => self.store(n),
+            },
             TypedNode::New(n) => self.alloc(n),
-            TypedNode::Proj(n) => self.valo(n.inputs(&self.sea)[0].unwrap()).fields[self.sea[n].index],
-            n => unreachable!("Unexpected node {n:?}")
+            TypedNode::Proj(n) => {
+                self.valo(n.inputs(&self.sea)[0].unwrap()).fields[self.sea[n].index]
+            }
+            n => unreachable!("Unexpected node {n:?}"),
         }
     }
 
@@ -236,7 +253,9 @@ impl<'a, 't> Evaluator<'a, 't> {
         self.heap.objs.push(Obj {
             ty: self.sea.types.ty_struct_bot.try_into().unwrap(), // dummy
             fields: {
-                let Type::Tuple { types } = &*self.sea[self.start].args else { unreachable!(); };
+                let Type::Tuple { types } = &*self.sea[self.start].args else {
+                    unreachable!();
+                };
                 let mut f = vec![Object::Memory; types.len()];
                 f[0] = Object::Null;
                 f[1] = Object::Long(parameter);
@@ -254,17 +273,23 @@ impl<'a, 't> Evaluator<'a, 't> {
             }
             i = 0;
 
-            let Some(exit) = self.blocks[block].exit else { return EResult::Fallthrough; };
+            let Some(exit) = self.blocks[block].exit else {
+                return EResult::Fallthrough;
+            };
 
             match exit.downcast(&self.sea.ops) {
-                TypedNode::Return(n) => return EResult::Value(self.val(n.inputs(&self.sea)[1].unwrap())),
+                TypedNode::Return(n) => {
+                    return EResult::Value(self.val(n.inputs(&self.sea)[1].unwrap()))
+                }
                 TypedNode::If(n) => {
                     let condition = self.is_true(self.val(n.inputs(&self.sea)[1].unwrap()));
                     block = self.blocks[block].next[if condition { 0 } else { 1 }];
                     // if (block == null) return Status.FALLTHROUGH;
                 }
                 TypedNode::Region(region) => {
-                    if loops == 0 { return EResult::Timeout; }
+                    if loops == 0 {
+                        return EResult::Timeout;
+                    }
                     loops -= 1;
 
                     let exit = self.blocks[block].exit_id.unwrap();
@@ -312,7 +337,12 @@ pub fn evaluate<'t>(
     }
 }
 
-pub fn evaluate_with_result<'t>(nodes: &Nodes<'t>, graph: Node, parameter: i64, loops: usize) -> (Heap<'t>, EResult) {
+pub fn evaluate_with_result<'t>(
+    nodes: &Nodes<'t>,
+    graph: Node,
+    parameter: i64,
+    loops: usize,
+) -> (Heap<'t>, EResult) {
     let mut evaluator = Evaluator::new(graph, nodes);
     let result = evaluator.evaluate(parameter, loops);
     (evaluator.heap, result)

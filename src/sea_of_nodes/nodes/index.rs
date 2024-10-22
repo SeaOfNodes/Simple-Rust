@@ -196,10 +196,12 @@ impl Start {
 // TODO make separate types
 impl Node {
     pub fn is_load(self, sea: &Nodes) -> bool {
-        self.to_mem(sea).is_some_and(|m| matches!(sea[m].kind, MemOpKind::Load {..}))
+        self.to_mem(sea)
+            .is_some_and(|m| matches!(sea[m].kind, MemOpKind::Load { .. }))
     }
 
     pub fn is_store(self, sea: &Nodes) -> bool {
-        self.to_mem(sea).is_some_and(|m| matches!(sea[m].kind, MemOpKind::Store {..}))
+        self.to_mem(sea)
+            .is_some_and(|m| matches!(sea[m].kind, MemOpKind::Store { .. }))
     }
 }
