@@ -375,10 +375,10 @@ impl Scheduler {
 
             self.data.get_mut(&node).unwrap().block = Some(block);
 
-            if let Some(r) = node.to_region(sea) {
+            if node.to_region(sea).is_some() || node.to_loop(sea).is_some() {
                 // Regions might have phis which need to be scheduled.
                 // Put them on a list for later scheduling.
-                for p in sea.outputs[r].iter().flat_map(|o| o.to_phi(sea)) {
+                for p in sea.outputs[node].iter().flat_map(|o| o.to_phi(sea)) {
                     if let Some(d) = self.data.get_mut(&p) {
                         d.users = 0;
                         phi_queue.push(p);
@@ -533,7 +533,7 @@ impl Scheduler {
         while let Some(first) = queue.pop() {
             let mut last = Some(first);
             let mut arr = vec![];
-            if first.to_region(sea).is_some() {
+            if first.to_region(sea).is_some() || first.to_loop(sea).is_some() {
                 arr.extend(
                     sea.outputs[first]
                         .iter()
@@ -549,7 +549,7 @@ impl Scheduler {
                 last = Self::find_single_cfg_out(last.unwrap(), sea);
                 let Some(last) = last else { break };
 
-                if last.to_region(sea).is_some() {
+                if last.to_region(sea).is_some() || first.to_loop(sea).is_some() {
                     if !blocks.contains_key(&last) && last != first {
                         queue.push(last);
                     }
@@ -574,6 +574,9 @@ impl Scheduler {
                 Some(TypedNode::Region(r)) => {
                     (r.inputs(sea).iter().position(|p| *p == prev), vec![0; 1])
                 }
+                Some(TypedNode::Loop(r)) => {
+                    (r.inputs(sea).iter().position(|p| *p == prev), vec![0; 1])
+                }
                 Some(TypedNode::Return(_)) => (None, vec![]),
                 Some(n) => unreachable!("Unexpected block exit node {n:?}"),
             };
@@ -595,7 +598,7 @@ impl Scheduler {
                         block.next[sea[p].index] = blocks[&*p];
                     }
                 }
-                Some(n) if n.to_region(sea).is_some() => {
+                Some(n) if n.to_region(sea).is_some() || n.to_loop(sea).is_some() => {
                     block.next[0] = blocks[&n];
                 }
                 _ => debug_assert!(block.exit.unwrap().to_return(sea).is_some()),

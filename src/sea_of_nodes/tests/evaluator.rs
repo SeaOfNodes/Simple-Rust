@@ -273,11 +273,11 @@ impl<'a, 't> Evaluator<'a, 't> {
             }
             i = 0;
 
-            let Some(exit) = self.blocks[block].exit else {
+            let Some(exit_node) = self.blocks[block].exit else {
                 return EResult::Fallthrough;
             };
 
-            match exit.downcast(&self.sea.ops) {
+            match exit_node.downcast(&self.sea.ops) {
                 TypedNode::Return(n) => {
                     return EResult::Value(self.val(n.inputs(&self.sea)[1].unwrap()))
                 }
@@ -286,14 +286,14 @@ impl<'a, 't> Evaluator<'a, 't> {
                     block = self.blocks[block].next[if condition { 0 } else { 1 }];
                     // if (block == null) return Status.FALLTHROUGH;
                 }
-                TypedNode::Region(region) => {
+                TypedNode::Region(_) | TypedNode::Loop(_) => {
                     if loops == 0 {
                         return EResult::Timeout;
                     }
                     loops -= 1;
 
                     let exit = self.blocks[block].exit_id.unwrap();
-                    debug_assert!(exit > 0 && region.inputs(&self.sea).len() > exit);
+                    debug_assert!(exit > 0 && exit_node.inputs(&self.sea).len() > exit);
                     block = self.blocks[block].next[0];
                     // assert block != null;
                     while i < self.blocks[block].nodes.len() {
