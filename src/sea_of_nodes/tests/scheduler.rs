@@ -549,7 +549,7 @@ impl Scheduler {
                 last = Self::find_single_cfg_out(last.unwrap(), sea);
                 let Some(last) = last else { break };
 
-                if last.to_region(sea).is_some() || first.to_loop(sea).is_some() {
+                if last.to_region(sea).is_some() || last.to_loop(sea).is_some() {
                     if !blocks.contains_key(&last) && last != first {
                         queue.push(last);
                     }
