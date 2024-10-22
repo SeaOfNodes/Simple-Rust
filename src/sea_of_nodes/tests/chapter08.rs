@@ -1,9 +1,10 @@
 use crate::datastructures::arena::DroplessArena;
+use crate::sea_of_nodes::ir_printer;
 use crate::sea_of_nodes::nodes::{Op, ProjOp};
 use crate::sea_of_nodes::parser::Parser;
-use crate::sea_of_nodes::tests::{evaluator, test_error};
+use crate::sea_of_nodes::tests::evaluator::{evaluate, Object};
+use crate::sea_of_nodes::tests::test_error;
 use crate::sea_of_nodes::types::Types;
-use crate::sea_of_nodes::ir_printer;
 
 #[test]
 fn test_ex6() {
@@ -34,8 +35,8 @@ return arg;
     assert!(matches!(parser.nodes.ret_ctrl(stop), Op::Region { .. }));
 
     let nodes = parser.nodes;
-    assert_eq!(5, evaluator::evaluate(&nodes, stop, Some(1), None));
-    assert_eq!(10, evaluator::evaluate(&nodes, stop, Some(6), None));
+    assert_eq!(Object::Long(5), evaluate(&nodes, stop, Some(1), None).1);
+    assert_eq!(Object::Long(10), evaluate(&nodes, stop, Some(6), None).1);
 }
 
 #[test]

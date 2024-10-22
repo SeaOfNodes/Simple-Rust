@@ -1,6 +1,6 @@
 use crate::datastructures::id_vec::IdVec;
 use crate::sea_of_nodes::nodes::node::{MemOp, PhiOp, StartOp};
-use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes, OpVec, ProjOp, ScopeOp};
+use crate::sea_of_nodes::nodes::{BoolOp, MemOpKind, Node, Nodes, OpVec, ProjOp, ScopeOp};
 use crate::sea_of_nodes::types::Ty;
 use std::fmt;
 use std::ops::{Deref, Index, IndexMut};
@@ -191,4 +191,15 @@ define_ids!(<'t>
 
 impl Start {
     pub const DUMMY: Start = Start(Node::DUMMY);
+}
+
+// TODO make separate types
+impl Node {
+    pub fn is_load(self, sea: &Nodes) -> bool {
+        self.to_mem(sea).is_some_and(|m| matches!(sea[m].kind, MemOpKind::Load {..}))
+    }
+
+    pub fn is_store(self, sea: &Nodes) -> bool {
+        self.to_mem(sea).is_some_and(|m| matches!(sea[m].kind, MemOpKind::Store {..}))
+    }
 }

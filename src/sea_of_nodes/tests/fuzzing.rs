@@ -1,6 +1,6 @@
 use crate::datastructures::arena::DroplessArena;
-use crate::sea_of_nodes::tests::evaluator;
 use crate::sea_of_nodes::parser::Parser;
+use crate::sea_of_nodes::tests::evaluator::{evaluate, Object};
 use crate::sea_of_nodes::types::Types;
 
 /// This used to crash with index out of bounds in the graph visualizer,
@@ -24,9 +24,9 @@ fn test_eval_negate_overflow() {
     assert_eq!("return (-arg);", parser.print(stop));
 
     let nodes = parser.nodes;
-    assert_eq!(-1, evaluator::evaluate(&nodes, stop, Some(1), None));
+    assert_eq!(Object::Long(-1), evaluate(&nodes, stop, Some(1), None).1);
     assert_eq!(
-        i64::MIN,
-        evaluator::evaluate(&nodes, stop, Some(i64::MIN), None)
+        Object::Long(i64::MIN),
+        evaluate(&nodes, stop, Some(i64::MIN), None).1
     );
 }

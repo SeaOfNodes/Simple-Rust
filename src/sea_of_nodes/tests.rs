@@ -17,6 +17,7 @@ mod chapter10;
 mod fuzzing;
 mod type_test;
 pub mod evaluator;
+mod scheduler;
 
 fn test_error(source: &str, error: &str) {
     let arena = DroplessArena::new();

@@ -1,52 +1,77 @@
 use crate::datastructures::id_set::IdSet;
-use crate::sea_of_nodes::nodes::{Node, Nodes, Op, ProjOp};
-use std::collections::HashMap;
+use crate::datastructures::id_vec::IdVec;
+use crate::sea_of_nodes::nodes::index::{Constant, Div, Mem, New, Start, TypedNode};
+use crate::sea_of_nodes::nodes::{BoolOp, MemOpKind, Node, Nodes};
+use crate::sea_of_nodes::tests::scheduler;
+use crate::sea_of_nodes::tests::scheduler::{Block, BlockId};
+use crate::sea_of_nodes::types::{Int, TyStruct, Type};
+use std::fmt::{Display, Formatter};
 
-#[derive(Debug, Eq, PartialEq)]
-pub enum EResult {
-    Value(i64),
-    Fallthrough,
-    Timeout,
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum Object {
+    Long(i64),
+    Null,
+    Memory,
+    Obj(usize),
 }
 
-pub fn evaluate(
-    nodes: &Nodes,
-    graph: impl Into<Node>,
-    parameter: Option<i64>,
-    loops: Option<usize>,
-) -> i64 {
-    let parameter = parameter.unwrap_or(0);
-    let loops = loops.unwrap_or(1000);
+#[derive(Debug)]
+struct Obj<'t> {
+    ty: TyStruct<'t>,
+    fields: Vec<Object>,
+}
 
-    let res = evaluate_with_result(nodes, graph.into(), parameter, loops);
+#[derive(Debug)]
+pub struct Heap<'t> {
+    pub objs: Vec<Obj<'t>>,
+}
 
-    match res {
-        EResult::Value(v) => v,
-        EResult::Fallthrough => 0,
-        EResult::Timeout => panic!("timeout"),
+struct PrintableObject<'o, 't> {
+    object: Object,
+    heap: &'o Heap<'t>,
+}
+
+impl<'a, 't> Display for PrintableObject<'a, 't> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self.object {
+            Object::Long(l) => l.fmt(f),
+            Object::Null => "null".fmt(f),
+            Object::Memory => "memory".fmt(f),
+            Object::Obj(obj) => {
+                let obj = &self.heap.objs[obj];
+                writeln!(f, "Obj<{}> {{", obj.ty.name())?;
+                for ((name, _ty), &val) in obj.ty.fields().iter().zip(&obj.fields) {
+                    writeln!(f, "  {name}={}", Self { object: val, ..*self })?;
+                }
+                write!(f, "}}")
+            }
+        }
     }
 }
 
-pub fn evaluate_with_result(nodes: &Nodes, graph: Node, parameter: i64, loops: usize) -> EResult {
-    let mut visited = IdSet::zeros(nodes.len());
-    let Some(start) = nodes.find_start(&mut visited, Some(graph)) else {
-        return EResult::Timeout;
-    };
-    let mut evaluator = GraphEvaluator::new(nodes);
-    evaluator.evaluate(start, parameter, loops)
+fn get_field_index(s: TyStruct, memop: Mem, sea: &Nodes) -> usize {
+    s.fields().iter().position(|f| f.0 == sea[memop].name).unwrap_or_else(|| unreachable!("Field {} not found in struct {}", sea[memop].name, s.name()))
+}
+
+
+#[derive(Debug)]
+pub enum EResult {
+    Timeout,
+    Fallthrough,
+    Value(Object),
 }
 
 /// Find the start node from some node in the graph or null if there is no start node
 impl<'t> Nodes<'t> {
-    fn find_start(&self, visit: &mut IdSet<Node>, node: Option<Node>) -> Option<Node> {
+    fn find_start(&self, visit: &mut IdSet<Node>, node: Option<Node>) -> Option<Start> {
         let node = node?;
-        if let Op::Start { .. } = &self[node] {
-            return Some(node);
-        }
         if visit.get(node) {
             return None;
         }
         visit.add(node);
+        if let s @ Some(_) = node.to_start(self) {
+            return s;
+        }
         for &def in &self.inputs[node] {
             if let res @ Some(_) = self.find_start(visit, def) {
                 return res;
@@ -59,161 +84,235 @@ impl<'t> Nodes<'t> {
         }
         None
     }
-
-    /// Find the control output from a control node
-    fn find_control(&self, control: Node) -> Option<Node> {
-        self.outputs[control]
-            .iter()
-            .find(|&&use_| use_.is_cfg(self))
-            .copied()
-    }
-
-    /// Find the projection for a node
-    fn find_projection(&self, node: Node, idx: usize) -> Option<Node> {
-        self.outputs[node]
-            .iter()
-            .find(|&&use_| matches!(&self[use_], Op::Proj(ProjOp {index, .. }) if *index == idx))
-            .copied()
-    }
 }
 
-struct GraphEvaluator<'a, 't> {
-    nodes: &'a Nodes<'t>,
+struct Evaluator<'a, 't> {
+    sea: &'a Nodes<'t>,
+    blocks: Vec<Block>,
+    heap: Heap<'t>,
 
-    /// Cache values for phi and parameter projection nodes.
-    cache_values: HashMap<Node, i64>,
-    /// Cache for loop phis as they can depend on itself or other loop phis
-    loop_phi_cache: Vec<i64>,
+    values: IdVec<Node, Object>,
+    phi_cache: Vec<Object>,
+    start: Start,
+    start_block: BlockId,
 }
 
-impl<'a, 't> GraphEvaluator<'a, 't> {
-    pub fn new(nodes: &'a Nodes<'t>) -> Self {
+impl<'a, 't> Evaluator<'a, 't> {
+    pub fn new(graph: Node, sea: &'a Nodes<'t>) -> Self {
+        let mut visited = IdSet::zeros(sea.len());
+        let start = sea.find_start(&mut visited, Some(graph)).unwrap();
+        let (blocks, start_block) = scheduler::schedule(start, sea);
         Self {
-            nodes,
-            cache_values: HashMap::new(),
-            loop_phi_cache: Vec::with_capacity(16),
+            sea,
+            blocks,
+            heap: Heap {
+                objs: vec![],
+            },
+            values: IdVec::new(vec![Object::Null; sea.len()]),
+            phi_cache: Vec::with_capacity(16),
+            start,
+            start_block,
         }
     }
 
-    fn div(&mut self, div: Node) -> i64 {
-        let in2 = self.get_value(self.nodes.inputs[div][2]);
+    fn div(&self, div: Div) -> i64 {
+        let in2 = self.vall(self.sea.inputs[div][2].unwrap());
         if in2 == 0 {
             0
         } else {
-            self.get_value(self.nodes.inputs[div][1]) / in2
+            self.vall(self.sea.inputs[div][1].unwrap()) / in2
         }
     }
 
-    fn binary<F: FnOnce(i64, i64) -> i64>(&mut self, node: Node, op: F) -> i64 {
-        let a = self.get_value(self.nodes.inputs[node][1]);
-        let b = self.get_value(self.nodes.inputs[node][2]);
-        op(a, b)
+    fn alloc(&mut self, alloc: New) -> Object {
+        let Type::Pointer(p) = self.sea[alloc].inner() else { unreachable!() };
+        let ty = p.to.try_into().unwrap();
+
+        let object = Object::Obj(self.heap.objs.len());
+        self.heap.objs.push(Obj {
+            ty,
+            fields: vec![Object::Null; ty.fields().len()],
+        });
+        object
     }
 
-    /// Calculate the value of a node
-    fn get_value(&mut self, node: Option<Node>) -> i64 {
-        let Some(node) = node else {
-            panic!("cannot evaluate None")
-        };
-        if let Some(&cache) = self.cache_values.get(&node) {
-            return cache;
+    fn load(&self, load: Mem) -> Object {
+        let from = self.valo(load.inputs(&self.sea)[2].unwrap());
+        let idx = get_field_index(from.ty, load, &self.sea);
+        from.fields[idx]
+    }
+
+    fn store(&mut self, store: Mem) -> Object {
+        let to = store.inputs(&self.sea)[2].unwrap();
+        let val = self.val(store.inputs(&self.sea)[3].unwrap());
+        let idx = get_field_index(self.valo(to).ty, store, &self.sea);
+        self.valo_mut(to).fields[idx] = val;
+        Object::Null
+    }
+
+    fn is_true(&self, obj: Object) -> bool {
+        match obj {
+            Object::Long(n) => n != 0,
+            Object::Null => false,
+            Object::Obj(_) => true,
+            Object::Memory => unreachable!(),
         }
-        match &self.nodes[node] {
-            Op::Constant(c) => c.unwrap_int(),
-            Op::Add => self.binary(node, i64::wrapping_add),
-            Op::Sub => self.binary(node, i64::wrapping_sub),
-            Op::Mul => self.binary(node, i64::wrapping_mul),
-            Op::Div => self.div(node),
-            Op::Minus => self.get_value(self.nodes.inputs[node][1]).wrapping_neg(),
-            Op::Bool(op) => self.binary(node, |a, b| op.compute(a, b) as i64),
-            Op::Not => {
-                if self.get_value(self.nodes.inputs[node][1]) == 0 {
-                    1
-                } else {
-                    0
+    }
+
+    fn val(&self, node: Node) -> Object {
+        self.values[node]
+    }
+
+    fn vall(&self, node: Node) -> i64 {
+        match self.val(node) {
+            Object::Long(l) => l,
+            v => unreachable!("Not a long {v:?}"),
+        }
+    }
+
+    fn valo(&self, node: Node) -> &Obj {
+        match self.val(node) {
+            Object::Obj(o) => &self.heap.objs[o],
+            v => unreachable!("Not a long {v:?}"),
+        }
+    }
+
+    fn valo_mut(&mut self, node: Node) -> &mut Obj<'t> {
+        match self.val(node) {
+            Object::Obj(o) => &mut self.heap.objs[o],
+            v => unreachable!("Not a long {v:?}"),
+        }
+    }
+
+    fn cons(&self, cons: Constant) -> Object {
+        match self.sea[cons].inner() {
+            Type::Int(Int::Constant(i)) => Object::Long(*i),
+            Type::Pointer(_) => Object::Null,
+            _ => unreachable!(),
+        }
+    }
+
+    fn binary<F: FnOnce(i64, i64) -> i64>(&self, node: Node, op: F) -> Object {
+        let a = self.vall(self.sea.inputs[node][1].unwrap());
+        let b = self.vall(self.sea.inputs[node][2].unwrap());
+        Object::Long(op(a, b))
+    }
+
+    fn exec(&mut self, node: Node) -> Object {
+        match node.downcast(&self.sea.ops) {
+            TypedNode::Constant(n) => self.cons(n),
+            TypedNode::Add(_) => self.binary(node, i64::wrapping_add),
+            TypedNode::Bool(b) => {
+                match self.sea[b] {
+                    BoolOp::EQ => {
+                        let a = self.val(self.sea.inputs[node][1].unwrap());
+                        let b = self.val(self.sea.inputs[node][2].unwrap());
+                        Object::Long(if a == b { 1 } else { 0 })
+                    }
+                    op => self.binary(node, |a, b| op.compute(a, b) as i64),
                 }
             }
-            n => todo!("unexpected node type {}", n.label()),
-        }
-    }
-
-    /// Special case of latchPhis when phis can depend on phis of the same region.
-    fn latch_loop_phis(&mut self, region: Node, prev: Node) {
-        let idx = self.nodes.inputs[region]
-            .iter()
-            .position(|n| *n == Some(prev))
-            .unwrap();
-        debug_assert!(idx > 0);
-        self.loop_phi_cache.clear();
-        for &use_ in &self.nodes.outputs[region] {
-            if let Op::Phi(_) = &self.nodes[use_] {
-                let value = self.get_value(self.nodes.inputs[use_][idx]);
-                self.loop_phi_cache.push(value);
+            TypedNode::Div(n) => Object::Long(self.div(n)),
+            TypedNode::Minus(_) => Object::Long(self.vall(node.inputs(&self.sea)[1].unwrap()).wrapping_neg()),
+            TypedNode::Mul(_) => self.binary(node, i64::wrapping_mul),
+            TypedNode::Not(_) => Object::Long(if self.is_true(self.val(node.inputs(&self.sea)[1].unwrap())) { 0 } else { 1 }),
+            TypedNode::Sub(_) => self.binary(node, i64::wrapping_sub),
+            TypedNode::Cast(_) => self.val(node.inputs(&self.sea)[1].unwrap()),
+            TypedNode::Mem(n) => {
+                match self.sea[n].kind {
+                    MemOpKind::Load { .. } => self.load(n),
+                    MemOpKind::Store => self.store(n),
+                }
             }
-        }
-        let mut d = self.loop_phi_cache.drain(..);
-        for &use_ in &self.nodes.outputs[region] {
-            if let Op::Phi(_) = &self.nodes[use_] {
-                self.cache_values.insert(use_, d.next().unwrap());
-            }
-        }
-        debug_assert_eq!(d.next(), None);
-    }
-
-    /// Calculate the values of phis of the region and caches the values. The phis are not allowed to depend on other phis of the region.
-    fn latch_phis(&mut self, region: Node, prev: Node) {
-        let idx = self.nodes.inputs[region]
-            .iter()
-            .position(|n| *n == Some(prev))
-            .unwrap();
-        debug_assert!(idx > 0);
-        for &use_ in &self.nodes.outputs[region] {
-            if let Op::Phi(_) = &self.nodes[use_] {
-                let value = self.get_value(self.nodes.inputs[use_][idx]);
-                self.cache_values.insert(use_, value);
-            }
+            TypedNode::New(n) => self.alloc(n),
+            TypedNode::Proj(n) => self.valo(n.inputs(&self.sea)[0].unwrap()).fields[self.sea[n].index],
+            n => unreachable!("Unexpected node {n:?}")
         }
     }
 
     /// Run the graph until either a return is found or the number of loop iterations are done.
-    fn evaluate(&mut self, start: Node, parameter: i64, mut loops: usize) -> EResult {
-        assert!(matches!(&self.nodes[start], Op::Start { .. }));
+    fn evaluate(&mut self, parameter: i64, mut loops: usize) -> EResult {
+        self.values[self.start] = Object::Obj(self.heap.objs.len());
+        self.heap.objs.push(Obj {
+            ty: self.sea.types.ty_struct_bot.try_into().unwrap(), // dummy
+            fields: {
+                let Type::Tuple { types } = &*self.sea[self.start].args else { unreachable!(); };
+                let mut f = vec![Object::Memory; types.len()];
+                f[0] = Object::Null;
+                f[1] = Object::Long(parameter);
+                f
+            },
+        });
 
-        if let Some(parameter1) = self.nodes.find_projection(start, 1) {
-            self.cache_values.insert(parameter1, parameter);
-        }
+        let mut i = 0;
+        let mut block = self.start_block;
+        loop {
+            while i < self.blocks[block].nodes.len() {
+                self.values[self.blocks[block].nodes[i]] = self.exec(self.blocks[block].nodes[i]);
+                i += 1;
+            }
+            i = 0;
 
-        let mut control = self.nodes.find_projection(start, 0);
-        let mut prev = start;
-        while let Some(c) = control {
-            let next = match &self.nodes[c] {
-                Op::Region { .. } | Op::Loop => {
-                    if matches!(&self.nodes[c], Op::Loop) && self.nodes.inputs[c][1] != Some(prev) {
-                        if loops == 0 {
-                            return EResult::Timeout;
-                        }
-                        loops -= 1;
-                        self.latch_loop_phis(c, prev);
-                    } else {
-                        self.latch_phis(c, prev)
-                    }
-                    self.nodes.find_control(c)
+            let Some(exit) = self.blocks[block].exit else { return EResult::Fallthrough; };
+
+            match exit.downcast(&self.sea.ops) {
+                TypedNode::Return(n) => return EResult::Value(self.val(n.inputs(&self.sea)[1].unwrap())),
+                TypedNode::If(n) => {
+                    let condition = self.is_true(self.val(n.inputs(&self.sea)[1].unwrap()));
+                    block = self.blocks[block].next[if condition { 0 } else { 1 }];
+                    // if (block == null) return Status.FALLTHROUGH;
                 }
-                Op::If => self.nodes.find_projection(
-                    c,
-                    if self.get_value(self.nodes.inputs[c][1]) != 0 {
-                        0
-                    } else {
-                        1
-                    },
-                ),
-                Op::Return => return EResult::Value(self.get_value(self.nodes.inputs[c][1])),
-                Op::Proj(_) => self.nodes.find_control(c),
-                n => todo!("unexpected control node {}", n.label()),
-            };
-            prev = c;
-            control = next;
+                TypedNode::Region(region) => {
+                    if loops == 0 { return EResult::Timeout; }
+                    loops -= 1;
+
+                    let exit = self.blocks[block].exit_id.unwrap();
+                    debug_assert!(exit > 0 && region.inputs(&self.sea).len() > exit);
+                    block = self.blocks[block].next[0];
+                    // assert block != null;
+                    while i < self.blocks[block].nodes.len() {
+                        if let Some(phi) = self.blocks[block].nodes[i].to_phi(&self.sea) {
+                            let exit_node = self.blocks[block].nodes[i].inputs(&self.sea)[exit].unwrap();
+                            self.phi_cache.push(self.val(exit_node))
+                        } else {
+                            break;
+                        }
+                        i += 1;
+                    }
+
+                    i = 0;
+                    while i < self.phi_cache.len() {
+                        self.values[self.blocks[block].nodes[i]] = self.phi_cache[i];
+                        i += 1;
+                    }
+                    self.phi_cache.clear();
+                }
+                n => todo!("Unexpected control node {n:?}"),
+            }
         }
-        EResult::Fallthrough
     }
+}
+
+pub fn evaluate<'t>(
+    nodes: &Nodes<'t>,
+    graph: impl Into<Node>,
+    parameter: Option<i64>,
+    loops: Option<usize>,
+) -> (Heap<'t>, Object) {
+    let parameter = parameter.unwrap_or(0);
+    let loops = loops.unwrap_or(1000);
+
+    let (heap, res) = evaluate_with_result(nodes, graph.into(), parameter, loops);
+
+    match res {
+        EResult::Value(v) => (heap, v),
+        EResult::Fallthrough => panic!("fallthrough"),
+        EResult::Timeout => panic!("timeout"),
+    }
+}
+
+pub fn evaluate_with_result<'t>(nodes: &Nodes<'t>, graph: Node, parameter: i64, loops: usize) -> (Heap<'t>, EResult) {
+    let mut evaluator = Evaluator::new(graph, nodes);
+    let result = evaluator.evaluate(parameter, loops);
+    (evaluator.heap, result)
 }

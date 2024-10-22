@@ -33,7 +33,7 @@ pub struct OpVec<'t>(IdVec<Node, Op<'t>>);
 ///    while `self.inputs[x]` automatically decides
 pub struct Nodes<'t> {
     /// indexed by self[id]
-    ops: OpVec<'t>,
+    pub ops: OpVec<'t>,
 
     pub ty: IdVec<Node, Option<Ty<'t>>>,
 
