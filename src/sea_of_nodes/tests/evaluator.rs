@@ -26,9 +26,9 @@ pub struct Heap<'t> {
     pub objs: Vec<Obj<'t>>,
 }
 
-struct PrintableObject<'o, 't> {
-    object: Object,
-    heap: &'o Heap<'t>,
+pub struct PrintableObject<'o, 't> {
+    pub object: Object,
+    pub heap: &'o Heap<'t>,
 }
 
 impl<'a, 't> Display for PrintableObject<'a, 't> {
@@ -273,7 +273,7 @@ impl<'a, 't> Evaluator<'a, 't> {
                     // assert block != null;
                     while i < self.blocks[block].nodes.len() {
                         if let Some(phi) = self.blocks[block].nodes[i].to_phi(&self.sea) {
-                            let exit_node = self.blocks[block].nodes[i].inputs(&self.sea)[exit].unwrap();
+                            let exit_node = phi.inputs(&self.sea)[exit].unwrap();
                             self.phi_cache.push(self.val(exit_node))
                         } else {
                             break;

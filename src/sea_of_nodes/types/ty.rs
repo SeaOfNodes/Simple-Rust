@@ -62,7 +62,7 @@ impl<'a> TryFrom<Ty<'a>> for TyStruct<'a> {
 
     fn try_from(value: Ty<'a>) -> Result<Self, Self::Error> {
         match &*value {
-            Type::Struct(s) => Ok(Self(value)),
+            Type::Struct(_) => Ok(Self(value)),
             _ => Err(())
         }
     }

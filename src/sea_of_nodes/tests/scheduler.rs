@@ -54,6 +54,7 @@ struct BasicBlock {
     prev: Vec<BasicBlockId>,
 
     /// Entry to this block
+    #[allow(unused)]
     entry: Node,
 
     /// Schedules node in reverse order.
@@ -225,7 +226,7 @@ impl Scheduler {
                 // At this point all anti-dep nodes are scheduled,
                 // but they did not refine the placement
                 // so do that now.
-                let mut mem = next.inputs(sea)[1].unwrap();
+                let mem = next.inputs(sea)[1].unwrap();
                 for out in &sea.outputs[mem] {
                     if let Some(p) = out.to_phi(sea) {
                         let r = p.inputs(sea)[0].unwrap();
@@ -370,7 +371,7 @@ impl Scheduler {
             }
 
             for in_ in node.inputs(sea).iter().flatten() {
-                if let Some(d) = self.data.get(in_) {
+                if self.data.get(in_).is_some() {
                     self.update(*in_, block, sea)
                 }
             }
@@ -531,9 +532,9 @@ impl Scheduler {
             }
             let (exit_id, next) = match last.map(|l| l.downcast(&sea.ops)) {
                 None => (None, vec![]),
-                Some(TypedNode::If(i)) => (None, vec![0; 2]),
+                Some(TypedNode::If(_)) => (None, vec![0; 2]),
                 Some(TypedNode::Region(r)) => (r.inputs(sea).iter().position(|p| *p == prev), vec![0; 1]),
-                Some(TypedNode::Return(r)) => (None, vec![]),
+                Some(TypedNode::Return(_)) => (None, vec![]),
                 Some(n) => unreachable!("Unexpected block exit node {n:?}")
             };
             blocks.insert(first, block_data.len());
