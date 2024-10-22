@@ -140,7 +140,7 @@ impl Scheduler {
     /// - `node` The node to check.
     /// - returns: true if the node is not XCtrl.
     fn is_not_xctrl(node: Node, sea: &Nodes) -> bool {
-        node.to_constant(sea).is_some_and(|c| sea[c] == sea.types.ty_xctrl)
+        !node.to_constant(sea).is_some_and(|c| sea[c] == sea.types.ty_xctrl)
     }
 
     // Return the dominator of <code>a</code> and <code>b</code>
@@ -213,7 +213,7 @@ impl Scheduler {
     fn do_schedule(&mut self, sea: &Nodes) {
         while let Some(next) = self.schedule_stack.pop() {
             let data = &self.data[&next];
-            debug_assert!(Self::is_pinned_node(data, sea));
+            debug_assert!(!Self::is_pinned_node(data, sea));
 
             debug_assert_ne!(data.block, None);
             debug_assert_eq!(data.users, 0);
@@ -295,10 +295,10 @@ impl Scheduler {
     /// - `node` The CFG node to check
     /// - returns: true if all parents of a CFG node are placed.
     fn is_cfg_node_ready(&self, node: Node, sea: &Nodes) -> bool {
-        if node.is_load(sea) {
-            debug_assert_ne!(self.data[&node].block, None)
-        } else if let Some(r) = node.to_region(sea) {
-            for i in r.inputs(sea).iter().skip(1).flatten() {
+        if node.to_loop(sea).is_some() {
+            debug_assert_ne!(self.data[&node.inputs(sea)[1].unwrap()].block, None)
+        } else if node.to_region(sea).is_some() {
+            for i in node.inputs(sea).iter().skip(1).flatten() {
                 if self.data.get(i).is_some_and(|d| d.block.is_none()) {
                     return false;
                 }
@@ -515,9 +515,10 @@ impl Scheduler {
                 let Some(last) = last else { break };
 
                 if last.to_region(sea).is_some() {
-                    //                     if (blocks.get(last) == null && last != first)
-                    //                         queue.push(d(last));
-                    //                     break;
+                    if !blocks.contains_key(&last) && last != first {
+                        queue.push(last);
+                    }
+                    break;
                 }
                 if last.to_return(sea).is_some() {
                     break;

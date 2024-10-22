@@ -248,7 +248,8 @@ impl<'a, 't> Evaluator<'a, 't> {
         let mut block = self.start_block;
         loop {
             while i < self.blocks[block].nodes.len() {
-                self.values[self.blocks[block].nodes[i]] = self.exec(self.blocks[block].nodes[i]);
+                let n = self.blocks[block].nodes[i];
+                self.values[n] = self.exec(n);
                 i += 1;
             }
             i = 0;
