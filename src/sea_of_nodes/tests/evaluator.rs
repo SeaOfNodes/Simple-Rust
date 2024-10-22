@@ -16,9 +16,9 @@ pub enum Object {
 }
 
 #[derive(Debug)]
-struct Obj<'t> {
-    ty: TyStruct<'t>,
-    fields: Vec<Object>,
+pub struct Obj<'t> {
+    pub ty: TyStruct<'t>,
+    pub fields: Vec<Object>,
 }
 
 #[derive(Debug)]
@@ -54,7 +54,7 @@ fn get_field_index(s: TyStruct, memop: Mem, sea: &Nodes) -> usize {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum EResult {
     Timeout,
     Fallthrough,
@@ -86,10 +86,10 @@ impl<'t> Nodes<'t> {
     }
 }
 
-struct Evaluator<'a, 't> {
+pub struct Evaluator<'a, 't> {
     sea: &'a Nodes<'t>,
     blocks: Vec<Block>,
-    heap: Heap<'t>,
+    pub heap: Heap<'t>,
 
     values: IdVec<Node, Object>,
     phi_cache: Vec<Object>,
@@ -231,7 +231,7 @@ impl<'a, 't> Evaluator<'a, 't> {
     }
 
     /// Run the graph until either a return is found or the number of loop iterations are done.
-    fn evaluate(&mut self, parameter: i64, mut loops: usize) -> EResult {
+    pub fn evaluate(&mut self, parameter: i64, mut loops: usize) -> EResult {
         self.values[self.start] = Object::Obj(self.heap.objs.len());
         self.heap.objs.push(Obj {
             ty: self.sea.types.ty_struct_bot.try_into().unwrap(), // dummy
