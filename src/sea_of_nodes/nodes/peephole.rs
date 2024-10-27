@@ -1,5 +1,4 @@
 use crate::sea_of_nodes::nodes::index::Constant;
-use crate::sea_of_nodes::nodes::node::MemOpKind;
 use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
 use crate::sea_of_nodes::types::{Int, Ty, Type};
 
@@ -286,10 +285,8 @@ impl<'t> Node {
             }
             Op::Stop => types.ty_bot,
             Op::Cast(t) => types.join(self.inputs(sea)[1].unwrap().ty(sea).unwrap(), *t),
-            Op::Mem(m) => match m.kind {
-                MemOpKind::Load { declared_type } => declared_type,
-                MemOpKind::Store => types.get_mem(m.alias),
-            },
+            Op::Load(l) => l.declared_type,
+            Op::Store(s) => types.get_mem(s.alias),
             Op::New(t) => *t,
         }
     }

@@ -1,11 +1,12 @@
 use crate::sea_of_nodes::nodes::index::{
-    Add, Bool, Cast, Constant, Div, If, Loop, Mem, Minus, Mul, New, Not, Phi, Proj, Region, Return,
-    Scope, Start, Stop, Sub,
+    Add, Bool, Cast, Constant, Div, If, Load, Loop, Minus, Mul, New, Not, Phi, Proj, Region,
+    Return, Scope, Start, Stop, Store, Sub,
 };
 use crate::sea_of_nodes::nodes::{Node, Nodes, Op, ScopeOp};
 use crate::sea_of_nodes::types::Ty;
 use std::borrow::Cow;
 use std::collections::HashMap;
+use Cow::*;
 
 #[derive(Clone, Debug)]
 pub struct StartOp<'t> {
@@ -50,23 +51,23 @@ pub struct PhiOp<'t> {
 }
 
 #[derive(Clone, Debug)]
-pub struct MemOp<'t> {
+pub struct LoadOp<'t> {
     pub name: &'t str,
     pub alias: u32,
-    pub kind: MemOpKind<'t>,
+    pub declared_type: Ty<'t>,
 }
 
 #[derive(Clone, Debug)]
-pub enum MemOpKind<'t> {
-    Load { declared_type: Ty<'t> },
-    Store,
+pub struct StoreOp<'t> {
+    pub name: &'t str,
+    pub alias: u32,
 }
 
 impl<'t> Op<'t> {
     /// Easy reading label for debugger
     pub fn label(&self) -> Cow<str> {
-        Cow::Borrowed(match self {
-            Op::Constant(ty) => return Cow::Owned(format!("#{ty}")),
+        Borrowed(match self {
+            Op::Constant(ty) => return Owned(format!("#{ty}")),
             Op::Return => "Return",
             Op::Start { .. } => "Start",
             Op::Add => "Add",
@@ -81,22 +82,16 @@ impl<'t> Op<'t> {
                 BoolOp::LE => "LE",
             },
             Op::Not => "Not",
-            Op::Proj(p) => return Cow::Borrowed(p.label),
+            Op::Proj(p) => p.label,
             Op::If => "If",
-            Op::Phi(p) => return Cow::Owned(format!("Phi_{}", p.label)),
+            Op::Phi(p) => return Owned(format!("Phi_{}", p.label)),
             Op::Region { .. } => "Region",
             Op::Loop => "Loop",
             Op::Stop => "Stop",
-            Op::Cast(t) => return Cow::Owned(format!("({})", t.str())),
+            Op::Cast(t) => return Owned(format!("({})", t.str())),
             Op::New(_) => "new",
-            Op::Mem(MemOp {
-                kind: MemOpKind::Load { .. },
-                ..
-            }) => "Load",
-            Op::Mem(MemOp {
-                kind: MemOpKind::Store,
-                ..
-            }) => "Store",
+            Op::Load(_) => "Load",
+            Op::Store(_) => "Store",
         })
     }
 
@@ -106,26 +101,24 @@ impl<'t> Op<'t> {
             Op::Constant(_) => self.label(),
             Op::Return => self.label(),
             Op::Start { .. } => self.label(),
-            Op::Add => Cow::Borrowed("+"),
-            Op::Sub => Cow::Borrowed("-"),
-            Op::Mul => Cow::Borrowed("*"),
-            Op::Div => Cow::Borrowed("//"),
-            Op::Minus => Cow::Borrowed("-"),
+            Op::Add => Borrowed("+"),
+            Op::Sub => Borrowed("-"),
+            Op::Mul => Borrowed("*"),
+            Op::Div => Borrowed("//"),
+            Op::Minus => Borrowed("-"),
             Op::Scope(_) => self.label(),
-            Op::Bool(op) => Cow::Borrowed(op.str()),
-            Op::Not => Cow::Borrowed("!"),
+            Op::Bool(op) => Borrowed(op.str()),
+            Op::Not => Borrowed("!"),
             Op::Proj(_) => self.label(),
             Op::If => self.label(),
-            Op::Phi(p) => Cow::Owned(format!("&phi;_{}", p.label)),
+            Op::Phi(p) => Owned(format!("&phi;_{}", p.label)),
             Op::Region { .. } => self.label(),
             Op::Loop => self.label(),
             Op::Stop => self.label(),
-            Op::Cast(t) => Cow::Owned(format!("({})", t.str())),
-            Op::New(_) => Cow::Borrowed("new"),
-            Op::Mem(m) => match m.kind {
-                MemOpKind::Load { .. } => Cow::Borrowed("Load"),
-                MemOpKind::Store => Cow::Borrowed("Store"),
-            },
+            Op::Cast(t) => Owned(format!("({})", t.str())),
+            Op::New(_) => Borrowed("new"),
+            Op::Load(_) => Borrowed("Load"),
+            Op::Store(_) => Borrowed("Store"),
         }
     }
 
@@ -148,7 +141,8 @@ impl<'t> Op<'t> {
             | Op::Loop
             | Op::Cast(_)
             | Op::New(_)
-            | Op::Mem(_)
+            | Op::Load(_)
+            | Op::Store(_)
             | Op::Stop => false,
         }
     }
@@ -176,14 +170,8 @@ impl<'t> Op<'t> {
             Op::Stop => 18,
             Op::Cast(_) => 19,
             Op::New(_) => 20,
-            Op::Mem(MemOp {
-                kind: MemOpKind::Load { .. },
-                ..
-            }) => 21,
-            Op::Mem(MemOp {
-                kind: MemOpKind::Store,
-                ..
-            }) => 22,
+            Op::Load(_) => 21,
+            Op::Store(_) => 22,
         }
     }
 }
@@ -336,8 +324,9 @@ impl Cast {
         this.to_cast(sea).unwrap()
     }
 }
-impl Mem {
-    pub fn new_load<'t>(
+
+impl Load {
+    pub fn new<'t>(
         name: &'t str,
         alias: u32,
         declared_type: Ty<'t>,
@@ -345,30 +334,28 @@ impl Mem {
         sea: &mut Nodes<'t>,
     ) -> Self {
         let this = sea.create((
-            Op::Mem(MemOp {
+            Op::Load(LoadOp {
                 name,
                 alias,
-                kind: MemOpKind::Load { declared_type },
+                declared_type,
             }),
             vec![None, Some(mem_slice), Some(mem_ptr), None],
         ));
-        this.to_mem(sea).unwrap()
+        this.to_load(sea).unwrap()
     }
-    pub fn new_store<'t>(
+}
+impl Store {
+    pub fn new<'t>(
         name: &'t str,
         alias: u32,
         [mem_slice, mem_ptr, value]: [Node; 3],
         sea: &mut Nodes<'t>,
     ) -> Self {
         let this = sea.create((
-            Op::Mem(MemOp {
-                name,
-                alias,
-                kind: MemOpKind::Store,
-            }),
+            Op::Store(StoreOp { name, alias }),
             vec![None, Some(mem_slice), Some(mem_ptr), Some(value)],
         ));
-        this.to_mem(sea).unwrap()
+        this.to_store(sea).unwrap()
     }
 }
 impl New {

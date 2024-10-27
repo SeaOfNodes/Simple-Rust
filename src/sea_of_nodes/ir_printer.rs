@@ -182,7 +182,8 @@ impl<'t> Nodes<'t> {
             | Op::Phi(_)
             | Op::Cast(_)
             | Op::New(_)
-            | Op::Mem(_)
+            | Op::Load(_)
+            | Op::Store(_)
             | Op::Stop => false,
         }
     }
@@ -209,7 +210,8 @@ impl<'t> Nodes<'t> {
             | Op::Loop
             | Op::Cast(_)
             | Op::New(_)
-            | Op::Mem(_)
+            | Op::Load(_)
+            | Op::Store(_)
             | Op::Stop => false,
         }
     }

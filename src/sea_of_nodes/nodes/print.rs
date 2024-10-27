@@ -4,7 +4,6 @@ use std::fmt::Display;
 
 use crate::datastructures::id::Id;
 use crate::datastructures::id_set::IdSet;
-use crate::sea_of_nodes::nodes::node::MemOpKind;
 use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
 use crate::sea_of_nodes::types::Type;
 
@@ -145,10 +144,8 @@ impl Display for PrintNodes2<'_, '_, '_> {
                 };
                 write!(f, "new {}", p.to.str())
             }
-            Op::Mem(m) => match m.kind {
-                MemOpKind::Load { .. } => write!(f, ".{}", m.name),
-                MemOpKind::Store => write!(f, ".{}={};", m.name, input(3)),
-            },
+            Op::Load(l) => write!(f, ".{}", l.name),
+            Op::Store(s) => write!(f, ".{}={};", s.name, input(3)),
         }
     }
 }

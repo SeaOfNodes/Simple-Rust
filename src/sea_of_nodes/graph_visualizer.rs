@@ -6,7 +6,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use crate::sea_of_nodes::nodes::index::{Scope, Stop};
-use crate::sea_of_nodes::nodes::{MemOpKind, Node, Nodes, Op};
+use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
 use crate::sea_of_nodes::types::Type;
 
 pub fn run_graphviz_and_chromium(input: String) {
@@ -233,7 +233,7 @@ impl Node {
         match &sea[self] {
             Op::Phi(p) => matches!(*p.ty, Type::Memory(_)),
             Op::Proj(_) => matches!(self.ty(sea).as_deref(), Some(Type::Memory(_))),
-            Op::Mem(m) => matches!(m.kind, MemOpKind::Store),
+            Op::Store(_) => true,
             _ => false,
         }
     }

@@ -1,6 +1,6 @@
 use crate::sea_of_nodes::graph_visualizer;
 use crate::sea_of_nodes::nodes::index::{
-    Constant, If, Loop, Mem, Minus, New, Not, Proj, Return, Scope, Start, Stop,
+    Constant, If, Load, Loop, Minus, New, Not, Proj, Return, Scope, Start, Stop, Store,
 };
 use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes, Op};
 use crate::sea_of_nodes::types::{Struct, Ty, Type, Types};
@@ -742,7 +742,7 @@ impl<'s, 't> Parser<'s, 't> {
         let mut alias = *self.nodes[self.nodes.start].alias_starts.get(name).unwrap();
         for &(fname, _) in fields {
             let mem_slice = self.mem_alias_lookup(alias).unwrap();
-            let store = Mem::new_store(fname, alias, [mem_slice, n, init_value], &mut self.nodes)
+            let store = Store::new(fname, alias, [mem_slice, n, init_value], &mut self.nodes)
                 .peephole(&mut self.nodes);
             self.mem_alias_update(alias, store).unwrap();
             alias += 1;
@@ -815,7 +815,7 @@ impl<'s, 't> Parser<'s, 't> {
             } else {
                 let val = self.parse_expression()?;
                 let mem_slice = self.mem_alias_lookup(alias).unwrap();
-                let store = Mem::new_store(name, alias, [mem_slice, expr, val], &mut self.nodes)
+                let store = Store::new(name, alias, [mem_slice, expr, val], &mut self.nodes)
                     .peephole(&mut self.nodes);
                 self.mem_alias_update(alias, store).unwrap();
                 return Ok(expr); // "obj.a = expr" returns the expression while updating memory
@@ -824,7 +824,7 @@ impl<'s, 't> Parser<'s, 't> {
 
         let declared_type = s.fields()[idx].1;
         let mem_slice = self.mem_alias_lookup(alias).unwrap();
-        let load = Mem::new_load(
+        let load = Load::new(
             name,
             alias,
             declared_type,

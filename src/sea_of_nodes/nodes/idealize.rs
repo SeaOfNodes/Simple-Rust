@@ -1,11 +1,10 @@
 use crate::datastructures::id::Id;
 use crate::sea_of_nodes::nodes::index::{
-    Add, Bool, Cast, Constant, Div, If, Mem, Minus, Mul, Not, Phi, Proj, Return, Stop, Sub,
+    Add, Bool, Cast, Constant, Div, If, Load, Minus, Mul, Not, Phi, Proj, Return, Stop, Store, Sub,
     TypedNode,
 };
-use crate::sea_of_nodes::nodes::node::{MemOp, MemOpKind};
 use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes, Op};
-use crate::sea_of_nodes::types::{Int, Ty, Type};
+use crate::sea_of_nodes::types::{Int, Type};
 
 impl Node {
     /// do not peephole directly returned values!
@@ -23,10 +22,8 @@ impl Node {
             TypedNode::Region(_) | TypedNode::Loop(_) => sea.idealize_region(s),
             TypedNode::If(_) => sea.idealize_if(s),
             TypedNode::Cast(n) => n.idealize_cast(sea),
-            TypedNode::Mem(m) => match sea[m].kind {
-                MemOpKind::Load { declared_type } => sea.idealize_load(s, declared_type),
-                MemOpKind::Store => sea.idealize_store(s),
-            },
+            TypedNode::Load(n) => n.idealize_load(sea),
+            TypedNode::Store(n) => n.idealize_store(sea),
             TypedNode::Minus(n) => n.idealize_minus(sea),
             TypedNode::Div(n) => n.idealize_div(sea),
             TypedNode::Constant(_)
@@ -498,26 +495,17 @@ impl Cast {
     }
 }
 
-impl<'t> Nodes<'t> {
-    fn idealize_load(&mut self, node: Node, declared_ty: Ty<'t>) -> Option<Node> {
-        let mem = self.inputs[node][1]?;
-        let ptr = self.inputs[node][2]?;
+impl Load {
+    fn idealize_load(self, sea: &mut Nodes) -> Option<Node> {
+        let mem = self.mem(sea)?;
+        let ptr = self.ptr(sea)?;
 
         // Simple Load-after-Store on same address.
-        if let Op::Mem(MemOp {
-            kind: MemOpKind::Store,
-            name,
-            ..
-        }) = &self[mem]
-        {
-            let store_ptr = self.inputs[mem][2]?;
+        if let Some(mem) = mem.to_store(sea) {
             // Must check same object
-            if ptr == store_ptr {
-                let Op::Mem(mem_op) = &self[node] else {
-                    unreachable!()
-                };
-                debug_assert_eq!(name, &mem_op.name); // Equiv class aliasing is perfect
-                return self.inputs[mem][3]; // store value
+            if ptr == mem.ptr(sea)? {
+                debug_assert_eq!(sea[mem].name, sea[self].name); // Equiv class aliasing is perfect
+                return mem.inputs(sea)[3]; // store value
             }
         }
 
@@ -528,44 +516,42 @@ impl<'t> Nodes<'t> {
         //   if( pred ) ptr.x = e0;         val = pred ? e0
         //   else       ptr.x = e1;                    : e1;
         //   val = ptr.x;                   ptr.x = val;
-        if matches!(&self[mem], Op::Phi(_))
-            && self.ty[self.inputs[mem][0]?] == Some(self.types.ty_ctrl)
-            && self.inputs[mem].len() == 3
-        {
-            // Profit on RHS/Loop backedge
-            if self.profit(node, mem, 2) ||
-                // Else must not be a loop to count profit on LHS.
-                (!matches!(self[self.inputs[mem][0].unwrap()], Op::Loop) && self.profit(node, mem, 1))
+        if let Some(mem) = mem.to_phi(sea) {
+            if mem.inputs(sea)[0]?.ty(sea) == Some(sea.types.ty_ctrl) && mem.inputs(sea).len() == 3
             {
-                let Op::Mem(mem_op) = &self[node] else {
-                    unreachable!()
-                };
-                let name = mem_op.name;
-                let alias = mem_op.alias;
+                // Profit on RHS/Loop backedge
+                if self.profit(mem, 2, sea) ||
+                    // Else must not be a loop to count profit on LHS.
+                    (mem.inputs(sea)[0].unwrap().to_loop(sea).is_none() && self.profit(mem, 1, sea))
+                {
+                    let name = sea[self].name;
+                    let alias = sea[self].alias;
+                    let declared_ty = sea[self].declared_type;
 
-                let ld1 = Mem::new_load(
-                    name,
-                    alias,
-                    declared_ty,
-                    [self.inputs[mem][1].unwrap(), ptr],
-                    self,
-                )
-                .peephole(self);
-                let ld2 = Mem::new_load(
-                    name,
-                    alias,
-                    declared_ty,
-                    [self.inputs[mem][2].unwrap(), ptr],
-                    self,
-                )
-                .peephole(self);
+                    let ld1 = Load::new(
+                        name,
+                        alias,
+                        declared_ty,
+                        [mem.inputs(sea)[1].unwrap(), ptr],
+                        sea,
+                    )
+                    .peephole(sea);
+                    let ld2 = Load::new(
+                        name,
+                        alias,
+                        declared_ty,
+                        [mem.inputs(sea)[2].unwrap(), ptr],
+                        sea,
+                    )
+                    .peephole(sea);
 
-                return Some(*Phi::new(
-                    name,
-                    self.ty[node].unwrap(),
-                    vec![self.inputs[mem][0], Some(ld1), Some(ld2)],
-                    self,
-                ));
+                    return Some(*Phi::new(
+                        name,
+                        self.ty(sea).unwrap(),
+                        vec![mem.inputs(sea)[0], Some(ld1), Some(ld2)],
+                        sea,
+                    ));
+                }
             }
         }
 
@@ -573,49 +559,36 @@ impl<'t> Nodes<'t> {
     }
 
     /// Profitable if we find a matching Store on this Phi arm.
-    fn profit(&mut self, this: Node, phi_node: Node, idx: usize) -> bool {
-        let px = self.inputs[phi_node][idx];
-        px.is_some_and(|px| {
-            px.add_dep(this, self);
-            if let Op::Mem(MemOp {
-                kind: MemOpKind::Store,
-                ..
-            }) = &self[px]
-            {
-                self.inputs[this][2] == self.inputs[px][2] // same ptr
-            } else {
-                false
-            }
+    fn profit(self, phi_node: Phi, idx: usize, sea: &mut Nodes) -> bool {
+        phi_node.inputs(sea)[idx].is_some_and(|px| {
+            px.add_dep(*self, sea)
+                .to_store(sea)
+                .is_some_and(|px| self.ptr(sea) == px.ptr(sea))
         })
     }
+}
 
-    fn idealize_store(&mut self, node: Node) -> Option<Node> {
+impl Store {
+    fn idealize_store(self, sea: &mut Nodes) -> Option<Node> {
         // Simple store-after-store on same address.  Should pick up the
         // required init-store being stomped by a first user store.
-        let mem = node.inputs(self)[1]?;
-        let ptr = node.inputs(self)[2]?;
+        let mem = self.mem(sea)?;
+        let ptr = self.ptr(sea)?;
 
-        if let Op::Mem(MemOp {
-            kind: MemOpKind::Store,
-            ..
-        }) = self[mem]
-        {
-            let store_ptr = self.inputs[mem][2]?;
+        if let Some(mem) = mem.to_store(sea) {
             // Must check same object
-            if ptr == store_ptr {
+            if ptr == mem.ptr(sea)? {
                 // No bother if weird dead pointers
-                if let Some(Type::Pointer(_)) = ptr.ty(self).as_deref() {
+                if let Some(Type::Pointer(_)) = ptr.ty(sea).as_deref() {
                     // Must have exactly one use of "this" or you get weird
                     // non-serializable memory effects in the worse case.
-                    if Self::check_no_use_beyond(mem, node, self) {
-                        debug_assert!({
-                            let x = node.to_mem(self).unwrap();
-                            let y = mem.to_mem(self).unwrap();
-                            self[x].name == self[y].name // Equiv class aliasing is perfect
-                        });
-                        let st_mem = mem.inputs(self)[1];
-                        node.set_def(1, st_mem, self);
-                        return Some(node);
+                    if mem.check_no_use_beyond(*self, sea) {
+                        debug_assert_eq!(
+                            sea[self].name, sea[mem].name,
+                            "Equiv class aliasing is perfect"
+                        );
+                        self.set_def(1, mem.mem(sea), sea);
+                        return Some(*self);
                     }
                 }
             }
@@ -624,15 +597,15 @@ impl<'t> Nodes<'t> {
     }
 
     // Check that `this` has no uses beyond `that`
-    fn check_no_use_beyond(this: Node, that: Node, sea: &mut Nodes) -> bool {
-        let n_outs = sea.outputs[this].len();
+    fn check_no_use_beyond(self, that: Node, sea: &mut Nodes) -> bool {
+        let n_outs = sea.outputs[self].len();
         if n_outs == 1 {
             return true;
         }
         // Add deps on the other uses (can be e.g. ScopeNode mid-parse) so that
         // when the other uses go away we can retry.
         for i in 0..n_outs {
-            let use_ = sea.outputs[this][i];
+            let use_ = sea.outputs[self][i];
             if use_ != that {
                 use_.add_dep(that, sea);
             }

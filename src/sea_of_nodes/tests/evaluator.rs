@@ -1,7 +1,7 @@
 use crate::datastructures::id_set::IdSet;
 use crate::datastructures::id_vec::IdVec;
-use crate::sea_of_nodes::nodes::index::{Constant, Div, Mem, New, Start, TypedNode};
-use crate::sea_of_nodes::nodes::{BoolOp, MemOpKind, Node, Nodes};
+use crate::sea_of_nodes::nodes::index::{Constant, Div, Load, New, Start, Store, TypedNode};
+use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes};
 use crate::sea_of_nodes::tests::scheduler;
 use crate::sea_of_nodes::tests::scheduler::{Block, BlockId};
 use crate::sea_of_nodes::types::{Int, TyStruct, Type};
@@ -56,13 +56,11 @@ impl<'a, 't> Display for PrintableObject<'a, 't> {
     }
 }
 
-fn get_field_index(s: TyStruct, memop: Mem, sea: &Nodes) -> usize {
+fn get_field_index(s: TyStruct, name: &str) -> usize {
     s.fields()
         .iter()
-        .position(|f| f.0 == sea[memop].name)
-        .unwrap_or_else(|| {
-            unreachable!("Field {} not found in struct {}", sea[memop].name, s.name())
-        })
+        .position(|f| f.0 == name)
+        .unwrap_or_else(|| unreachable!("Field {name} not found in struct {}", s.name()))
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -147,16 +145,16 @@ impl<'a, 't> Evaluator<'a, 't> {
         object
     }
 
-    fn load(&self, load: Mem) -> Object {
+    fn load(&self, load: Load) -> Object {
         let from = self.valo(load.inputs(&self.sea)[2].unwrap());
-        let idx = get_field_index(from.ty, load, &self.sea);
+        let idx = get_field_index(from.ty, self.sea[load].name);
         from.fields[idx]
     }
 
-    fn store(&mut self, store: Mem) -> Object {
+    fn store(&mut self, store: Store) -> Object {
         let to = store.inputs(&self.sea)[2].unwrap();
         let val = self.val(store.inputs(&self.sea)[3].unwrap());
-        let idx = get_field_index(self.valo(to).ty, store, &self.sea);
+        let idx = get_field_index(self.valo(to).ty, self.sea[store].name);
         self.valo_mut(to).fields[idx] = val;
         Object::Null
     }
@@ -235,10 +233,8 @@ impl<'a, 't> Evaluator<'a, 't> {
             ),
             TypedNode::Sub(_) => self.binary(node, i64::wrapping_sub),
             TypedNode::Cast(_) => self.val(node.inputs(&self.sea)[1].unwrap()),
-            TypedNode::Mem(n) => match self.sea[n].kind {
-                MemOpKind::Load { .. } => self.load(n),
-                MemOpKind::Store => self.store(n),
-            },
+            TypedNode::Load(n) => self.load(n),
+            TypedNode::Store(n) => self.store(n),
             TypedNode::New(n) => self.alloc(n),
             TypedNode::Proj(n) => {
                 self.valo(n.inputs(&self.sea)[0].unwrap()).fields[self.sea[n].index]

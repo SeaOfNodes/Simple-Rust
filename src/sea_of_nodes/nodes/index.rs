@@ -1,6 +1,6 @@
 use crate::datastructures::id_vec::IdVec;
-use crate::sea_of_nodes::nodes::node::{MemOp, PhiOp, StartOp};
-use crate::sea_of_nodes::nodes::{BoolOp, MemOpKind, Node, Nodes, OpVec, ProjOp, ScopeOp};
+use crate::sea_of_nodes::nodes::node::{PhiOp, StartOp};
+use crate::sea_of_nodes::nodes::{BoolOp, LoadOp, Node, Nodes, OpVec, ProjOp, ScopeOp, StoreOp};
 use crate::sea_of_nodes::types::Ty;
 use std::fmt;
 use std::ops::{Deref, Index, IndexMut};
@@ -185,7 +185,8 @@ define_ids!(<'t>
     Loop               to_loop;
     Stop               to_stop;
     Cast(Ty<'t>)       to_cast;
-    Mem(MemOp<'t>)     to_mem;
+    Load(LoadOp<'t>)   to_load;
+    Store(StoreOp<'t>) to_store;
     New(Ty<'t>)        to_new;
 );
 
@@ -193,15 +194,39 @@ impl Start {
     pub const DUMMY: Start = Start(Node::DUMMY);
 }
 
-// TODO make separate types
+// TODO impl with macro
 impl Node {
     pub fn is_load(self, sea: &Nodes) -> bool {
-        self.to_mem(sea)
-            .is_some_and(|m| matches!(sea[m].kind, MemOpKind::Load { .. }))
+        self.to_load(sea).is_some()
     }
 
     pub fn is_store(self, sea: &Nodes) -> bool {
-        self.to_mem(sea)
-            .is_some_and(|m| matches!(sea[m].kind, MemOpKind::Store { .. }))
+        self.to_store(sea).is_some()
+    }
+
+    // TODO Mem Node type?
+    pub fn to_mem_name<'t>(self, sea: &Nodes<'t>) -> Option<&'t str> {
+        match self.downcast(&sea.ops) {
+            TypedNode::Load(n) => Some(sea[n].name),
+            TypedNode::Store(n) => Some(sea[n].name),
+            _ => None,
+        }
+    }
+}
+
+impl Load {
+    pub fn mem(self, sea: &Nodes) -> Option<Node> {
+        self.inputs(sea)[1]
+    }
+    pub fn ptr(self, sea: &Nodes) -> Option<Node> {
+        self.inputs(sea)[2]
+    }
+}
+impl Store {
+    pub fn mem(self, sea: &Nodes) -> Option<Node> {
+        self.inputs(sea)[1]
+    }
+    pub fn ptr(self, sea: &Nodes) -> Option<Node> {
+        self.inputs(sea)[2]
     }
 }

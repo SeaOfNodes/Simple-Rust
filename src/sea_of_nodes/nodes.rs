@@ -3,7 +3,7 @@ use std::num::NonZeroU32;
 
 pub use id::Node;
 pub use index::Op;
-pub use node::{BoolOp, MemOp, MemOpKind, ProjOp, StartOp};
+pub use node::{BoolOp, LoadOp, ProjOp, StartOp, StoreOp};
 pub use scope::ScopeOp;
 
 use crate::datastructures::id_set::IdSet;
@@ -277,10 +277,10 @@ impl Node {
     }
 
     pub fn err(self, sea: &Nodes) -> Option<String> {
-        if let Some(memop) = self.to_mem(sea) {
+        if let Some(memop) = self.to_mem_name(sea) {
             let ptr = self.inputs(sea)[2]?.ty(sea)?;
             if ptr == sea.types.ty_bot || matches!(*ptr, Type::Pointer(MemPtr { nil: true, .. })) {
-                return Some(format!("Might be null accessing '{}'", sea[memop].name));
+                return Some(format!("Might be null accessing '{memop}'"));
             }
         }
         None
@@ -303,7 +303,8 @@ impl Node {
             | Op::Bool(_)
             | Op::Phi(_)
             | Op::Cast(_)
-            | Op::Mem(_)
+            | Op::Load(_)
+            | Op::Store(_)
             | Op::New(_)
             | Op::Not => false,
         }
