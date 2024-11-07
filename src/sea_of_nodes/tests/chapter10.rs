@@ -1,10 +1,8 @@
 use crate::datastructures::arena::DroplessArena;
 use crate::sea_of_nodes::parser::Parser;
-use crate::sea_of_nodes::types::Types;
-
-use crate::sea_of_nodes::ir_printer::pretty_print_llvm;
 use crate::sea_of_nodes::tests::test_error;
 use crate::sea_of_nodes::tests::test_error_iterate;
+use crate::sea_of_nodes::types::Types;
 
 #[test]
 fn test_fuzzer() {
@@ -34,6 +32,7 @@ return p-r;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
+
     assert_eq!(parser.print(stop), "return 0;");
 }
 
@@ -60,9 +59,8 @@ return bar.a;
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    println!("{}", pretty_print_llvm(&parser.nodes, stop, 99));
+
     assert_eq!(parser.print(stop), "return 2;");
 }
 
@@ -84,11 +82,9 @@ return v;
         &types,
     );
     let stop = parser.parse().unwrap();
-    parser.show_graph();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    println!("{}", pretty_print_llvm(&parser.nodes, stop, 99));
+
     assert_eq!(parser.print(stop), "return new Vector2D;");
 }
 
@@ -135,15 +131,14 @@ return bar.a;
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    assert_eq!(parser.print(stop), "return Phi(Loop10,0,(Phi_a+2));");
+
+    assert_eq!(parser.print(stop), "return Phi(Loop11,0,(Phi_a+2));");
 }
 
 #[test]
 fn test_if() {
-    // NOTE we don't call iterate because this is a parse error
-    test_error(
+    test_error_iterate(
         "\
 struct Bar { int a; }
 Bar bar = new Bar;
@@ -199,9 +194,9 @@ return bar;
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    assert_eq!(parser.print(stop), "return Phi(Region15,null,new Bar);");
+
+    assert_eq!(parser.print(stop), "return Phi(Region16,null,new Bar);");
 }
 
 #[test]
@@ -222,9 +217,9 @@ return rez;
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    assert_eq!(parser.print(stop), "return Phi(Region32,4,3);");
+
+    assert_eq!(parser.print(stop), "return Phi(Region33,4,3);");
 }
 
 #[test]
@@ -283,11 +278,11 @@ return sum;
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
+
     assert_eq!(
         parser.print(stop),
-        "return Phi(Loop14,0,(Phi(Loop,0,(Phi_x+1))+Phi_sum));"
+        "return Phi(Loop15,0,(Phi(Loop,0,(Phi_x+1))+Phi_sum));"
     );
 }
 
@@ -304,21 +299,19 @@ while(arg) {
     v0.v0 = arg;
     arg = arg-1;
     if (arg==5) ret=v0;
-    #showGraph;
+
 }
 return ret;
 ",
         &types,
     );
     let stop = parser.parse().unwrap();
-    parser.show_graph();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    println!("{}", pretty_print_llvm(&parser.nodes, stop, 99));
+
     assert_eq!(
         parser.print(stop),
-        "return Phi(Loop10,new s0,Phi(Region31,new s0,Phi_ret));"
+        "return Phi(Loop11,new s0,Phi(Region31,new s0,Phi_ret));"
     );
 }
 
@@ -335,18 +328,16 @@ while(arg) {
     v0.v0 = arg;
     arg = arg-1;
     if (arg==5) ret=v0;
-        #showGraph;
+
 }
 return ret;
 ",
         &types,
     );
     let stop = parser.parse().unwrap();
-    parser.show_graph();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    println!("{}", pretty_print_llvm(&parser.nodes, stop, 99));
+
     assert_eq!(
         parser.print(stop),
         "return Phi(Loop13,new s0,Phi(Region32,new s0,Phi_ret));"
@@ -371,14 +362,12 @@ return ret;
         &types,
     );
     let stop = parser.parse().unwrap();
-    parser.show_graph();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    println!("{}", pretty_print_llvm(&parser.nodes, stop, 99));
+
     assert_eq!(
         parser.print(stop),
-        "return Phi(Loop10,new s0,Phi(Region30,new s0,Phi_ret));"
+        "return Phi(Loop11,new s0,Phi(Region30,new s0,Phi_ret));"
     );
 }
 
@@ -415,11 +404,10 @@ if(0) {
         &types,
     );
     let stop = parser.parse().unwrap();
-    parser.show_graph();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    assert_eq!(parser.print(stop), "Stop[ ]");
+
+    assert_eq!(parser.print(stop), "return 0;");
 }
 
 #[test]
@@ -438,10 +426,9 @@ if(new s0.f0) return 0;
         &types,
     );
     let stop = parser.parse().unwrap();
-    parser.show_graph();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
+
     assert_eq!(parser.print(stop), "return new s0;");
 }
 
@@ -464,7 +451,6 @@ return 0;
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
 }
 
@@ -484,8 +470,8 @@ return v1;
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
+
     assert_eq!(parser.print(stop), "return new s0;");
 }
 
@@ -523,9 +509,9 @@ while(0) {}
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    assert_eq!(parser.print(stop), "Stop[ ]");
+
+    assert_eq!(parser.print(stop), "return 0;");
 }
 
 #[test]
@@ -542,7 +528,7 @@ return 0;
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
+
     assert_eq!(parser.print(stop), "return 0;");
 }

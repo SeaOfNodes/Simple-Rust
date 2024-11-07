@@ -38,20 +38,22 @@ fn test_var_scope_no_peephole() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
-        "int a=1; int b=2; int c=0; { int b=3; c=a+b; #showGraph; } return c; #showGraph;",
+        "int a=1; int b=2; int c=0; { int b=3; c=a+b;  } return c; ",
         &types,
     );
     parser.nodes.disable_peephole = true;
     let stop = parser.parse().unwrap();
-
-    assert_eq!("return (1+3);", parser.print(stop));
+    assert_eq!(parser.print(stop), "return (1+3);");
 }
 
 #[test]
 fn test_var_dist() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new("int x0=1; int y0=2; int x1=3; int y1=4; return (x0-x1)*(x0-x1) + (y0-y1)*(y0-y1); #showGraph;", &types);
+    let mut parser = Parser::new(
+        "int x0=1; int y0=2; int x1=3; int y1=4; return (x0-x1)*(x0-x1) + (y0-y1)*(y0-y1); ",
+        &types,
+    );
     let stop = parser.parse().unwrap();
     assert_eq!(parser.print(stop), "return 8;");
 }

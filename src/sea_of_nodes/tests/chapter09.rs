@@ -8,7 +8,7 @@ fn test_jig() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
-        "
+        "\
 int v0=0;
 arg=0;
 while(v0) {
@@ -17,21 +17,20 @@ while(v0) {
     arg=1;
 }
 return 0;
-                ",
+",
         &types,
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
 }
 
 #[test]
-fn test_gvn1() {
+fn test_gvn_1() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
-        "
+        "\
 int x = arg + arg;
 if(arg < 10) {
     return arg + arg;
@@ -40,16 +39,14 @@ else {
     x = x + 1;
 }
 return x;
-                ",
+",
         &types,
     );
     let stop = parser.parse().unwrap();
-    parser.show_graph();
     assert_eq!(
-        "Stop[ return (arg*2); return (Mul+1); ]",
-        parser.print(stop)
+        parser.print(stop),
+        "Stop[ return (arg*2); return (Mul+1); ]"
     );
-
     assert_eq!(
         Object::Long(2),
         evaluate(&parser.nodes, stop, Some(1), None).1
@@ -61,18 +58,17 @@ return x;
 }
 
 #[test]
-fn test_gvn2() {
+fn test_gvn_2() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
-        "
+        "\
 return arg*arg-arg*arg;
-                ",
+",
         &types,
     );
     let stop = parser.parse().unwrap();
-    parser.show_graph();
-    assert_eq!("return 0;", parser.print(stop));
+    assert_eq!(parser.print(stop), "return 0;");
     assert_eq!(
         Object::Long(0),
         evaluate(&parser.nodes, stop, Some(1), None).1
@@ -80,25 +76,24 @@ return arg*arg-arg*arg;
 }
 
 #[test]
-fn test_worklist1() {
+fn test_worklist_1() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
-        "
+        "\
 int step = 1;
 while (arg < 10) {
     arg = arg + step + 1;
 }
 return arg;
-                ",
+",
         &types,
     );
     let stop = parser.parse().unwrap();
-    parser.show_graph();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    assert_eq!("return Phi(Loop7,arg,(Phi_arg+2));", parser.print(stop));
+
+    assert_eq!(parser.print(stop), "return Phi(Loop9,arg,(Phi_arg+2));");
     assert_eq!(
         Object::Long(11),
         evaluate(&parser.nodes, stop, Some(1), None).1
@@ -106,11 +101,11 @@ return arg;
 }
 
 #[test]
-fn test_worklist2() {
+fn test_worklist_2() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
-        "
+        "\
 int cond = 0;
 int one = 1;
 while (arg < 10) {
@@ -118,15 +113,14 @@ while (arg < 10) {
     arg = arg + one*3 + 1;
 }
 return arg;
-                ",
+",
         &types,
     );
     let stop = parser.parse().unwrap();
-    parser.show_graph();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    assert_eq!("return Phi(Loop8,arg,(Phi_arg+4));", parser.print(stop));
+
+    assert_eq!(parser.print(stop), "return Phi(Loop10,arg,(Phi_arg+4));");
     assert_eq!(
         Object::Long(13),
         evaluate(&parser.nodes, stop, Some(1), None).1
@@ -134,11 +128,11 @@ return arg;
 }
 
 #[test]
-fn test_worklist3() {
+fn test_worklist_3() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
-        "
+        "\
 int v1 = 0;
 int v2 = 0;
 int v3 = 0;
@@ -158,14 +152,14 @@ while (arg) {
     arg = arg + v8 + 1;
 }
 return arg;
-                ",
+",
         &types,
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    assert_eq!("return Phi(Loop14,arg,(Phi_arg+1));", parser.print(stop));
+
+    assert_eq!(parser.print(stop), "return Phi(Loop16,arg,(Phi_arg+1));");
 }
 
 #[test]
@@ -173,7 +167,7 @@ fn test_region_peep_bug() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
-        "
+        "\
 int v0=0;
 int v1=0;
 while(v1+arg) {
@@ -183,34 +177,34 @@ while(v1+arg) {
     v0=1;
     v1=v2;
 }
-                ",
+",
         &types,
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    assert_eq!("Stop[ ]", parser.print(stop));
+
+    assert_eq!(parser.print(stop), "Stop[ return 0; return 0; ]");
 }
 
 #[test]
-fn test_while0() {
+fn test_while_0() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new("while(0) continue; if(0) arg=0;", &types);
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    assert_eq!("Stop[ ]", parser.print(stop));
+
+    assert_eq!(parser.print(stop), "return 0;");
 }
 
 #[test]
-fn test_while1() {
+fn test_while_1() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
-        "
+        "\
 if(0) while(0) {
     int arg=arg;
     while(0) {}
@@ -220,9 +214,9 @@ if(0) while(0) {
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    assert_eq!("Stop[ ]", parser.print(stop));
+
+    assert_eq!(parser.print(stop), "return 0;");
 }
 
 #[test]
@@ -232,29 +226,29 @@ fn test_precedence() {
     let mut parser = Parser::new("return 3-1+2;", &types);
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    assert_eq!("return 4;", parser.print(stop));
+
+    assert_eq!(parser.print(stop), "return 4;");
 }
 
 #[test]
-fn test_swap2() {
+fn test_swap_2() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new("return 1+(1+1);", &types);
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    assert_eq!("return 3;", parser.print(stop));
+
+    assert_eq!(parser.print(stop), "return 3;");
 }
 
 #[test]
-fn test_fuzz0() {
+fn test_fuzz_0() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
-        "
+        "\
 int one = 1;
 int a = 0;
 int zero = 0;
@@ -269,17 +263,17 @@ return a;
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    assert_eq!("return Phi(Loop9,0,(-(Phi_a+3)));", parser.print(stop));
+
+    assert_eq!(parser.print(stop), "return Phi(Loop11,0,(-(Phi_a+3)));");
 }
 
 #[test]
-fn test_fuzz1() {
+fn test_fuzz_1() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
-        "
+        "\
 while(1) {}
 while(arg) break;
 while(arg) arg=0;
@@ -291,41 +285,41 @@ return -0+0+0;
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    assert_eq!("Stop[ ]", parser.print(stop));
+
+    assert_eq!(parser.print(stop), "return 0;");
 }
 
 #[test]
-fn test_fuzz2() {
+fn test_fuzz_2() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new("return 0+-0;", &types);
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    assert_eq!("return 0;", parser.print(stop));
+
+    assert_eq!(parser.print(stop), "return 0;");
 }
 
 #[test]
-fn test_fuzz3() {
+fn test_fuzz_3() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new("int v0=0; while(0==69) while(v0) return 0;", &types);
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    assert_eq!("Stop[ ]", parser.print(stop));
+
+    assert_eq!(parser.print(stop), "return 0;");
 }
 
 #[test]
-fn test_fuzz4() {
+fn test_fuzz_4() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
-        "
+        "\
 while(1) {
     arg=0<=0;
     if(1<0) while(arg==-0) arg=arg-arg;
@@ -335,17 +329,17 @@ while(1) {
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    assert_eq!("Stop[ ]", parser.print(stop));
+
+    assert_eq!(parser.print(stop), "return 0;");
 }
 
 #[test]
-fn test_fuzz5() {
+fn test_fuzz_5() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
-        "
+        "\
 {
     int v0=0;
     while(1)
@@ -365,36 +359,36 @@ return 0!=0;
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    assert_eq!("Stop[ ]", parser.print(stop));
+
+    assert_eq!(parser.print(stop), "return 0;");
 }
 
 #[test]
-fn test_fuzz6() {
+fn test_fuzz_6() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
-        "
+        "\
 int v0=0;
 while(0==1) while(v0)
         v0=1+v0;
-                                   ",
+",
         &types,
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    assert_eq!("Stop[ ]", parser.print(stop));
+
+    assert_eq!(parser.print(stop), "return 0;");
 }
 
 #[test]
-fn test_fuzz7() {
+fn test_fuzz_7() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
-        "
+        "\
 while(1) {}
 int v0=0;
 while(v0)
@@ -403,26 +397,26 @@ int v1=0;
 while(1)
         v1=1;
 return v1+v0;
-                                   ",
+",
         &types,
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    assert_eq!("Stop[ ]", parser.print(stop));
+
+    assert_eq!(parser.print(stop), "return 0;");
 }
 
 #[test]
-fn test_fuzz8() {
+fn test_fuzz_8() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new("while(arg) arg = arg - 1; #showGraph; return arg;", &types);
+    let mut parser = Parser::new("while(arg) arg = arg - 1;  return arg;", &types);
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    assert_eq!("return Phi(Loop6,arg,(Phi_arg-1));", parser.print(stop));
+
+    assert_eq!(parser.print(stop), "return Phi(Loop8,arg,(Phi_arg-1));");
 }
 
 #[test]

@@ -8,7 +8,7 @@ use crate::sea_of_nodes::types::Types;
 fn test_peephole() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new("return 1+arg+2; #showGraph;", &types);
+    let mut parser = Parser::new("return 1+arg+2; ", &types);
     let stop = parser.parse().unwrap();
     assert_eq!(parser.print(stop), "return (arg+3);");
 }
@@ -44,7 +44,7 @@ fn test_add_add_mul() {
 fn test_peephole_3() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new("return 1+arg+2+arg+3; #showGraph;", &types);
+    let mut parser = Parser::new("return 1+arg+2+arg+3; ", &types);
     let stop = parser.parse().unwrap();
     assert_eq!(parser.print(stop), "return ((arg*2)+6);");
 }
@@ -62,8 +62,7 @@ fn test_mul_1() {
 fn test_var_arg() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
-    let arg = types.ty_bot;
-    let mut parser = Parser::new_with_arg("return arg; #showGraph;", &types, arg);
+    let mut parser = Parser::new("return arg; ", &types);
     let stop = parser.parse().unwrap();
 
     assert!(matches!(&parser.nodes[stop], Op::Stop));
@@ -72,7 +71,7 @@ fn test_var_arg() {
 
     assert!(matches!(
         parser.nodes[parser.nodes.inputs[ret][0].unwrap()],
-        Op::Proj(_)
+        Op::CProj(_)
     ));
     assert!(matches!(
         parser.nodes[parser.nodes.inputs[ret][1].unwrap()],
@@ -84,18 +83,16 @@ fn test_var_arg() {
 fn test_constant_arg() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
-    let arg = types.get_int(2);
-    let mut parser = Parser::new_with_arg("return arg; #showGraph;", &types, arg);
+    let mut parser = Parser::new_with_arg("return arg; ", &types, types.get_int(2));
     let stop = parser.parse().unwrap();
-
-    assert_eq!("return 2;", parser.print(stop));
+    assert_eq!(parser.print(stop), "return 2;");
 }
 
 #[test]
 fn test_comp_eq() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new("return 3==3; #showGraph;", &types);
+    let mut parser = Parser::new("return 3==3; ", &types);
     let stop = parser.parse().unwrap();
     assert_eq!(parser.print(stop), "return 1;");
 }
@@ -104,15 +101,16 @@ fn test_comp_eq() {
 fn test_comp_eq_2() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new("return 3==4; #showGraph;", &types);
+    let mut parser = Parser::new("return 3==4; ", &types);
     let stop = parser.parse().unwrap();
     assert_eq!(parser.print(stop), "return 0;");
 }
+
 #[test]
 fn test_comp_neq() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new("return 3!=3; #showGraph;", &types);
+    let mut parser = Parser::new("return 3!=3; ", &types);
     let stop = parser.parse().unwrap();
     assert_eq!(parser.print(stop), "return 0;");
 }
@@ -121,7 +119,7 @@ fn test_comp_neq() {
 fn test_comp_neq_2() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new("return 3!=4; #showGraph;", &types);
+    let mut parser = Parser::new("return 3!=4; ", &types);
     let stop = parser.parse().unwrap();
     assert_eq!(parser.print(stop), "return 1;");
 }
@@ -130,7 +128,7 @@ fn test_comp_neq_2() {
 fn test_bug_1() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new("int a=arg+1; int b=a; b=1; return a+2; #showGraph;", &types);
+    let mut parser = Parser::new("int a=arg+1; int b=a; b=1; return a+2; ", &types);
     let stop = parser.parse().unwrap();
     assert_eq!(parser.print(stop), "return (arg+3);");
 }
@@ -139,7 +137,7 @@ fn test_bug_1() {
 fn test_bug_2() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new("int a=arg+1; a=a; return a; #showGraph;", &types);
+    let mut parser = Parser::new("int a=arg+1; a=a; return a; ", &types);
     let stop = parser.parse().unwrap();
     assert_eq!(parser.print(stop), "return (arg+1);");
 }

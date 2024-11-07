@@ -45,12 +45,12 @@ fn test_zero() {
 }
 
 #[test]
-fn test_bad1() {
+fn test_bad_1() {
     test_error("ret", "Undefined name 'ret'");
 }
 
 #[test]
-fn test_bad2() {
+fn test_bad_2() {
     test_error(
         "return 0123;",
         "Syntax error: integer values cannot start with '0'",
@@ -58,7 +58,7 @@ fn test_bad2() {
 }
 
 #[test]
-fn test_not_bad3() {
+fn test_not_bad_3() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new("return --12;", &types);
@@ -67,12 +67,12 @@ fn test_not_bad3() {
 }
 
 #[test]
-fn test_bad4() {
-    test_error("return 100", "Syntax error, expected ;: ")
+fn test_bad_4() {
+    test_error("return 100", "Syntax error, expected ;: ");
 }
 
 #[test]
-fn test_not_bad5() {
+fn test_not_bad_5() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new("return -100;", &types);
@@ -81,11 +81,11 @@ fn test_not_bad5() {
 }
 
 #[test]
-fn test_bad6() {
+fn test_bad_6() {
     test_error("return100", "Undefined name 'return100'");
 }
 
 #[test]
-fn test_bad7() {
+fn test_bad_7() {
     test_error("return 1;}", "Syntax error, unexpected }");
 }

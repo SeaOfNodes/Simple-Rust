@@ -14,24 +14,24 @@ if (arg == 1)
     a = arg+2;
 else {
     a = arg-3;
-    #showGraph;
+
 }
-#showGraph;
+
 return a;",
         &types,
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    assert_eq!(parser.print(stop), "return Phi(Region18,(arg+2),(arg-3));");
+
+    assert_eq!(parser.print(stop), "return Phi(Region20,(arg+2),(arg-3));");
 }
 
 #[test]
 fn test_test() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new(
+    let mut parser = Parser::new_with_arg(
         "\
 int c = 3;
 int b = 2;
@@ -41,29 +41,33 @@ if (arg == 1) {
 }
 return c;",
         &types,
+        types.ty_int_bot,
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    assert_eq!(parser.print(stop), "return Phi(Region16,4,3);");
+
+    assert_eq!(parser.print(stop), "return Phi(Region18,4,3);");
 }
+
 #[test]
-fn test_return2() {
+fn test_return_2() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new(
+    let mut parser = Parser::new_with_arg(
         "\
 if( arg==1 )
     return 3;
 else
     return 4;
-#showGraph;",
+",
         &types,
+        types.ty_int_bot,
     );
     let stop = parser.parse().unwrap();
     assert_eq!(parser.print(stop), "Stop[ return 3; return 4; ]");
 }
+
 #[test]
 fn test_if_merge_b() {
     let arena = DroplessArena::new();
@@ -81,12 +85,13 @@ return a+b;",
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    assert_eq!(parser.print(stop), "return ((arg*2)+Phi(Region21,2,3));");
+
+    assert_eq!(parser.print(stop), "return ((arg*2)+Phi(Region23,2,3));");
 }
+
 #[test]
-fn test_if_merge2() {
+fn test_if_merge_2() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
@@ -102,18 +107,19 @@ return a+b;",
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
+
     assert_eq!(
         parser.print(stop),
-        "return ((Phi(Region32,(arg*2),arg)+arg)+Phi(Region,4,5));"
+        "return ((Phi(Region34,(arg*2),arg)+arg)+Phi(Region,4,5));"
     );
 }
+
 #[test]
-fn test_merge3() {
+fn test_merge_3() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new(
+    let mut parser = Parser::new_with_arg(
         "\
 int a=1;
 if( arg==1 )
@@ -126,22 +132,25 @@ else if( arg==3 )
 else
     a=5;
 return a;
-#showGraph;",
+",
         &types,
+        types.ty_int_bot,
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
+
     assert_eq!(
         parser.print(stop),
-        "return Phi(Region36,Phi(Region22,2,3),Phi(Region34,4,5));"
+        "return Phi(Region38,Phi(Region24,2,3),Phi(Region36,4,5));"
     );
 }
+
 #[test]
-fn test_merge4() {
+fn test_merge_4() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new(
+    let mut parser = Parser::new_with_arg(
         "\
 int a=0;
 int b=0;
@@ -150,17 +159,19 @@ if( arg )
 if( arg==0 )
     b=2;
 return arg+a+b;
-#showGraph;",
+",
         &types,
+        types.ty_int_bot,
     );
     let stop = parser.parse().unwrap();
     assert_eq!(
         parser.print(stop),
-        "return ((arg+Phi(Region13,1,0))+Phi(Region28,2,0));"
+        "return ((arg+Phi(Region15,1,0))+Phi(Region30,2,0));"
     );
 }
+
 #[test]
-fn test_merge5() {
+fn test_merge_5() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
@@ -176,8 +187,10 @@ return a;",
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
-    assert_eq!(parser.print(stop), "return (arg==Phi(Region16,3,2));");
+
+    assert_eq!(parser.print(stop), "return (arg==Phi(Region18,3,2));");
 }
+
 #[test]
 fn test_true() {
     let arena = DroplessArena::new();
@@ -186,6 +199,7 @@ fn test_true() {
     let stop = parser.parse().unwrap();
     assert_eq!(parser.print(stop), "return 1;");
 }
+
 #[test]
 fn test_half_def() {
     test_error(
@@ -193,20 +207,23 @@ fn test_half_def() {
         "Cannot define a new name on one arm of an if",
     );
 }
+
 #[test]
-fn test_half_def2() {
+fn test_half_def_2() {
     test_error(
         "if( arg==1 ) { int b=2; } else { int b=3; } return b;",
         "Undefined name 'b'",
     );
 }
+
 #[test]
-fn test_regress1() {
+fn test_regress_1() {
     test_error(
         "if(arg==2) int a=1; else int b=2; return a;",
         "Cannot define a new name on one arm of an if",
     );
 }
+
 #[test]
 fn test_bad_num() {
     test_error(
@@ -214,8 +231,9 @@ fn test_bad_num() {
         "Syntax error, expected an identifier or expression: ;",
     );
 }
+
 #[test]
-fn test_keyword1() {
+fn test_keyword_1() {
     test_error(
         "int true=0; return true;",
         "Expected an identifier, found 'true'",
@@ -223,14 +241,15 @@ fn test_keyword1() {
 }
 
 #[test]
-fn test_keyword2() {
+fn test_keyword_2() {
     test_error(
         "int else=arg; if(else) else=2; else else=1; return else;",
         "Expected an identifier, found 'else'",
     );
 }
+
 #[test]
-fn test_keyword3() {
+fn test_keyword_3() {
     test_error(
         "int a=1; ififif(arg)inta=2;return a;",
         "Undefined name 'ififif'",

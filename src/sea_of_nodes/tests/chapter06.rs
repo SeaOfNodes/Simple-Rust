@@ -16,14 +16,10 @@ return 1;
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    assert_eq!("return 2;", parser.print(stop));
 
-    let ret = stop.unique_input(&mut parser.nodes).unwrap();
-    assert!(matches!(parser.nodes[ret], Op::Return));
-    let ret_ctrl = parser.nodes.inputs[ret][0].unwrap();
-    assert!(matches!(parser.nodes[ret_ctrl], Op::Proj(_)));
+    assert_eq!(parser.print(stop), "return 2;");
+    assert!(matches!(parser.nodes.ret_ctrl(stop), Op::CProj(_)));
 }
 
 #[test]
@@ -42,7 +38,8 @@ return (arg < a) < 3;
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
-    assert_eq!(parser.print(stop), "return ((arg<Phi(Region12,2,1))<3);");
+
+    assert_eq!(parser.print(stop), "return ((arg<Phi(Region14,2,1))<3);");
 }
 
 #[test]
@@ -62,22 +59,18 @@ return a;
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    assert_eq!("return 2;", parser.print(stop));
 
-    let ret = stop.unique_input(&mut parser.nodes).unwrap();
-    assert!(matches!(parser.nodes[ret], Op::Return));
-    let ret_ctrl = parser.nodes.inputs[ret][0].unwrap();
-    assert!(matches!(parser.nodes[ret_ctrl], Op::Proj(_)));
+    assert_eq!(parser.print(stop), "return 2;");
+    assert!(matches!(parser.nodes.ret_ctrl(stop), Op::CProj(_)));
 }
 
 #[test]
 fn test_if_if() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new(
-        "
+    let mut parser = Parser::new_with_arg(
+        "\
 int a=1;
 if( arg!=1 )
     a=2;
@@ -90,19 +83,20 @@ else
     b=5;
 return b;",
         &types,
+        types.ty_int_bot,
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    assert_eq!(parser.print(stop), "return Phi(Region37,42,5);");
+
+    assert_eq!(parser.print(stop), "return Phi(Region39,42,5);");
 }
 
 #[test]
 fn test_if_arg_if() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new(
+    let mut parser = Parser::new_with_arg(
         "\
 int a=1;
 if( 1==1 )
@@ -116,20 +110,21 @@ else
     b=5;
 return b;",
         &types,
+        types.ty_int_bot,
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    assert_eq!(parser.print(stop), "return Phi(Region30,2,5);");
+
+    assert_eq!(parser.print(stop), "return Phi(Region32,2,5);");
 }
 
 #[test]
-fn test_merge3_with2() {
+fn test_merge_3_with_2() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new_with_arg(
-        "
+        "\
 int a=1;
 if( arg==1 )
     if( arg==2 )
@@ -141,7 +136,7 @@ else if( arg==3 )
 else
     a=5;
 return a;
-#showGraph;",
+",
         &types,
         types.get_int(2),
     );
@@ -150,12 +145,11 @@ return a;
 }
 
 #[test]
-fn test_merge3_with1() {
+fn test_merge_3_with_1() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
-
     let mut parser = Parser::new_with_arg(
-        "
+        "\
 int a=1;
 if( arg==1 )
     if( arg==2 )
@@ -173,12 +167,17 @@ return a;
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
+
     assert_eq!(parser.print(stop), "return 3;");
 }
 
-const MERGE3_PEEPHOLE: &str = "
+#[test]
+fn test_merge_3_peephole() {
+    let arena = DroplessArena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new_with_arg(
+        "\
 int a=1;
 if( arg==1 )
     if( 1==2 )
@@ -190,48 +189,82 @@ else if( arg==3 )
 else
     a=5;
 return a;
-";
-
-#[test]
-fn test_merge3_peephole() {
-    let arena = DroplessArena::new();
-    let types = Types::new(&arena);
-    let mut parser = Parser::new_with_arg(MERGE3_PEEPHOLE, &types, types.ty_bot);
+",
+        &types,
+        types.ty_int_bot,
+    );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
+
     assert_eq!(
         parser.print(stop),
-        "return Phi(Region41,3,Phi(Region39,4,5));"
+        "return Phi(Region43,3,Phi(Region41,4,5));"
     );
 }
 
 #[test]
-fn test_merge3_peephole1() {
+fn test_merge_3_peephole_1() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new_with_arg(MERGE3_PEEPHOLE, &types, types.get_int(1));
+    let mut parser = Parser::new_with_arg(
+        "\
+int a=1;
+if( arg==1 )
+    if( 1==2 )
+        a=2;
+    else
+        a=3;
+else if( arg==3 )
+    a=4;
+else
+    a=5;
+return a;
+",
+        &types,
+        types.get_int(1),
+    );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
+
     assert_eq!(parser.print(stop), "return 3;");
 }
 
 #[test]
-fn test_merge3_peephole3() {
+fn test_merge_3_peephole_3() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new_with_arg(MERGE3_PEEPHOLE, &types, types.get_int(3));
+    let mut parser = Parser::new_with_arg(
+        "\
+int a=1;
+if( arg==1 )
+    if( 1==2 )
+        a=2;
+    else
+        a=3;
+else if( arg==3 )
+    a=4;
+else
+    a=5;
+return a;
+",
+        &types,
+        types.get_int(3),
+    );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
+
     assert_eq!(parser.print(stop), "return 4;");
 }
 
-const DEMO1: &str = "
+#[test]
+fn test_demo_1_non_const() {
+    let arena = DroplessArena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new(
+        "\
 int a = 0;
 int b = 1;
 if( arg ) {
@@ -240,45 +273,72 @@ if( arg ) {
     else b = 3;
 }
 return a+b;
-";
-
-#[test]
-fn test_demo1_non_const() {
-    let arena = DroplessArena::new();
-    let types = Types::new(&arena);
-    let mut parser = Parser::new_with_arg(DEMO1, &types, types.ty_bot);
+",
+        &types,
+    );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
-    assert_eq!(parser.print(stop), "return Phi(Region24,4,1);");
+
+    assert_eq!(parser.print(stop), "return Phi(Region26,4,1);");
 }
 
 #[test]
-fn test_demo1_true() {
+fn test_demo_1_true() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new_with_arg(DEMO1, &types, types.get_int(1));
+    let mut parser = Parser::new_with_arg(
+        "\
+int a = 0;
+int b = 1;
+if( arg ) {
+    a = 2;
+    if( arg ) { b = 2; }
+    else b = 3;
+}
+return a+b;
+",
+        &types,
+        types.get_int(1),
+    );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
+
     assert_eq!(parser.print(stop), "return 4;");
 }
 
 #[test]
-fn test_demo1_false() {
+fn test_demo_1_false() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new_with_arg(DEMO1, &types, types.get_int(0));
+    let mut parser = Parser::new_with_arg(
+        "\
+int a = 0;
+int b = 1;
+if( arg ) {
+    a = 2;
+    if( arg ) { b = 2; }
+    else b = 3;
+}
+return a+b;
+",
+        &types,
+        types.get_int(0),
+    );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
+
     assert_eq!(parser.print(stop), "return 1;");
 }
 
-const DEMO2: &str = "
+#[test]
+fn test_demo_2_non_const() {
+    let arena = DroplessArena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new(
+        "\
 int a = 0;
 int b = 1;
 int c = 0;
@@ -289,43 +349,69 @@ if( arg ) {
     else b = 3;
 }
 return a+b+c;
-";
-
-#[test]
-fn test_demo2_non_const() {
-    let arena = DroplessArena::new();
-    let types = Types::new(&arena);
-    let mut parser = Parser::new_with_arg(DEMO2, &types, types.ty_bot);
+",
+        &types,
+    );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
+
     assert_eq!(
         parser.print(stop),
-        "return (Phi(Region36,Phi(Region23,2,3),0)+Phi(Region,3,1));"
+        "return (Phi(Region38,Phi(Region25,2,3),0)+Phi(Region,3,1));"
     );
 }
 
 #[test]
-fn test_demo2_true() {
+fn test_demo_2_true() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new_with_arg(DEMO2, &types, types.get_int(1));
+    let mut parser = Parser::new_with_arg(
+        "\
+int a = 0;
+int b = 1;
+int c = 0;
+if( arg ) {
+    a = 1;
+    if( arg==2 ) { c=2; } else { c=3; }
+    if( arg ) { b = 2; }
+    else b = 3;
+}
+return a+b+c;
+",
+        &types,
+        types.get_int(1),
+    );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
+
     assert_eq!(parser.print(stop), "return 6;");
 }
 
 #[test]
-fn test_demo2_arg2() {
+fn test_demo_2arg_2() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new_with_arg(DEMO2, &types, types.get_int(2));
+    let mut parser = Parser::new_with_arg(
+        "\
+int a = 0;
+int b = 1;
+int c = 0;
+if( arg ) {
+    a = 1;
+    if( arg==2 ) { c=2; } else { c=3; }
+    if( arg ) { b = 2; }
+    else b = 3;
+}
+return a+b+c;
+",
+        &types,
+        types.get_int(2),
+    );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    parser.show_graph();
     parser.type_check(stop).unwrap();
+
     assert_eq!(parser.print(stop), "return 5;");
 }

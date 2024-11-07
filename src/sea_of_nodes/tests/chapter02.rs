@@ -9,10 +9,7 @@ fn test_parse_grammar() {
     let mut parser = Parser::new("return 1+2*3+-5;", &types);
     parser.nodes.disable_peephole = true;
     let stop = parser.parse().unwrap();
-
-    parser.show_graph();
-
-    assert_eq!("return ((1+(2*3))+(-5));", parser.print(stop));
+    assert_eq!(parser.print(stop), "return ((1+(2*3))+(-5));");
 }
 
 #[test]
@@ -66,8 +63,5 @@ fn test_example() {
     let types = Types::new(&arena);
     let mut parser = Parser::new("return 1+2*3+-5;", &types);
     let stop = parser.parse().unwrap();
-
-    parser.show_graph();
-
     assert_eq!(parser.print(stop), "return 2;");
 }

@@ -32,9 +32,13 @@ fn test_error_iterate(source: &str, error: &str) {
     let types = Types::new(&arena);
 
     let mut parser = Parser::new(source, &types);
-    let stop = parser.parse().unwrap();
-    parser.iterate(stop);
-    assert_eq!(parser.type_check(stop), Err(error.to_string()),);
+    match parser.parse() {
+        Err(err) => assert_eq!(err, error),
+        Ok(stop) => {
+            parser.iterate(stop);
+            assert_eq!(parser.type_check(stop), Err(error.to_string()));
+        }
+    }
 }
 
 impl<'t> Nodes<'t> {
