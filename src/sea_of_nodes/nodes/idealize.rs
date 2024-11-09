@@ -310,17 +310,17 @@ impl Phi {
             if nullx != 0 {
                 let val = self.inputs(sea)[3 - nullx].unwrap();
                 let region = self.inputs(sea)[0].unwrap();
-                let idom = sea.idom(region);
-                if let Some(iff) = sea.to_if(idom) {
+                let idom = region.to_cfg(&sea.ops).unwrap().idom(sea).unwrap();
+                if let Some(iff) = sea.to_if(idom.node()) {
                     let pred = iff.inputs(sea)[1].unwrap();
                     pred.add_dep(*self, sea);
                     if pred == val {
                         // Must walk the idom on the null side to make sure we hit False.
-                        let mut idom = region.inputs(sea)[nullx].unwrap();
-                        while idom.inputs(sea)[0] != Some(*iff) {
-                            idom = sea.idom(idom).unwrap();
+                        let mut idom = region.inputs(sea)[nullx].unwrap().to_cfg(&sea.ops).unwrap();
+                        while idom.node().inputs(sea)[0] != Some(*iff) {
+                            idom = idom.idom(sea).unwrap();
                         }
-                        if sea.to_proj(idom).is_some_and(|p| sea[p].index == 1) {
+                        if sea.to_proj(idom.node()).is_some_and(|p| sea[p].index == 1) {
                             return Some(val);
                         }
                     }
@@ -469,8 +469,9 @@ impl<'t> Nodes<'t> {
         let pred = self.inputs[node][1]?;
         if !self.ty[pred]?.is_high_or_constant() {
             let mut prior = node;
-            let mut dom = self.idom(node);
-            while let Some(d) = dom {
+            let mut dom = node.to_cfg(&self.ops).unwrap().idom(self);
+            while let Some(cfg) = dom {
+                let d = cfg.node();
                 d.add_dep(node, self);
                 if matches!(&self[d], Op::If(_)) {
                     let if_pred = self.inputs[d][1]?;
@@ -489,7 +490,7 @@ impl<'t> Nodes<'t> {
                     }
                 }
                 prior = d;
-                dom = self.idom(d);
+                dom = cfg.idom(self);
             }
         }
         None

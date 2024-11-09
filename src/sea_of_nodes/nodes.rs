@@ -8,6 +8,7 @@ pub use scope::ScopeOp;
 
 use crate::datastructures::id_set::IdSet;
 use crate::datastructures::id_vec::IdVec;
+use crate::sea_of_nodes::nodes::cfg::CfgData;
 use crate::sea_of_nodes::nodes::gvn::GvnEntry;
 use crate::sea_of_nodes::nodes::index::{Constant, Phi, Proj, Scope, Start, XCtrl};
 use crate::sea_of_nodes::parser::Parser;
@@ -63,10 +64,9 @@ pub struct Nodes<'t> {
     /// revisit them if `this` changes.
     pub deps: IdVec<Node, Vec<Node>>,
 
-    /// Immediate dominator tree depth, used to approximate a real IDOM during
-    ///  parsing where we do not have the whole program, and also peepholes
-    ///  change the CFG incrementally.
-    idepth: IdVec<Node, u32>,
+    /// Control Flow Graph Nodes
+    /// CFG nodes have a immediate dominator depth (idepth) and a loop nesting depth(loop_depth).
+    cfg_data: IdVec<Node, CfgData>,
 
     /// If this is true peephole only computes the type.
     pub disable_peephole: bool,
@@ -115,7 +115,7 @@ impl<'t> Nodes<'t> {
             outputs: IdVec::new(vec![vec![]]),
             ty: IdVec::new(vec![None]),
             deps: IdVec::new(vec![vec![]]),
-            idepth: IdVec::new(vec![0]),
+            cfg_data: IdVec::new(vec![CfgData::new()]),
             disable_peephole: false,
             // TODO get rid of DUMMYs
             start: Start::DUMMY,
@@ -144,7 +144,7 @@ impl<'t> Nodes<'t> {
         self.outputs.push(vec![]);
         self.ty.push(None);
         self.deps.push(vec![]);
-        self.idepth.push(0);
+        self.cfg_data.push(CfgData::new());
         self.hash.push(None);
         for i in 0..self.inputs[id].len() {
             if let Some(input) = self.inputs[id][i] {
@@ -385,61 +385,6 @@ impl Phi {
 }
 
 impl<'t> Nodes<'t> {
-    /// Return the immediate dominator of this Node and compute dom tree depth.
-    fn idom(&mut self, node: Node) -> Option<Node> {
-        match &self[node] {
-            Op::Start { .. } | Op::Stop => None,
-            Op::Loop => self.inputs[node][1],
-            Op::Region => {
-                if let &[_, i1] = self.inputs[node].as_slice() {
-                    i1 // 1-input is that one input
-                } else if let &[_, lhs, rhs] = self.inputs[node].as_slice() {
-                    // Walk the LHS & RHS idom trees in parallel until they match, or either fails
-                    // Because this does not cache, it can be linear in the size of the program.
-                    let mut lhs = lhs?;
-                    let mut rhs = rhs?;
-                    while lhs != rhs {
-                        let comp = self.idepth(lhs) as i32 - self.idepth(rhs) as i32;
-                        if comp >= 0 {
-                            lhs = self.idom(lhs)?
-                        }
-                        if comp <= 0 {
-                            rhs = self.idom(rhs)?
-                        }
-                    }
-                    Some(lhs)
-                } else {
-                    // Fails for anything other than 2-inputs
-                    None
-                }
-            }
-            _ => Some(self.inputs[node][0].expect("don't ask")),
-        }
-    }
-
-    fn idepth(&mut self, node: Node) -> u32 {
-        if self.idepth[node] != 0 {
-            return self.idepth[node];
-        }
-        let index = match self[node] {
-            Op::Start(_) => return 0, // uncached
-            Op::Region => {
-                let mut d = 0;
-                for n in 0..self.inputs[node].len() {
-                    if let Some(n) = self.inputs[node][n] {
-                        d = d.max(self.idepth(n));
-                    }
-                }
-                self.idepth[node] = d;
-                return d;
-            }
-            Op::Loop => 1, // Bypass Region idom, same as the default idom() using use entry in(1) instead of in(0)
-            _ => 0,
-        };
-        self.idepth[node] = self.idepth(self.inputs[node][index].unwrap()) + 1;
-        self.idepth[node]
-    }
-
     fn in_progress(ops: &OpVec<'t>, inputs: &IdVec<Node, Vec<Option<Node>>>, region: Node) -> bool {
         debug_assert!(matches!(
             ops[region],

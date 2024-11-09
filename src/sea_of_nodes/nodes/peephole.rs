@@ -1,3 +1,4 @@
+use crate::sea_of_nodes::nodes::cfg::Cfg;
 use crate::sea_of_nodes::nodes::index::{Constant, XCtrl};
 use crate::sea_of_nodes::nodes::node::IfOp;
 use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
@@ -222,9 +223,10 @@ impl<'t> Node {
                 // Hunt up the immediate dominator tree.  If we find an identical if
                 // test on either the true or false branch, then this test matches.
 
-                let mut dom = sea.idom(self);
+                let mut dom = self.to_cfg(&sea.ops).unwrap().idom(sea);
                 let mut prior = self;
-                while let Some(d) = dom {
+                while let Some(cfg) = dom {
+                    let d = cfg.node();
                     if d.to_if(sea).is_some() && d.inputs(sea)[1].unwrap() == pred {
                         return if let Op::Proj(proj) = &sea[prior] {
                             // Repeated test, dominated on one side.  Test result is the same.
@@ -240,7 +242,7 @@ impl<'t> Node {
                     }
 
                     prior = d;
-                    dom = sea.idom(d);
+                    dom = cfg.idom(sea);
                 }
 
                 types.ty_if_both
