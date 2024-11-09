@@ -191,7 +191,9 @@ impl Scheduler {
     // - `data` Node to check.
     // - returns: true if node is placed during the control flow graph build.
     fn is_pinned_node(data: &NodeData, sea: &Nodes) -> bool {
-        data.node.is_cfg(sea) || data.node.to_phi(sea).is_some()
+        data.node.is_cfg(sea)
+            || data.node == *sea.zero
+            || matches!(sea[data.node], Op::New(_) | Op::Phi(_) | Op::Proj(_))
     }
 
     // Refine placement of a node.
