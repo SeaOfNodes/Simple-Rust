@@ -4,6 +4,7 @@ use std::fmt::Display;
 
 use crate::datastructures::id::Id;
 use crate::datastructures::id_set::IdSet;
+use crate::sea_of_nodes::nodes::node::IfOp;
 use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
 use crate::sea_of_nodes::types::Type;
 
@@ -81,6 +82,7 @@ impl Display for PrintNodes2<'_, '_, '_> {
             Op::Bool(op) => binary(op.str()),
             Op::Return => write!(f, "return {};", input(1)),
             Op::Constant(ty) => write!(f, "{}", ty),
+            Op::XCtrl => write!(f, "Xctrl"),
             n @ Op::Start { .. } => write!(f, "{}", n.label()),
             Op::Minus => write!(f, "(-{})", input(1)),
             Op::Scope(_) => {
@@ -102,8 +104,11 @@ impl Display for PrintNodes2<'_, '_, '_> {
                 write!(f, "]")
             }
             Op::Not => write!(f, "(!{})", input(1)),
-            Op::Proj(proj) => write!(f, "{}", proj.label),
-            Op::If => write!(f, "if( {} )", input(1)),
+            Op::Proj(proj) | Op::CProj(proj) => write!(f, "{}", proj.label),
+            Op::If(op) => match op {
+                IfOp::Cond => write!(f, "if( {} )", input(1)),
+                IfOp::Never => write!(f, "Never"),
+            },
             Op::Phi(_) => {
                 if !sea.instanceof_region(inputs[0])
                     || Nodes::in_progress(&sea.ops, &sea.inputs, sea.inputs[node][0].unwrap())

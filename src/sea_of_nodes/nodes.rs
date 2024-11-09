@@ -9,11 +9,12 @@ pub use scope::ScopeOp;
 use crate::datastructures::id_set::IdSet;
 use crate::datastructures::id_vec::IdVec;
 use crate::sea_of_nodes::nodes::gvn::GvnEntry;
-use crate::sea_of_nodes::nodes::index::{Phi, Proj, Scope, Start};
+use crate::sea_of_nodes::nodes::index::{Constant, Phi, Proj, Scope, Start, XCtrl};
 use crate::sea_of_nodes::parser::Parser;
 use crate::sea_of_nodes::types::{MemPtr, Struct, Ty, Type, Types};
 use iter_peeps::IterPeeps;
 
+mod cfg;
 mod gvn;
 mod id;
 mod idealize;
@@ -73,6 +74,12 @@ pub struct Nodes<'t> {
     /// the start node to be used for creating constants.
     pub start: Start,
 
+    /// zero constant node
+    pub zero: Constant,
+
+    /// xctrl constant node
+    pub xctrl: XCtrl,
+
     /// Creating nodes such as constants and computing peepholes requires
     /// interning new types and operations such as meet and join.
     pub types: &'t Types<'t>,
@@ -110,7 +117,10 @@ impl<'t> Nodes<'t> {
             deps: IdVec::new(vec![vec![]]),
             idepth: IdVec::new(vec![0]),
             disable_peephole: false,
+            // TODO get rid of DUMMYs
             start: Start::DUMMY,
+            zero: Constant::DUMMY,
+            xctrl: XCtrl::DUMMY,
             types,
             iter_peeps: IterPeeps::new(),
             iter_cnt: 0,
@@ -210,6 +220,8 @@ impl Node {
             new_def.add_use(self, sea);
         }
 
+        sea.inputs[self][index] = new_def;
+
         if let Some(old_def) = old_def {
             old_def.del_use(self, sea);
             if old_def.is_unused(sea) {
@@ -217,7 +229,6 @@ impl Node {
             }
         }
 
-        sea.inputs[self][index] = new_def;
         self.move_deps_to_worklist(sea);
     }
 
@@ -264,8 +275,9 @@ impl Node {
         sea.inputs[self].swap(1, 2);
         self
     }
-    pub fn keep(self, sea: &mut Nodes) {
+    pub fn keep(self, sea: &mut Nodes) -> Node {
         self.add_use(Node::DUMMY, sea);
+        self
     }
 
     pub fn unkeep(self, sea: &mut Nodes) {
@@ -287,27 +299,7 @@ impl Node {
     }
 
     pub fn is_cfg(self, sea: &Nodes) -> bool {
-        match &sea[self] {
-            Op::Start { .. } | Op::Return | Op::Stop => true,
-            Op::If | Op::Region { .. } | Op::Loop => true,
-            Op::Proj(p) => {
-                p.index == 0 || self.inputs(sea)[0].is_some_and(|n| n.to_if(sea).is_some())
-            }
-            Op::Constant(_)
-            | Op::Add
-            | Op::Sub
-            | Op::Mul
-            | Op::Div
-            | Op::Minus
-            | Op::Scope(_)
-            | Op::Bool(_)
-            | Op::Phi(_)
-            | Op::Cast(_)
-            | Op::Load(_)
-            | Op::Store(_)
-            | Op::New(_)
-            | Op::Not => false,
-        }
+        self.to_cfg(&sea.ops).is_some()
     }
 
     pub fn unique_input(self, sea: &Nodes) -> Option<Node> {

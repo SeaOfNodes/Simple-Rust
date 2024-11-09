@@ -167,8 +167,9 @@ fn print_line_llvm(nodes: &Nodes, n: Node, sb: &mut String) -> fmt::Result {
 impl<'t> Nodes<'t> {
     pub fn is_multi_head(&self, node: Node) -> bool {
         match &self[node] {
-            Op::If | Op::Region { .. } | Op::Loop | Op::Start { .. } => true,
+            Op::If(_) | Op::Region { .. } | Op::Loop | Op::Start { .. } => true,
             Op::Constant(_)
+            | Op::XCtrl
             | Op::Return
             | Op::Add
             | Op::Sub
@@ -179,6 +180,7 @@ impl<'t> Nodes<'t> {
             | Op::Bool(_)
             | Op::Not
             | Op::Proj(_)
+            | Op::CProj(_)
             | Op::Phi(_)
             | Op::Cast(_)
             | Op::New(_)
@@ -190,8 +192,8 @@ impl<'t> Nodes<'t> {
 
     pub fn is_multi_tail(&self, node: Node) -> bool {
         match &self[node] {
-            Op::Constant(_) | Op::Phi(_) => true,
-            Op::Proj(_) => {
+            Op::Constant(_) | Op::XCtrl | Op::Phi(_) => true,
+            Op::Proj(_) | Op::CProj(_) => {
                 let ctrl = self.inputs[node][0].unwrap();
                 self.is_multi_head(ctrl)
             }
@@ -205,7 +207,7 @@ impl<'t> Nodes<'t> {
             | Op::Scope(_)
             | Op::Bool(_)
             | Op::Not
-            | Op::If
+            | Op::If(_)
             | Op::Region { .. }
             | Op::Loop
             | Op::Cast(_)

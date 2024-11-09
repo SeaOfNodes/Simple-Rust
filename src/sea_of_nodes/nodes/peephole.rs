@@ -1,4 +1,5 @@
-use crate::sea_of_nodes::nodes::index::Constant;
+use crate::sea_of_nodes::nodes::index::{Constant, XCtrl};
+use crate::sea_of_nodes::nodes::node::IfOp;
 use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
 use crate::sea_of_nodes::types::{Int, Ty, Type};
 
@@ -47,8 +48,16 @@ impl<'t> Node {
         // println!("{:<3} {:<8} {}->{}", self, &sea[self].label(), old.map(|t| t.to_string()).unwrap_or("null".to_string()), ty);
 
         // Replace constant computations from non-constants with a constant node
-        if self.to_constant(sea).is_none() && ty.is_high_or_constant() {
-            return Constant::new(ty, sea).peephole_opt(sea);
+        if self.to_constant(sea).is_none()
+            && self.to_xctrl(sea).is_none()
+            && ty.is_high_or_constant()
+        {
+            return if ty == sea.types.ty_xctrl {
+                *XCtrl::new(sea)
+            } else {
+                *Constant::new(ty, sea)
+            }
+            .peephole_opt(sea);
         }
 
         // Global Value Numbering
@@ -106,6 +115,7 @@ impl<'t> Node {
         let types = sea.types;
         match &sea[self] {
             Op::Constant(ty) => *ty,
+            Op::XCtrl => types.ty_xctrl,
             Op::Return => {
                 let ctrl = self.inputs(sea)[0]
                     .and_then(|n| n.ty(sea))
@@ -173,7 +183,7 @@ impl<'t> Node {
                     }
                 }
             }
-            Op::Proj(n) => {
+            Op::Proj(n) | Op::CProj(n) => {
                 let Some(input) = self.inputs(sea)[0].and_then(|n| n.ty(sea)) else {
                     return types.ty_bot;
                 };
@@ -182,7 +192,8 @@ impl<'t> Node {
                     _ => unreachable!("proj node ctrl must always be tuple, if present"),
                 }
             }
-            Op::If => {
+            Op::If(IfOp::Never) => types.ty_int_bot,
+            Op::If(IfOp::Cond) => {
                 // If the If node is not reachable then neither is any following Proj
                 let ctrl_ty = self.inputs(sea)[0].unwrap().ty(sea);
                 if ctrl_ty != Some(types.ty_ctrl) && ctrl_ty != Some(types.ty_bot) {
@@ -214,7 +225,7 @@ impl<'t> Node {
                 let mut dom = sea.idom(self);
                 let mut prior = self;
                 while let Some(d) = dom {
-                    if matches!(&sea[d], Op::If) && d.inputs(sea)[1].unwrap() == pred {
+                    if d.to_if(sea).is_some() && d.inputs(sea)[1].unwrap() == pred {
                         return if let Op::Proj(proj) = &sea[prior] {
                             // Repeated test, dominated on one side.  Test result is the same.
                             if proj.index == 0 {

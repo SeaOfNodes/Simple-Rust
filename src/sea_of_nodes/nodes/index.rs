@@ -1,5 +1,5 @@
 use crate::datastructures::id_vec::IdVec;
-use crate::sea_of_nodes::nodes::node::{PhiOp, StartOp};
+use crate::sea_of_nodes::nodes::node::{IfOp, PhiOp, StartOp};
 use crate::sea_of_nodes::nodes::{BoolOp, LoadOp, Node, Nodes, OpVec, ProjOp, ScopeOp, StoreOp};
 use crate::sea_of_nodes::types::Ty;
 use std::fmt;
@@ -168,6 +168,7 @@ macro_rules! define_ids {
 
 define_ids!(<'t>
     Constant(Ty<'t>)   to_constant;
+    XCtrl              to_xctrl;
     Return             to_return;
     Start(StartOp<'t>) to_start;
     Add                to_add;
@@ -179,7 +180,8 @@ define_ids!(<'t>
     Bool(BoolOp)       to_bool;
     Not                to_not;
     Proj(ProjOp<'t>)   to_proj;
-    If                 to_if;
+    CProj(ProjOp<'t>)  to_cproj;
+    If(IfOp)           to_if;
     Phi(PhiOp<'t>)     to_phi;
     Region             to_region;
     Loop               to_loop;
@@ -192,6 +194,12 @@ define_ids!(<'t>
 
 impl Start {
     pub const DUMMY: Start = Start(Node::DUMMY);
+}
+impl Constant {
+    pub const DUMMY: Constant = Constant(Node::DUMMY);
+}
+impl XCtrl {
+    pub const DUMMY: XCtrl = XCtrl(Node::DUMMY);
 }
 
 // TODO impl with macro

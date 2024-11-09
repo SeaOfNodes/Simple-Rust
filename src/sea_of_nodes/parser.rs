@@ -1,6 +1,6 @@
 use crate::sea_of_nodes::graph_visualizer;
 use crate::sea_of_nodes::nodes::index::{
-    Constant, If, Load, Loop, Minus, New, Not, Proj, Return, Scope, Start, Stop, Store,
+    Constant, If, Load, Loop, Minus, New, Not, Proj, Return, Scope, Start, Stop, Store, XCtrl,
 };
 use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes, Op};
 use crate::sea_of_nodes::types::{Struct, Ty, Type, Types};
@@ -71,6 +71,17 @@ impl<'s, 't> Parser<'s, 't> {
 
         let stop = Stop::new(&mut nodes);
         nodes.ty[stop] = Some(types.ty_bot); // differs from java; ensures that it isn't dead
+
+        nodes.zero = Constant::new(types.ty_int_zero, &mut nodes)
+            .peephole(&mut nodes)
+            .keep(&mut nodes)
+            .to_constant(&nodes)
+            .unwrap();
+        nodes.xctrl = XCtrl::new(&mut nodes)
+            .peephole(&mut nodes)
+            .keep(&mut nodes)
+            .to_xctrl(&nodes)
+            .unwrap();
 
         Self {
             lexer: Lexer {
@@ -272,7 +283,7 @@ impl<'s, 't> Parser<'s, 't> {
         self.require(")")?;
 
         // IfNode takes current control and predicate
-        let if_node = If::new(ctrl, pred, &mut self.nodes).peephole(&mut self.nodes);
+        let if_node = If::new(ctrl, Some(pred), &mut self.nodes).peephole(&mut self.nodes);
 
         // Setup projection nodes
         if_node.keep(&mut self.nodes);
@@ -390,7 +401,7 @@ impl<'s, 't> Parser<'s, 't> {
         pred.keep(&mut self.nodes);
 
         // IfNode takes current control and predicate
-        let if_node = If::new(self.ctrl(), pred, &mut self.nodes).peephole(&mut self.nodes);
+        let if_node = If::new(self.ctrl(), Some(pred), &mut self.nodes).peephole(&mut self.nodes);
 
         // Setup projection nodes
         if_node.keep(&mut self.nodes);

@@ -1,6 +1,6 @@
 use crate::sea_of_nodes::nodes::index::{
-    Add, Bool, Cast, Constant, Div, If, Load, Loop, Minus, Mul, New, Not, Phi, Proj, Region,
-    Return, Scope, Start, Stop, Store, Sub,
+    Add, Bool, CProj, Cast, Constant, Div, If, Load, Loop, Minus, Mul, New, Not, Phi, Proj, Region,
+    Return, Scope, Start, Stop, Store, Sub, XCtrl,
 };
 use crate::sea_of_nodes::nodes::{Node, Nodes, Op, ScopeOp};
 use crate::sea_of_nodes::types::Ty;
@@ -63,11 +63,18 @@ pub struct StoreOp<'t> {
     pub alias: u32,
 }
 
+#[derive(Clone, Debug)]
+pub enum IfOp {
+    Cond,
+    Never,
+}
+
 impl<'t> Op<'t> {
     /// Easy reading label for debugger
     pub fn label(&self) -> Cow<str> {
         Borrowed(match self {
             Op::Constant(ty) => return Owned(format!("#{ty}")),
+            Op::XCtrl => "XCtrl",
             Op::Return => "Return",
             Op::Start { .. } => "Start",
             Op::Add => "Add",
@@ -83,7 +90,9 @@ impl<'t> Op<'t> {
             },
             Op::Not => "Not",
             Op::Proj(p) => p.label,
-            Op::If => "If",
+            Op::CProj(p) => p.label,
+            Op::If(IfOp::Cond) => "If",
+            Op::If(IfOp::Never) => "Never",
             Op::Phi(p) => return Owned(format!("Phi_{}", p.label)),
             Op::Region { .. } => "Region",
             Op::Loop => "Loop",
@@ -99,6 +108,7 @@ impl<'t> Op<'t> {
     pub fn glabel(&self) -> Cow<str> {
         match self {
             Op::Constant(_) => self.label(),
+            Op::XCtrl => self.label(),
             Op::Return => self.label(),
             Op::Start { .. } => self.label(),
             Op::Add => Borrowed("+"),
@@ -110,7 +120,8 @@ impl<'t> Op<'t> {
             Op::Bool(op) => Borrowed(op.str()),
             Op::Not => Borrowed("!"),
             Op::Proj(_) => self.label(),
-            Op::If => self.label(),
+            Op::CProj(_) => self.label(),
+            Op::If(_) => self.label(),
             Op::Phi(p) => Owned(format!("&phi;_{}", p.label)),
             Op::Region { .. } => self.label(),
             Op::Loop => self.label(),
@@ -122,56 +133,39 @@ impl<'t> Op<'t> {
         }
     }
 
+    // implements the MultiNode interface
     pub fn is_multi_node(&self) -> bool {
-        match self {
-            Op::Start { .. } | Op::If => true,
-            Op::Constant(_)
-            | Op::Return
-            | Op::Add
-            | Op::Sub
-            | Op::Mul
-            | Op::Div
-            | Op::Minus
-            | Op::Scope(_)
-            | Op::Bool(_)
-            | Op::Not
-            | Op::Proj(_)
-            | Op::Phi(_)
-            | Op::Region { .. }
-            | Op::Loop
-            | Op::Cast(_)
-            | Op::New(_)
-            | Op::Load(_)
-            | Op::Store(_)
-            | Op::Stop => false,
-        }
+        matches!(self, Op::Start(_) | Op::If(_))
     }
 
     pub fn operation(&self) -> usize {
         match self {
             Op::Constant(_) => 0,
-            Op::Return => 1,
-            Op::Start { .. } => 2,
-            Op::Add => 3,
-            Op::Sub => 4,
-            Op::Mul => 5,
-            Op::Div => 6,
-            Op::Minus => 7,
-            Op::Scope(_) => 8,
-            Op::Bool(BoolOp::EQ) => 9,
-            Op::Bool(BoolOp::LT) => 10,
-            Op::Bool(BoolOp::LE) => 11,
-            Op::Not => 12,
-            Op::Proj(_) => 13,
-            Op::If => 14,
-            Op::Phi(_) => 15,
-            Op::Region { .. } => 16,
-            Op::Loop => 17,
-            Op::Stop => 18,
-            Op::Cast(_) => 19,
-            Op::New(_) => 20,
-            Op::Load(_) => 21,
-            Op::Store(_) => 22,
+            Op::XCtrl => 1,
+            Op::Return => 2,
+            Op::Start { .. } => 3,
+            Op::Add => 4,
+            Op::Sub => 5,
+            Op::Mul => 6,
+            Op::Div => 7,
+            Op::Minus => 8,
+            Op::Scope(_) => 9,
+            Op::Bool(BoolOp::EQ) => 10,
+            Op::Bool(BoolOp::LT) => 11,
+            Op::Bool(BoolOp::LE) => 12,
+            Op::Not => 13,
+            Op::Proj(_) => 14,
+            Op::CProj(_) => 15,
+            Op::If(IfOp::Cond) => 16,
+            Op::If(IfOp::Never) => 17,
+            Op::Phi(_) => 18,
+            Op::Region { .. } => 19,
+            Op::Loop => 20,
+            Op::Stop => 21,
+            Op::Cast(_) => 22,
+            Op::New(_) => 23,
+            Op::Load(_) => 24,
+            Op::Store(_) => 25,
         }
     }
 }
@@ -213,6 +207,13 @@ impl Constant {
         let start = sea.start;
         let this = sea.create((Op::Constant(ty), vec![Some(*start)]));
         this.to_constant(sea).unwrap()
+    }
+}
+impl XCtrl {
+    pub fn new(sea: &mut Nodes) -> Self {
+        let start = sea.start;
+        let this = sea.create((Op::XCtrl, vec![Some(*start)]));
+        this.to_xctrl(sea).unwrap()
     }
 }
 
@@ -281,9 +282,25 @@ impl Proj {
     }
 }
 
+impl CProj {
+    pub fn new<'t, N: Into<Node>>(
+        ctrl: N,
+        index: usize,
+        label: &'t str,
+        sea: &mut Nodes<'t>,
+    ) -> Self {
+        let this = sea.create((Op::Proj(ProjOp { index, label }), vec![Some(ctrl.into())]));
+        this.to_cproj(sea).unwrap()
+    }
+}
+
 impl If {
-    pub fn new(ctrl: Node, pred: Node, sea: &mut Nodes) -> Self {
-        let this = sea.create((Op::If, vec![Some(ctrl), Some(pred)]));
+    pub fn new(ctrl: Node, pred: Option<Node>, sea: &mut Nodes) -> Self {
+        let (op, pred) = match pred {
+            Some(n) => (IfOp::Cond, n),
+            None => (IfOp::Never, *sea.zero),
+        };
+        let this = sea.create((Op::If(op), vec![Some(ctrl), Some(pred)]));
         sea.iter_peeps.add(this); // Because idoms are complex, just add it
         this.to_if(sea).unwrap()
     }
@@ -339,7 +356,7 @@ impl Load {
                 alias,
                 declared_type,
             }),
-            vec![None, Some(mem_slice), Some(mem_ptr), None],
+            vec![None, Some(mem_slice), Some(mem_ptr)],
         ));
         this.to_load(sea).unwrap()
     }

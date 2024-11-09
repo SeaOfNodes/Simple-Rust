@@ -1,8 +1,9 @@
 use crate::datastructures::id::Id;
 use crate::sea_of_nodes::nodes::index::{
-    Add, Bool, Cast, Constant, Div, If, Load, Minus, Mul, Not, Phi, Proj, Return, Stop, Store, Sub,
-    TypedNode,
+    Add, Bool, CProj, Cast, Constant, Div, If, Load, Minus, Mul, Not, Phi, Return, Stop, Store,
+    Sub, TypedNode,
 };
+use crate::sea_of_nodes::nodes::node::IfOp;
 use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes, Op};
 use crate::sea_of_nodes::types::{Int, Type};
 
@@ -18,7 +19,8 @@ impl Node {
             TypedNode::Phi(n) => n.idealize_phi(sea),
             TypedNode::Stop(n) => n.idealize_stop(sea),
             TypedNode::Return(n) => n.idealize_return(sea),
-            TypedNode::Proj(n) => n.idealize_proj(sea),
+            TypedNode::Proj(_) => None,
+            TypedNode::CProj(n) => n.idealize_cproj(sea),
             TypedNode::Region(_) | TypedNode::Loop(_) => sea.idealize_region(s),
             TypedNode::If(_) => sea.idealize_if(s),
             TypedNode::Cast(n) => n.idealize_cast(sea),
@@ -27,6 +29,7 @@ impl Node {
             TypedNode::Minus(n) => n.idealize_minus(sea),
             TypedNode::Div(n) => n.idealize_div(sea),
             TypedNode::Constant(_)
+            | TypedNode::XCtrl(_)
             | TypedNode::Start(_)
             | TypedNode::Scope(_)
             | TypedNode::New(_)
@@ -351,8 +354,8 @@ impl Return {
     }
 }
 
-impl Proj {
-    fn idealize_proj(self, sea: &mut Nodes) -> Option<Node> {
+impl CProj {
+    fn idealize_cproj(self, sea: &mut Nodes) -> Option<Node> {
         let index = sea[self].index;
         if let Some(iff) = self.inputs(sea)[0]?.to_if(sea) {
             if let Some(Type::Tuple { types: ts }) = iff.ty(sea).as_deref() {
@@ -363,10 +366,10 @@ impl Proj {
 
             // Flip a negating if-test, to remove the not
             if let Some(not) = iff.inputs(sea)[1]?.add_dep(*self, sea).to_not(sea) {
-                return Some(*Proj::new(
+                return Some(*CProj::new(
                     If::new(
                         iff.inputs(sea)[0].unwrap(),
-                        not.inputs(sea)[1].unwrap(),
+                        Some(not.inputs(sea)[1].unwrap()),
                         sea,
                     )
                     .peephole(sea),
@@ -458,6 +461,9 @@ impl<'t> Nodes<'t> {
     }
 
     fn idealize_if(&mut self, node: Node) -> Option<Node> {
+        if matches!(self[node], Op::If(IfOp::Never)) {
+            return None;
+        }
         // Hunt up the immediate dominator tree.  If we find an identical if
         // test on either the true or false branch, that side wins.
         let pred = self.inputs[node][1]?;
@@ -466,7 +472,7 @@ impl<'t> Nodes<'t> {
             let mut dom = self.idom(node);
             while let Some(d) = dom {
                 d.add_dep(node, self);
-                if matches!(&self[d], Op::If) {
+                if matches!(&self[d], Op::If(_)) {
                     let if_pred = self.inputs[d][1]?;
                     if_pred.add_dep(node, self);
                     if if_pred == pred {

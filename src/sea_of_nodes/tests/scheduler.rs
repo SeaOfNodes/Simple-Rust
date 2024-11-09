@@ -366,7 +366,7 @@ impl Scheduler {
                         .collect();
                     BasicBlock::create(node, prev, self)
                 }
-                Op::If | Op::Return => self.data[&node.inputs(sea)[0].unwrap()].block.unwrap(),
+                Op::If(_) | Op::Return => self.data[&node.inputs(sea)[0].unwrap()].block.unwrap(),
                 _ => {
                     let b = self.data[&node.inputs(sea)[0].unwrap()].block.unwrap();
                     BasicBlock::create(node, vec![b], self)
