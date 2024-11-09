@@ -289,7 +289,7 @@ impl CProj {
         label: &'t str,
         sea: &mut Nodes<'t>,
     ) -> Self {
-        let this = sea.create((Op::Proj(ProjOp { index, label }), vec![Some(ctrl.into())]));
+        let this = sea.create((Op::CProj(ProjOp { index, label }), vec![Some(ctrl.into())]));
         this.to_cproj(sea).unwrap()
     }
 }

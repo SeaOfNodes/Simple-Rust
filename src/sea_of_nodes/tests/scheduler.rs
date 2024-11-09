@@ -388,7 +388,8 @@ impl Scheduler {
 
             if node.to_return(sea).is_none() {
                 for &n in &sea.outputs[node] {
-                    if n.is_cfg(sea)
+                    if n != Node::DUMMY
+                        && n.is_cfg(sea)
                         && self.is_cfg_node_ready(n, sea)
                         && self.data[&n].block.is_none()
                     {
@@ -445,7 +446,7 @@ impl Scheduler {
             debug_assert!(node.is_cfg(sea));
             if node.to_return(sea).is_none() {
                 for &out in &sea.outputs[node] {
-                    if out.is_cfg(sea) && Self::is_not_xctrl(out, sea) {
+                    if out != Node::DUMMY && out.is_cfg(sea) && Self::is_not_xctrl(out, sea) {
                         self.mark_alive(&mut cfg_queue, out, true, sea);
                     }
                 }

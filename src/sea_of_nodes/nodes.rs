@@ -483,9 +483,11 @@ impl<'t> Nodes<'t> {
         }
         for i in 0..self.outputs[node].len() {
             let node = self.outputs[node][i];
-            if let result @ Some(_) = self.walk_non_reentrant_inner(node, f) {
-                return result;
-            };
+            if node != Node::DUMMY {
+                if let result @ Some(_) = self.walk_non_reentrant_inner(node, f) {
+                    return result;
+                };
+            }
         }
         None
     }

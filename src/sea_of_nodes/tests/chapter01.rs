@@ -16,7 +16,7 @@ fn test_simple_program() {
     assert!(matches!(&parser.nodes[ret], Op::Return));
 
     let ctrl = parser.nodes.inputs[ret][0].expect("has ctrl");
-    assert!(matches!(parser.nodes[ctrl], Op::Proj(_)));
+    assert!(matches!(parser.nodes[ctrl], Op::CProj(_)));
 
     let expr = parser.nodes.inputs[ret][1].expect("has expr");
     let Op::Constant(constant) = &parser.nodes[expr] else {

@@ -1,6 +1,7 @@
 use crate::sea_of_nodes::graph_visualizer;
 use crate::sea_of_nodes::nodes::index::{
-    Constant, If, Load, Loop, Minus, New, Not, Proj, Return, Scope, Start, Stop, Store, XCtrl,
+    CProj, Constant, If, Load, Loop, Minus, New, Not, Proj, Return, Scope, Start, Stop, Store,
+    XCtrl,
 };
 use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes, Op};
 use crate::sea_of_nodes::types::{Struct, Ty, Type, Types};
@@ -115,7 +116,7 @@ impl<'s, 't> Parser<'s, 't> {
 
         // project ctrl and arg0 from start
         let start = self.nodes.start;
-        let ctrl = Proj::new(start, 0, Scope::CTRL, &mut self.nodes).peephole(&mut self.nodes);
+        let ctrl = CProj::new(start, 0, Scope::CTRL, &mut self.nodes).peephole(&mut self.nodes);
         self.scope
             .define(Scope::CTRL, self.types.ty_ctrl, ctrl, &mut self.nodes)
             .expect("not in scope");
@@ -287,10 +288,10 @@ impl<'s, 't> Parser<'s, 't> {
 
         // Setup projection nodes
         if_node.keep(&mut self.nodes);
-        let if_true = Proj::new(if_node, 0, "True", &mut self.nodes).peephole(&mut self.nodes);
+        let if_true = CProj::new(if_node, 0, "True", &mut self.nodes).peephole(&mut self.nodes);
         if_node.unkeep(&mut self.nodes);
         if_true.keep(&mut self.nodes);
-        let if_false = Proj::new(if_node, 1, "False", &mut self.nodes).peephole(&mut self.nodes);
+        let if_false = CProj::new(if_node, 1, "False", &mut self.nodes).peephole(&mut self.nodes);
 
         // Clone the body Scope to create the break/exit Scope which accounts for any
         // side effects in the predicate.  The break/exit Scope will be the final
@@ -405,10 +406,10 @@ impl<'s, 't> Parser<'s, 't> {
 
         // Setup projection nodes
         if_node.keep(&mut self.nodes);
-        let if_true = Proj::new(if_node, 0, "True", &mut self.nodes).peephole(&mut self.nodes);
+        let if_true = CProj::new(if_node, 0, "True", &mut self.nodes).peephole(&mut self.nodes);
         if_node.unkeep(&mut self.nodes);
         if_true.keep(&mut self.nodes);
-        let if_false = Proj::new(if_node, 1, "False", &mut self.nodes).peephole(&mut self.nodes);
+        let if_false = CProj::new(if_node, 1, "False", &mut self.nodes).peephole(&mut self.nodes);
         if_false.keep(&mut self.nodes);
 
         // In if true branch, the ifT proj node becomes the ctrl
