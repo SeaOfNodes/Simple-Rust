@@ -126,6 +126,14 @@ impl<'s, 't> Parser<'s, 't> {
             .expect("not in scope");
 
         self.parse_block()?;
+        if self.ctrl().ty(&self.nodes) == Some(self.types.ty_ctrl) {
+            let ctrl = self.ctrl();
+            let expr =
+                Constant::new(self.types.ty_int_zero, &mut self.nodes).peephole(&mut self.nodes);
+            let ret =
+                Return::new(ctrl, expr, self.scope, &mut self.nodes).peephole(&mut self.nodes);
+            self.stop.add_def(Some(ret), &mut self.nodes);
+        }
 
         self.scope.pop(&mut self.nodes);
         self.x_scopes.pop();
@@ -345,9 +353,7 @@ impl<'s, 't> Parser<'s, 't> {
 
     fn jump_to(&mut self, to_scope: Option<Scope>) -> Scope {
         let cur = self.scope.dup(false, &mut self.nodes);
-
-        let ctrl = Constant::new(self.types.ty_xctrl, &mut self.nodes).peephole(&mut self.nodes);
-        self.set_ctrl(ctrl); // Kill current scope
+        self.set_ctrl(*self.nodes.xctrl); // Kill current scope
 
         // Prune nested lexical scopes that have depth > than the loop head
         // We use _breakScope as a proxy for the loop head scope to obtain the depth
@@ -464,8 +470,7 @@ impl<'s, 't> Parser<'s, 't> {
         let ret = Return::new(ctrl, expr, self.scope, &mut self.nodes).peephole(&mut self.nodes);
 
         self.stop.add_def(Some(ret), &mut self.nodes);
-        let ctrl = Constant::new(self.types.ty_xctrl, &mut self.nodes).peephole(&mut self.nodes);
-        self.set_ctrl(ctrl);
+        self.set_ctrl(*self.nodes.xctrl);
         Ok(())
     }
 
@@ -714,7 +719,7 @@ impl<'s, 't> Parser<'s, 't> {
         } else if self.matchx("true") {
             Ok(Constant::new(self.types.ty_int_one, &mut self.nodes).peephole(&mut self.nodes))
         } else if self.matchx("false") {
-            Ok(Constant::new(self.types.ty_int_zero, &mut self.nodes).peephole(&mut self.nodes))
+            Ok(*self.nodes.zero)
         } else if self.matchx("null") {
             Ok(
                 Constant::new(self.types.ty_pointer_null, &mut self.nodes)
@@ -744,9 +749,6 @@ impl<'s, 't> Parser<'s, 't> {
         let n = New::new(ptr_ty, ctrl, &mut self.nodes).peephole(&mut self.nodes);
         n.keep(&mut self.nodes);
 
-        let init_value =
-            Constant::new(self.types.ty_int_zero, &mut self.nodes).peephole(&mut self.nodes);
-
         let Type::Struct(Struct::Struct { name, fields }) = *obj else {
             unreachable!()
         };
@@ -754,8 +756,13 @@ impl<'s, 't> Parser<'s, 't> {
         let mut alias = *self.nodes[self.nodes.start].alias_starts.get(name).unwrap();
         for &(fname, _) in fields {
             let mem_slice = self.mem_alias_lookup(alias).unwrap();
-            let store = Store::new(fname, alias, [mem_slice, n, init_value], &mut self.nodes)
-                .peephole(&mut self.nodes);
+            let store = Store::new(
+                fname,
+                alias,
+                [self.ctrl(), mem_slice, n, *self.nodes.zero],
+                &mut self.nodes,
+            )
+            .peephole(&mut self.nodes);
             self.mem_alias_update(alias, store).unwrap();
             alias += 1;
         }
@@ -827,8 +834,13 @@ impl<'s, 't> Parser<'s, 't> {
             } else {
                 let val = self.parse_expression()?;
                 let mem_slice = self.mem_alias_lookup(alias).unwrap();
-                let store = Store::new(name, alias, [mem_slice, expr, val], &mut self.nodes)
-                    .peephole(&mut self.nodes);
+                let store = Store::new(
+                    name,
+                    alias,
+                    [self.ctrl(), mem_slice, expr, val],
+                    &mut self.nodes,
+                )
+                .peephole(&mut self.nodes);
                 self.mem_alias_update(alias, store).unwrap();
                 return Ok(expr); // "obj.a = expr" returns the expression while updating memory
             }
@@ -918,7 +930,7 @@ fn is_id_letter(c: char) -> bool {
 }
 
 fn is_punctuation(c: char) -> bool {
-    "=;[]<>(){}+-/*!".contains(c)
+    "=;[]<>()+-/*".contains(c)
 }
 
 impl<'a> Lexer<'a> {
@@ -940,8 +952,18 @@ impl<'a> Lexer<'a> {
     }
 
     fn skip_whitespace(&mut self) {
-        while self.is_whitespace() {
-            self.next_char();
+        loop {
+            if self.is_whitespace() {
+                self.next_char();
+            } else if self.remaining.starts_with("//") {
+                if let Some(i) = self.remaining.find('\n') {
+                    self.remaining = &self.remaining[i + 1..];
+                } else {
+                    self.remaining = "";
+                }
+            } else {
+                break;
+            }
         }
     }
 

@@ -365,12 +365,12 @@ impl Store {
     pub fn new<'t>(
         name: &'t str,
         alias: u32,
-        [mem_slice, mem_ptr, value]: [Node; 3],
+        [ctrl, mem_slice, mem_ptr, value]: [Node; 4],
         sea: &mut Nodes<'t>,
     ) -> Self {
         let this = sea.create((
             Op::Store(StoreOp { name, alias }),
-            vec![None, Some(mem_slice), Some(mem_ptr), Some(value)],
+            vec![Some(ctrl), Some(mem_slice), Some(mem_ptr), Some(value)],
         ));
         this.to_store(sea).unwrap()
     }
