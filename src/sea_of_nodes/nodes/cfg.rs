@@ -33,10 +33,10 @@ pub struct CfgData {
     /// change the CFG incrementally.
     ///
     /// See <a href="https://en.wikipedia.org/wiki/Dominator_(graph_theory)">Wikipedia: Dominator</a>
-    idepth: u32,
+    pub idepth: u32,
     ///  loop_depth is computed after optimization as part of scheduling.
-    loop_depth: u32,
-    anti: Option<Load>,
+    pub loop_depth: u32,
+    pub anti: Option<Load>,
 }
 impl CfgData {
     pub fn new() -> Self {

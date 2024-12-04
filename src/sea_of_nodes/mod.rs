@@ -6,3 +6,4 @@ pub mod parser;
 #[cfg(test)]
 mod tests;
 pub mod types;
+mod global_code_motion;
