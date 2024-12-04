@@ -33,10 +33,10 @@ pub struct CfgData {
     /// change the CFG incrementally.
     ///
     /// See <a href="https://en.wikipedia.org/wiki/Dominator_(graph_theory)">Wikipedia: Dominator</a>
-    idepth: u32,
+    pub idepth: u32,
     ///  loop_depth is computed after optimization as part of scheduling.
-    loop_depth: u32,
-    anti: Option<Load>,
+    pub loop_depth: u32,
+    pub anti: Option<Load>,
 }
 impl CfgData {
     pub fn new() -> Self {
@@ -122,7 +122,7 @@ impl Cfg {
     }
 
     /// Return the LCA of two idoms
-    fn _idom(self, rhs: Option<Cfg>, sea: &mut Nodes) -> Cfg {
+    pub fn _idom(self, rhs: Option<Cfg>, sea: &mut Nodes) -> Cfg {
         let Some(mut rhs) = rhs else {
             return self;
         };

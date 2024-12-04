@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::num::NonZeroU32;
 
+pub use cfg::Cfg;
 pub use id::Node;
 pub use index::Op;
 pub use node::{BoolOp, LoadOp, ProjOp, StartOp, StoreOp};
@@ -102,6 +103,9 @@ pub struct Nodes<'t> {
     /// probed to see if it can be inserted.  His edges are "locked", because
     /// hacking his edges will change his hash.
     hash: IdVec<Node, Option<NonZeroU32>>,
+
+    /// True if debug printer can use schedule info
+    pub scheduled: bool,
 }
 
 pub type NodeCreation<'t> = (Op<'t>, Vec<Option<Node>>);
@@ -128,6 +132,7 @@ impl<'t> Nodes<'t> {
             walk_visited: IdSet::zeros(0),
             gvn: HashMap::new(),
             hash: IdVec::new(vec![None]),
+            scheduled: false,
         }
     }
     pub fn len(&self) -> usize {

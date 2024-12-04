@@ -1,6 +1,6 @@
 use crate::datastructures::id_vec::IdVec;
 use crate::sea_of_nodes::nodes::node::{IfOp, PhiOp, StartOp};
-use crate::sea_of_nodes::nodes::{BoolOp, LoadOp, Node, Nodes, OpVec, ProjOp, ScopeOp, StoreOp};
+use crate::sea_of_nodes::nodes::{BoolOp, Cfg, LoadOp, Node, Nodes, OpVec, ProjOp, ScopeOp, StoreOp};
 use crate::sea_of_nodes::types::Ty;
 use std::fmt;
 use std::ops::{Deref, Index, IndexMut};
@@ -236,5 +236,11 @@ impl Store {
     }
     pub fn ptr(self, sea: &Nodes) -> Option<Node> {
         self.inputs(sea)[2]
+    }
+}
+
+impl Phi {
+    pub fn region(self, sea: &Nodes) -> Cfg {
+        self.inputs(sea)[0].unwrap().to_cfg(&sea.ops).unwrap()
     }
 }
