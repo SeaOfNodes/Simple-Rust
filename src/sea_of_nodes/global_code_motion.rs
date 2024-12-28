@@ -27,7 +27,10 @@ fn fix_loops(stop: Stop, sea: &mut Nodes) {
     for ret in stop.inputs(sea) {
         ret.unwrap()
             .to_return(sea)
-            .walk_unreach(&mut visit, &mut unreach);
+            .unwrap()
+            .to_cfg(&sea.ops)
+            .unwrap()
+            .walk_unreach(&mut visit, &mut unreach, sea);
     }
     if unreach.is_empty() {
         return;
@@ -44,7 +47,10 @@ fn fix_loops(stop: Stop, sea: &mut Nodes) {
     for ret in stop.inputs(sea) {
         ret.unwrap()
             .to_return(sea)
-            .walk_unreach(&mut visit, &mut unreach);
+            .unwrap()
+            .to_cfg(&sea.ops)
+            .unwrap()
+            .walk_unreach(&mut visit, &mut unreach, sea);
     }
     assert!(unreach.is_empty());
 }
@@ -207,7 +213,7 @@ fn _sched_late(n: Node, ns: &mut Vec<Option<Node>>, late: &mut Vec<Option<Cfg>>,
     let early = n.inputs(sea)[0].unwrap().to_cfg(&sea.ops).unwrap();
     let mut lca = None;
     for use_ in sea.outputs[n] {
-        lca = use_block(n, use_, late, sea)._idom(lca, sea);
+        lca = use_block(n, use_, late, sea).idom_2(lca, sea);
     }
 
     // Loads may need anti-dependencies, raising their LCA
@@ -269,7 +275,7 @@ fn is_forwards_edge(use_: Option<Node>, def: Option<Node>, sea: &Nodes) -> bool 
         && (use_.to_loop(sea).is_some()
             || (use_
                 .to_phi(sea)
-                .is_some_and(|phi| phi.region(sea).to_loop(sea).is_some()))))
+                .is_some_and(|phi| phi.region(sea).node().to_loop(sea).is_some()))))
 }
 
 fn find_anti_dep(lca: Cfg, load: Load, early: Cfg, late: &[Cfg], sea: &mut Nodes) -> Cfg {
