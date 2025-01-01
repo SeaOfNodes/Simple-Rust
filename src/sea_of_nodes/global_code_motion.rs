@@ -319,7 +319,7 @@ fn _sched_late(n: Node, ns: &mut Vec<Option<Node>>, late: &mut Vec<Option<Cfg>>,
 /// to the matching Region input.
 fn use_block(n: Node, use_: Node, late: &[Option<Cfg>], sea: &Nodes) -> Cfg {
     let Some(phi) = use_.to_phi(sea) else {
-        return late[n.index()].unwrap();
+        return late[use_.index()].unwrap();
     };
     let mut found = None;
     for i in 1..phi.inputs(sea).len() {
