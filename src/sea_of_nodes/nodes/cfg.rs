@@ -130,7 +130,7 @@ impl Cfg {
         };
         let mut lhs = self;
         while lhs != rhs {
-            let comp = lhs.idepth(sea) - rhs.idepth(sea);
+            let comp = lhs.idepth(sea) as i64 - rhs.idepth(sea) as i64;
             if comp >= 0 {
                 lhs = lhs.idom(sea).unwrap()
             }
@@ -162,7 +162,7 @@ impl Cfg {
         visit.add(this);
 
         match this.downcast(&sea.ops) {
-            TypedNode::If(i) => {
+            TypedNode::If(_) => {
                 for proj in &sea.outputs[this] {
                     let proj = proj.to_proj(sea).unwrap().to_cfg(&sea.ops).unwrap();
                     if sea[proj].loop_depth == 0 {
@@ -171,12 +171,12 @@ impl Cfg {
                 }
                 self.cfg(0, sea).unwrap().walk_unreach(visit, unreach, sea);
             }
-            TypedNode::Region(r) => {
+            TypedNode::Region(_) => {
                 for i in 1..this.inputs(sea).len() {
                     self.cfg(i, sea).unwrap().walk_unreach(visit, unreach, sea);
                 }
             }
-            TypedNode::Start(s) => {}
+            TypedNode::Start(_) => {}
             _ => self.cfg(0, sea).unwrap().walk_unreach(visit, unreach, sea),
         }
 

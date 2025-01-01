@@ -67,7 +67,7 @@ impl Loop {
 
         let mut x = self.back(sea);
         while x.node() != *self {
-            if let Some(exit) = x.node().to_cproj(sea) {
+            if x.node().to_cproj(sea).is_some() {
                 return; // Found an exit, not an infinite loop
             }
             x = x.idom(sea).unwrap()
@@ -78,7 +78,7 @@ impl Loop {
         for i in 0..sea.outputs[self].len() {
             let use_ = sea.outputs[self][i];
             if let Some(phi) = use_.to_phi(sea) {
-                iff.add_def(Some(use_), sea);
+                iff.add_def(Some(*phi), sea);
             }
         }
 
@@ -358,7 +358,7 @@ fn find_anti_dep(
     // We could skip final-field loads here.
     // Walk LCA->early, flagging Load's block location choices
     {
-        let mut early = Some(early);
+        let early = Some(early);
         let mut cfg = Some(lca);
         while early.is_some() && cfg != early.unwrap().idom(sea) {
             sea[cfg.unwrap()].anti = Some(load);
