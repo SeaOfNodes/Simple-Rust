@@ -208,7 +208,7 @@ impl Cfg {
                 }
                 self.cfg(0, sea).unwrap().walk_unreach(visit, unreach, sea);
             }
-            TypedNode::Region(_) => {
+            TypedNode::Region(_) | TypedNode::Loop(_) => {
                 for i in 1..this.inputs(sea).len() {
                     self.cfg(i, sea).unwrap().walk_unreach(visit, unreach, sea);
                 }
