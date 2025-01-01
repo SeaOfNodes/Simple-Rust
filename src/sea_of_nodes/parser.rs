@@ -130,8 +130,8 @@ impl<'s, 't> Parser<'s, 't> {
             let ctrl = self.ctrl();
             let expr =
                 Constant::new(self.types.ty_int_zero, &mut self.nodes).peephole(&mut self.nodes);
-            let ret =
-                Return::new(ctrl, expr, self.scope, &mut self.nodes).peephole(&mut self.nodes);
+            let ret = Return::new(ctrl, expr, Some(self.scope), &mut self.nodes)
+                .peephole(&mut self.nodes);
             self.stop.add_def(Some(ret), &mut self.nodes);
         }
 
@@ -467,7 +467,8 @@ impl<'s, 't> Parser<'s, 't> {
         let expr = self.parse_expression()?;
         self.require(";")?;
         let ctrl = self.ctrl();
-        let ret = Return::new(ctrl, expr, self.scope, &mut self.nodes).peephole(&mut self.nodes);
+        let ret =
+            Return::new(ctrl, expr, Some(self.scope), &mut self.nodes).peephole(&mut self.nodes);
 
         self.stop.add_def(Some(ret), &mut self.nodes);
         self.set_ctrl(*self.nodes.xctrl);

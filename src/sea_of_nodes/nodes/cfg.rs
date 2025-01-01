@@ -149,7 +149,6 @@ impl Cfg {
         sea[self].loop_depth
     }
 
-
     pub fn walk_unreach(
         self,
         visit: &mut IdSet<Node>,

@@ -186,16 +186,18 @@ impl Start {
 }
 
 impl Return {
-    pub fn new(ctrl: Node, data: Node, scope: Scope, sea: &mut Nodes) -> Self {
+    pub fn new(ctrl: Node, data: Node, scope: Option<Scope>, sea: &mut Nodes) -> Self {
         let this = sea.create((Op::Return, vec![Some(ctrl), Some(data)]));
 
-        // We lookup memory slices by the naming convention that they start with $
-        // We could also use implicit knowledge that all memory projects are at offset >= 2
-        let names = scope.reverse_names(sea);
-        for name in names.into_iter().map(Option::unwrap) {
-            if name.starts_with("$") && name != Scope::CTRL {
-                let v = scope.lookup(name, sea).unwrap();
-                this.add_def(Some(v), sea);
+        if let Some(scope) = scope {
+            // We lookup memory slices by the naming convention that they start with $
+            // We could also use implicit knowledge that all memory projects are at offset >= 2
+            let names = scope.reverse_names(sea);
+            for name in names.into_iter().map(Option::unwrap) {
+                if name.starts_with("$") && name != Scope::CTRL {
+                    let v = scope.lookup(name, sea).unwrap();
+                    this.add_def(Some(v), sea);
+                }
             }
         }
 
