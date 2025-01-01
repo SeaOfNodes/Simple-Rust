@@ -144,7 +144,44 @@ impl Cfg {
     // Loop nesting depth
     pub fn loop_depth(self, sea: &mut Nodes) -> u32 {
         if sea[self].loop_depth == 0 {
-            sea[self].loop_depth = self.cfg(0, sea).unwrap().loop_depth(sea);
+            sea[self].loop_depth = match self.node().downcast(&sea.ops) {
+                TypedNode::Start(_) | TypedNode::Stop(_) => 1,
+                TypedNode::Loop(l) => {
+                    let d = sea[l.entry(sea)].loop_depth + 1; // Entry depth plus one
+
+                    // One-time tag loop exits
+                    let mut idom = l.back(sea);
+                    while idom != self {
+                        // Walk idom in loop, setting depth
+                        sea[idom].loop_depth = d;
+                        // Loop exit hits the CProj before the If, instead of jumping from
+                        // Region directly to If.
+
+                        if let Some(proj) = idom.node().to_cproj(sea) {
+                            let i = proj.inputs(sea)[0].unwrap();
+                            debug_assert!(i.to_if(sea).is_some(), "expected loop exit test");
+
+                            // Find the loop exit CProj, and set loop_depth
+                            for use_ in 0..sea.outputs[i].len() {
+                                let use_ = sea.outputs[i][use_];
+                                if use_ != Node::DUMMY {
+                                    if let Some(proj2) = use_.to_phi(sea) {
+                                        let proj2 = proj2.to_cfg(&sea.ops).unwrap();
+                                        if proj2 != idom {
+                                            sea[proj2].loop_depth = d - 1;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        idom = self.idom(sea).unwrap();
+                    }
+                    d
+                }
+                TypedNode::Region(_) => self.cfg(1, sea).unwrap().loop_depth(sea),
+                _ => self.cfg(0, sea).unwrap().loop_depth(sea),
+            }
         }
         sea[self].loop_depth
     }
@@ -164,7 +201,7 @@ impl Cfg {
         match this.downcast(&sea.ops) {
             TypedNode::If(_) => {
                 for proj in &sea.outputs[this] {
-                    let proj = proj.to_proj(sea).unwrap().to_cfg(&sea.ops).unwrap();
+                    let proj = proj.to_cproj(sea).unwrap().to_cfg(&sea.ops).unwrap();
                     if sea[proj].loop_depth == 0 {
                         unreach.insert(proj);
                     }

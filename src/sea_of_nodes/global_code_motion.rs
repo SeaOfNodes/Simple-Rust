@@ -77,8 +77,10 @@ impl Loop {
         let iff = If::new(self.back(sea).node(), None, sea);
         for i in 0..sea.outputs[self].len() {
             let use_ = sea.outputs[self][i];
-            if let Some(phi) = use_.to_phi(sea) {
-                iff.add_def(Some(*phi), sea);
+            if use_ != Node::DUMMY {
+                if let Some(phi) = use_.to_phi(sea) {
+                    iff.add_def(Some(*phi), sea);
+                }
             }
         }
 
@@ -132,8 +134,10 @@ fn sched_early(sea: &mut Nodes) {
             let len = sea.outputs[region].len();
             for i in 0..len {
                 if sea.outputs[region][i] != Node::DUMMY {
-                    if let Some(phi) = sea.outputs[region][i].to_phi(sea) {
-                        _sched_early(Some(*phi), &mut visit, sea);
+                    if sea.outputs[region][i] != Node::DUMMY {
+                        if let Some(phi) = sea.outputs[region][i].to_phi(sea) {
+                            _sched_early(Some(*phi), &mut visit, sea);
+                        }
                     }
                 }
             }
@@ -151,7 +155,9 @@ fn _rpo_cfg(n: Node, visit: &mut IdSet<Node>, rpo: &mut Vec<Cfg>, sea: &Nodes) {
     }
     visit.add(n);
     for &use_ in &sea.outputs[n] {
-        _rpo_cfg(use_, visit, rpo, sea);
+        if use_ != Node::DUMMY {
+            _rpo_cfg(use_, visit, rpo, sea);
+        }
     }
     rpo.push(cfg);
 }
@@ -250,18 +256,22 @@ fn _sched_late(n: Node, ns: &mut Vec<Option<Node>>, late: &mut Vec<Option<Cfg>>,
     // Walk Stores before Loads, so we can get the anti-deps right
     for i in 0..sea.outputs[n].len() {
         let use_ = sea.outputs[n][i];
-        if is_forwards_edge(Some(use_), Some(n), sea)
-            && matches!(&*use_.ty(sea).unwrap(), Type::Memory(_))
-        {
-            _sched_late(use_, ns, late, sea);
+        if use_ != Node::DUMMY {
+            if is_forwards_edge(Some(use_), Some(n), sea)
+                && matches!(&*use_.ty(sea).unwrap(), Type::Memory(_))
+            {
+                _sched_late(use_, ns, late, sea);
+            }
         }
     }
 
     // Walk everybody now
     for i in 0..sea.outputs[n].len() {
         let use_ = sea.outputs[n][i];
-        if is_forwards_edge(Some(use_), Some(n), sea) {
-            _sched_late(use_, ns, late, sea);
+        if use_ != Node::DUMMY {
+            if is_forwards_edge(Some(use_), Some(n), sea) {
+                _sched_late(use_, ns, late, sea);
+            }
         }
     }
 
@@ -277,7 +287,9 @@ fn _sched_late(n: Node, ns: &mut Vec<Option<Node>>, late: &mut Vec<Option<Cfg>>,
     let mut lca = None;
     for i in 0..sea.outputs[n].len() {
         let use_ = sea.outputs[n][i];
-        lca = Some(use_block(n, use_, late, sea).idom_2(lca, sea));
+        if use_ != Node::DUMMY {
+            lca = Some(use_block(n, use_, late, sea).idom_2(lca, sea));
+        }
     }
 
     // Loads may need anti-dependencies, raising their LCA
@@ -369,6 +381,9 @@ fn find_anti_dep(
     // Walk load->mem uses, looking for Stores causing an anti-dep
     for i in 0..sea.outputs[load.mem(sea).unwrap()].len() {
         let mem = sea.outputs[load.mem(sea).unwrap()][i];
+        if mem == Node::DUMMY {
+            continue;
+        }
         match mem.downcast(&sea.ops) {
             TypedNode::Store(st) => {
                 lca = anti_dep(
