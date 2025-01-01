@@ -175,7 +175,7 @@ impl Cfg {
                             }
                         }
 
-                        idom = self.idom(sea).unwrap();
+                        idom = idom.idom(sea).unwrap();
                     }
                     d
                 }
