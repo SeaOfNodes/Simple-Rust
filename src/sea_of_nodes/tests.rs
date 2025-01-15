@@ -15,7 +15,7 @@ mod chapter08;
 mod chapter09;
 mod chapter10;
 pub mod evaluator;
-mod fuzzing;
+mod rust;
 mod scheduler;
 mod scheduler_test;
 mod type_test;
