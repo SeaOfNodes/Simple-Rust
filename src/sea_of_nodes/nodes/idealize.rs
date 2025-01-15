@@ -320,7 +320,7 @@ impl Phi {
                         while idom.node().inputs(sea)[0] != Some(*iff) {
                             idom = idom.idom(sea).unwrap();
                         }
-                        if sea.to_proj(idom.node()).is_some_and(|p| sea[p].index == 1) {
+                        if sea.to_cproj(idom.node()).is_some_and(|p| sea[p].index == 1) {
                             return Some(val);
                         }
                     }
