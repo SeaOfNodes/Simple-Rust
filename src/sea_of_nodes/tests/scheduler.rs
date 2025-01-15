@@ -146,6 +146,7 @@ impl Scheduler {
         !node
             .to_constant(sea)
             .is_some_and(|c| sea[c] == sea.types.ty_xctrl)
+            && !node.to_xctrl(sea).is_some()
     }
 
     // Return the dominator of <code>a</code> and <code>b</code>
@@ -191,9 +192,7 @@ impl Scheduler {
     // - `data` Node to check.
     // - returns: true if node is placed during the control flow graph build.
     fn is_pinned_node(data: &NodeData, sea: &Nodes) -> bool {
-        data.node.is_cfg(sea)
-            || data.node == *sea.zero
-            || matches!(sea[data.node], Op::New(_) | Op::Phi(_) | Op::Proj(_))
+        data.node.is_cfg(sea) || data.node.to_phi(sea).is_some()
     }
 
     // Refine placement of a node.
@@ -320,6 +319,8 @@ impl Scheduler {
                     return false;
                 }
             }
+        } else if node.to_xctrl(sea).is_some() {
+            return false;
         } else {
             debug_assert_ne!(self.data[&node.inputs(sea)[0].unwrap()].block, None)
         }
@@ -514,7 +515,7 @@ impl Scheduler {
             return sea.outputs[node]
                 .iter()
                 .copied()
-                .find(|n| n.to_proj(sea).is_some_and(|p| sea[p].index == 0));
+                .find(|n| n.to_cproj(sea).is_some_and(|p| sea[p].index == 0));
         }
         let mut iter = sea.outputs[node].iter().filter(|n| n.is_cfg(sea));
         let result = iter.next().copied();
@@ -597,7 +598,7 @@ impl Scheduler {
             match block.exit {
                 None => {}
                 Some(n) if n.to_if(sea).is_some() => {
-                    for p in sea.outputs[n].iter().filter_map(|n| n.to_proj(sea)) {
+                    for p in sea.outputs[n].iter().filter_map(|n| n.to_cproj(sea)) {
                         block.next[sea[p].index] = blocks[&*p];
                     }
                 }
