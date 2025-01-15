@@ -1,9 +1,10 @@
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Write;
 
 use crate::datastructures::id_set::IdSet;
-use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
+use crate::sea_of_nodes::nodes::{Cfg, Node, Nodes, Op};
 use crate::sea_of_nodes::types::{Int, Ty, Type};
 
 pub fn pretty_print_llvm(nodes: &Nodes, node: impl Into<Node>, depth: usize) -> String {
@@ -12,7 +13,11 @@ pub fn pretty_print_llvm(nodes: &Nodes, node: impl Into<Node>, depth: usize) -> 
 
 /// Another bulk pretty-printer.  Makes more effort at basic-block grouping.
 pub fn pretty_print(nodes: &Nodes, node: impl Into<Node>, depth: usize) -> String {
-    pretty_print_(nodes, node.into(), depth, false)
+    if nodes.scheduled {
+        pretty_print_scheduled(node.into(), depth, false, nodes).unwrap()
+    } else {
+        pretty_print_(nodes, node.into(), depth, false)
+    }
 }
 
 fn pretty_print_(sea: &Nodes, node: Node, depth: usize, llvm_format: bool) -> String {
@@ -80,7 +85,7 @@ fn print_line_(sea: &Nodes, n: Node, sb: &mut String) -> fmt::Result {
             write!(sb, "____ ")?;
         }
     }
-    for _ in sea.inputs[n].len()..3 {
+    for _ in sea.inputs[n].len()..4 {
         sb.push_str("     ");
     }
     sb.push_str(" [[  ");
@@ -93,7 +98,7 @@ fn print_line_(sea: &Nodes, n: Node, sb: &mut String) -> fmt::Result {
         }
     }
 
-    let lim = 5 - sea.inputs[n].len().max(3);
+    let lim = 6 - sea.inputs[n].len().max(4);
     for _ in sea.outputs[n].len()..lim {
         sb.push_str("     ");
     }
@@ -350,4 +355,142 @@ impl BFS {
             .flatten()
             .any(|def| self._bs.get(*def))
     }
+}
+
+/// Bulk pretty printer, knowing scheduling information is available
+fn pretty_print_scheduled(
+    node: Node,
+    depth: usize,
+    llvm_format: bool,
+    sea: &Nodes,
+) -> Result<String, fmt::Error> {
+    // Backwards DFS walk to depth.
+    let mut ds = HashMap::new();
+    walk_(&mut ds, node, depth, sea);
+    // Print by block with least idepth
+    let mut sb = String::new();
+    let mut bns = vec![];
+
+    while !ds.is_empty() {
+        let mut blk: Option<Cfg> = None;
+        for &n in ds.keys() {
+            let mut cfg = n.to_cfg(&sea.ops);
+            if cfg.is_none() || !cfg.unwrap().block_head(sea) {
+                cfg = n.inputs(sea)[0].unwrap().to_cfg(&sea.ops);
+            }
+            let cfg = cfg.unwrap();
+            if blk.is_none() || sea[cfg].idepth < sea[blk.unwrap()].idepth {
+                blk = Some(cfg);
+            }
+        }
+        let blk = blk.unwrap();
+        ds.remove(&blk.node());
+
+        // Print block header
+        write!(sb, "{:<13.13}:                     [[  ", blk.label(sea))?;
+
+        if blk.node().to_region(sea).is_some() || blk.node().to_stop(sea).is_some() {
+            for i in if blk.node().to_stop(sea).is_some() {
+                0
+            } else {
+                1
+            }..blk.node().inputs(sea).len()
+            {
+                label(&mut sb, blk.cfg(i, sea).unwrap(), sea)?
+            }
+        } else if !blk.node().to_start(sea).is_some() {
+            label(&mut sb, blk.cfg(0, sea).unwrap(), sea)?;
+        }
+        sb += " ]]  \n";
+
+        // Collect block contents that are in the depth limit
+        bns.clear();
+        let mut xd = usize::MAX;
+        for &use_ in &sea.outputs[blk.node()] {
+            if let Some(i) = ds.get(&use_) {
+                if !use_.to_cfg(&sea.ops).is_some_and(|cfg| cfg.block_head(sea)) {
+                    bns.push(use_);
+                    xd = xd.min(*i);
+                }
+            }
+        }
+
+        // Print Phis up front, if any
+        {
+            let mut i = 0;
+            while i < bns.len() {
+                if let Some(phi) = bns[i].to_phi(sea) {
+                    print_line_2(*phi, &mut sb, llvm_format, &mut bns, i, &mut ds, sea)?;
+                    i -= 1;
+                }
+                i += 1;
+            }
+        }
+
+        // Print block contents in depth order, bumping depth until whole block printed
+        while !bns.is_empty() {
+            let mut i = 0;
+            while i < bns.len() {
+                if ds.get(&bns[i]) == Some(&xd) {
+                    print_line_2(bns[i], &mut sb, llvm_format, &mut bns, i, &mut ds, sea)?;
+                    i -= 1;
+                }
+                i += 1;
+            }
+            xd += 1;
+        }
+
+        sb += "\n";
+    }
+    Ok(sb)
+}
+
+fn walk_(ds: &mut HashMap<Node, usize>, node: Node, d: usize, sea: &Nodes) {
+    let nd = ds.get(&node);
+    if nd.is_some_and(|&nd| d <= nd) {
+        return; // Been there, done that
+    }
+    ds.insert(node, d);
+    if d == 0 {
+        return; // Depth cutoff
+    }
+    for def in node.inputs(sea) {
+        if let Some(def) = def {
+            walk_(ds, *def, d - 1, sea);
+        }
+    }
+}
+
+impl Cfg {
+    fn label(self, sea: &Nodes) -> Cow<'static, str> {
+        if self.node().to_start(sea).is_some() {
+            Cow::Borrowed("START")
+        } else if self.node().to_loop(sea).is_some() {
+            Cow::Borrowed("LOOP")
+        } else {
+            Cow::Owned(format!("L{}", self.node()))
+        }
+    }
+}
+
+fn label(sb: &mut String, mut blk: Cfg, sea: &Nodes) -> fmt::Result {
+    if blk.block_head(sea) {
+        blk = blk.cfg(0, sea).unwrap();
+    }
+    write!(sb, "{:<9.9} ", blk.label(sea))
+}
+
+fn print_line_2(
+    n: Node,
+    sb: &mut String,
+    llvm_format: bool,
+    bns: &mut Vec<Node>,
+    i: usize,
+    ds: &mut HashMap<Node, usize>,
+    sea: &Nodes,
+) -> fmt::Result {
+    print_line(sea, n, sb, llvm_format)?;
+    bns.swap_remove(i);
+    ds.remove(&n);
+    Ok(())
 }
