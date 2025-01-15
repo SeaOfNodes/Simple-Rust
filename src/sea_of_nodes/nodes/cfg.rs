@@ -96,10 +96,7 @@ impl Cfg {
                 .flatten()
                 .max()
                 .unwrap(),
-            _ => {
-                let idom = self.idom(sea).unwrap();
-                sea[idom].idepth
-            }
+            _ => self.idom(sea).unwrap().idepth(sea),
         } + 1;
         sea[self].idepth = d;
         d
