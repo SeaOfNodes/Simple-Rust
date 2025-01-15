@@ -258,7 +258,7 @@ fn _sched_late(n: Node, ns: &mut Vec<Option<Node>>, late: &mut Vec<Option<Cfg>>,
         let use_ = sea.outputs[n][i];
         if use_ != Node::DUMMY {
             if is_forwards_edge(Some(use_), Some(n), sea)
-                && matches!(&*use_.ty(sea).unwrap(), Type::Memory(_))
+                && use_.ty(sea).is_some_and(|t| matches!(&*t, Type::Memory(_)))
             {
                 _sched_late(use_, ns, late, sea);
             }

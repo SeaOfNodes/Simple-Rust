@@ -30,3 +30,14 @@ fn test_eval_negate_overflow() {
         evaluate(&nodes, stop, Some(i64::MIN), None).1
     );
 }
+
+/// `force_exit` on loops doesn't set types on the newly created nodes which caused an unwrap in `_sched_late`
+#[test]
+fn gcm_unwrap_panic_bug() {
+    let arena = DroplessArena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new("while(1) {};", &types);
+    let stop = parser.parse().unwrap();
+    parser.iterate(stop);
+    parser.type_check(stop).unwrap();
+}
