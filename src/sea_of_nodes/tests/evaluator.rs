@@ -236,6 +236,9 @@ impl<'a, 't> Evaluator<'a, 't> {
             TypedNode::Load(n) => self.load(n),
             TypedNode::Store(n) => self.store(n),
             TypedNode::New(n) => self.alloc(n),
+            TypedNode::CProj(n) => {
+                self.valo(n.inputs(&self.sea)[0].unwrap()).fields[self.sea[n].index]
+            }
             TypedNode::Proj(n) => {
                 self.valo(n.inputs(&self.sea)[0].unwrap()).fields[self.sea[n].index]
             }
