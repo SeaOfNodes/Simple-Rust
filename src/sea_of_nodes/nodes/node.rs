@@ -74,7 +74,7 @@ impl<'t> Op<'t> {
     pub fn label(&self) -> Cow<str> {
         Borrowed(match self {
             Op::Constant(ty) => return Owned(format!("#{ty}")),
-            Op::XCtrl => "XCtrl",
+            Op::XCtrl => "Xctrl",
             Op::Return => "Return",
             Op::Start { .. } => "Start",
             Op::Add => "Add",

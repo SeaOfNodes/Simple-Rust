@@ -477,7 +477,7 @@ impl<'t> Nodes<'t> {
                     let if_pred = self.inputs[d][1]?;
                     if_pred.add_dep(node, self);
                     if if_pred == pred {
-                        if let Op::Proj(p) = &self[prior] {
+                        if let Op::CProj(p) = &self[prior] {
                             let value = if p.index == 0 {
                                 self.types.ty_int_one
                             } else {

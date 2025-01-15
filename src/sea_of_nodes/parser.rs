@@ -71,7 +71,6 @@ impl<'s, 't> Parser<'s, 't> {
         nodes.start = Start::new(&[types.ty_ctrl, arg], &mut nodes);
 
         let stop = Stop::new(&mut nodes);
-        nodes.ty[stop] = Some(types.ty_bot); // differs from java; ensures that it isn't dead
 
         nodes.zero = Constant::new(types.ty_int_zero, &mut nodes)
             .peephole(&mut nodes)
