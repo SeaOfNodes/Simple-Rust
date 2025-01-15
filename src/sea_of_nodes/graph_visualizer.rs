@@ -104,7 +104,7 @@ fn nodes_by_cluster(
     }
 
     for &n in all.iter() {
-        if matches!(&nodes[n], Op::Proj(_) | Op::Scope(_)) {
+        if matches!(&nodes[n], Op::Proj(_) | Op::CProj(_) | Op::Scope(_)) || n == *nodes.xctrl {
             continue;
         }
         if separate_control_cluster && do_ctrl && !n.is_cfg(nodes) {
@@ -137,11 +137,24 @@ fn nodes_by_cluster(
                         )?;
                         write!(sb, "\t\t\t\t<TR>")?;
                     }
-                    write!(sb, "<TD PORT=\"p{}\"", p.index)?;
-                    if use_.is_cfg(nodes) {
-                        write!(sb, " BGCOLOR=\"yellow\"")?;
-                    };
-                    write!(sb, ">{}</TD>", proj.glabel())?;
+                    write!(sb, "<TD PORT=\"p{}\">{}</TD>", p.index, proj.glabel())?;
+                }
+                if let proj @ Op::CProj(p) = &nodes[*use_] {
+                    if !do_proj_table {
+                        do_proj_table = true;
+                        writeln!(sb, "<TD>")?;
+                        writeln!(
+                            sb,
+                            "\t\t\t\t<TABLE BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\">"
+                        )?;
+                        write!(sb, "\t\t\t\t<TR>")?;
+                    }
+                    write!(
+                        sb,
+                        "<TD PORT=\"p{}\" BGCOLOR=\"yellow\">{}</TD>",
+                        p.index,
+                        proj.glabel()
+                    )?;
                 }
             }
             if do_proj_table {
@@ -242,7 +255,11 @@ impl Node {
 fn node_edges(sb: &mut String, sea: &Nodes, all: &HashSet<Node>) -> fmt::Result {
     writeln!(sb, "\tedge [ fontname=Helvetica, fontsize=8 ];")?;
     for &n in all.iter() {
-        if matches!(&sea[n], Op::Constant(_) | Op::Proj(_) | Op::Scope(_)) {
+        if matches!(
+            &sea[n],
+            Op::Constant(_) | Op::Proj(_) | Op::CProj(_) | Op::Scope(_)
+        ) || n == *sea.xctrl
+        {
             continue;
         }
         for (i, def) in sea.inputs[n].iter().enumerate() {
@@ -308,7 +325,7 @@ fn scope_edges(sb: &mut String, sea: &Nodes, scope: Scope) -> fmt::Result {
 
 fn def_name(sea: &Nodes, def: Node) -> String {
     match &sea[def] {
-        Op::Proj(p) => {
+        Op::CProj(p) | Op::Proj(p) => {
             let mname = sea.unique_name(sea.inputs[def][0].unwrap());
             format!("{mname}:p{}", p.index)
         }
