@@ -424,7 +424,7 @@ impl<'t> Nodes<'t> {
                 }
 
                 return if node.is_dead(self) {
-                    Some(*Constant::new(self.types.ty_xctrl, self))
+                    Some(*self.xctrl)
                 } else {
                     node.del_def(path, self);
                     Some(node)
