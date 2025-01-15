@@ -11,7 +11,7 @@ fn test_xscope_after_while() {
     let types = Types::new(&arena);
     let mut parser = Parser::new("while(0)break;#showGraph;", &types);
     let stop = parser.parse().unwrap();
-    assert_eq!(parser.print(stop), "Stop[ ]");
+    assert_eq!(parser.print(stop), "return 0;");
 }
 
 #[test]
