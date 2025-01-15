@@ -130,14 +130,12 @@ fn sched_early(sea: &mut Nodes) {
         // step.  Since _schedEarly modifies the output arrays, the normal
         // region._outputs ArrayList iterator throws CME.  The extra edges
         // are always *added* after any Phis, so just walk the Phi prefix.
-        if let Some(region) = cfg.node().to_region(sea) {
-            let len = sea.outputs[region].len();
+        if cfg.node().to_region(sea).is_some() || cfg.node().to_loop(sea).is_some() {
+            let len = sea.outputs[cfg.node()].len();
             for i in 0..len {
-                if sea.outputs[region][i] != Node::DUMMY {
-                    if sea.outputs[region][i] != Node::DUMMY {
-                        if let Some(phi) = sea.outputs[region][i].to_phi(sea) {
-                            _sched_early(Some(*phi), &mut visit, sea);
-                        }
+                if sea.outputs[cfg.node()][i] != Node::DUMMY {
+                    if let Some(phi) = sea.outputs[cfg.node()][i].to_phi(sea) {
+                        _sched_early(Some(*phi), &mut visit, sea);
                     }
                 }
             }

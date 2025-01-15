@@ -389,7 +389,10 @@ fn pretty_print_scheduled(
         // Print block header
         write!(sb, "{:<13.13}:                     [[  ", blk.label(sea))?;
 
-        if blk.node().to_region(sea).is_some() || blk.node().to_stop(sea).is_some() {
+        if blk.node().to_region(sea).is_some()
+            || blk.node().to_loop(sea).is_some()
+            || blk.node().to_stop(sea).is_some()
+        {
             for i in if blk.node().to_stop(sea).is_some() {
                 0
             } else {
