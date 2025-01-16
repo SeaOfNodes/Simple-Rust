@@ -315,8 +315,7 @@ impl Phi {
                 let region = self.inputs(sea)[0].unwrap();
                 let idom = region.to_cfg(&sea.ops).unwrap().idom(sea).unwrap();
                 if let Some(iff) = idom.node().to_if(sea) {
-                    let pred = iff.inputs(sea)[1].unwrap().add_dep(*self, sea);
-                    if pred == val {
+                    if iff.pred(sea).unwrap().add_dep(*self, sea) == val {
                         // Must walk the idom on the null side to make sure we hit False.
                         let mut idom = region.inputs(sea)[nullx].unwrap().to_cfg(&sea.ops).unwrap();
                         while idom.node().inputs(sea)[0] != Some(*iff) {
@@ -467,14 +466,14 @@ impl If {
         }
         // Hunt up the immediate dominator tree.  If we find an identical if
         // test on either the true or false branch, that side wins.
-        let pred = self.inputs(sea)[1]?;
+        let pred = self.pred(sea).unwrap();
         if !pred.ty(sea)?.is_high_or_constant() {
             let mut prior = *self;
             let mut dom = self.to_cfg(&sea.ops).unwrap().idom(sea);
             while let Some(cfg) = dom {
                 let d = cfg.node().add_dep(*self, sea);
                 if let Some(d) = d.to_if(sea) {
-                    if d.inputs(sea)[1].unwrap().add_dep(*self, sea) == pred {
+                    if d.pred(sea).unwrap().add_dep(*self, sea) == pred {
                         if let Op::CProj(p) = &sea[prior] {
                             let value = if p.index == 0 {
                                 sea.types.ty_int_one

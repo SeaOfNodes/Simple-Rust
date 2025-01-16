@@ -223,18 +223,20 @@ impl<'t> Node {
                 let mut prior = self;
                 while let Some(cfg) = dom {
                     let d = cfg.node();
-                    if d.is_if(sea) && d.inputs(sea)[1].unwrap() == pred {
-                        return if let Op::Proj(proj) = &sea[prior] {
-                            // Repeated test, dominated on one side.  Test result is the same.
-                            if proj.index == 0 {
-                                types.ty_if_true
+                    if let Some(d) = d.to_if(sea) {
+                        if d.pred(sea).unwrap() == pred {
+                            return if let Op::Proj(proj) = &sea[prior] {
+                                // Repeated test, dominated on one side.  Test result is the same.
+                                if proj.index == 0 {
+                                    types.ty_if_true
+                                } else {
+                                    types.ty_if_false
+                                }
                             } else {
-                                types.ty_if_false
-                            }
-                        } else {
-                            // Repeated test not dominated on one side
-                            d.ty(sea).unwrap()
-                        };
+                                // Repeated test not dominated on one side
+                                d.ty(sea).unwrap()
+                            };
+                        }
                     }
 
                     prior = d;

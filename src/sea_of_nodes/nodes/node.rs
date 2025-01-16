@@ -520,6 +520,9 @@ impl If {
         sea.iter_peeps.add(*this); // Because idoms are complex, just add it
         this
     }
+    pub fn pred(self, sea: &Nodes) -> Option<Node> {
+        self.inputs(sea)[1]
+    }
 }
 
 #[derive(Clone, Debug)]
