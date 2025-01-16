@@ -1,5 +1,5 @@
 use crate::datastructures::arena::DroplessArena;
-use crate::sea_of_nodes::nodes::index::Stop;
+use crate::sea_of_nodes::nodes::node::Stop;
 use crate::sea_of_nodes::nodes::{Nodes, Op};
 use crate::sea_of_nodes::parser::Parser;
 use crate::sea_of_nodes::types::Types;

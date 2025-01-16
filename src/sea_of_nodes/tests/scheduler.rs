@@ -21,7 +21,7 @@
 //! Then the control flow graph is build. Then, all phis are placed and finally all the remaining nodes
 //! in an order where a node is placed when all alive uses are placed. Finally, the output is produced.
 
-use crate::sea_of_nodes::nodes::index::{Phi, Start, TypedNode};
+use crate::sea_of_nodes::nodes::node::{Phi, Start, TypedNode};
 use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
 use std::collections::HashMap;
 

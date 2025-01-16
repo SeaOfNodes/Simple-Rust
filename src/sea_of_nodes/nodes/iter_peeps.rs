@@ -35,7 +35,7 @@
 use crate::datastructures::id_set::IdSet;
 use crate::datastructures::random::Random;
 use crate::sea_of_nodes::global_code_motion::build_cfg;
-use crate::sea_of_nodes::nodes::index::Stop;
+use crate::sea_of_nodes::nodes::node::Stop;
 use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
 
 pub struct IterPeeps {

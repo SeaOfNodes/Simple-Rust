@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::sea_of_nodes::nodes::index::{Cast, Constant, Not, Phi, Region, Scope};
+use crate::sea_of_nodes::nodes::node::{Cast, Constant, Not, Phi, Region, Scope};
 use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
 use crate::sea_of_nodes::types::{Ty, Type};
 

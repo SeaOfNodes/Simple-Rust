@@ -1,5 +1,5 @@
 use crate::sea_of_nodes::graph_visualizer;
-use crate::sea_of_nodes::nodes::index::{
+use crate::sea_of_nodes::nodes::node::{
     CProj, Constant, If, Load, Loop, Minus, New, Not, Proj, Return, Scope, Start, Stop, Store,
     XCtrl,
 };

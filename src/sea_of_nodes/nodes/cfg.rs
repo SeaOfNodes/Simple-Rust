@@ -1,5 +1,5 @@
 use crate::datastructures::id_set::IdSet;
-use crate::sea_of_nodes::nodes::index::{Load, TypedNode};
+use crate::sea_of_nodes::nodes::node::{Load, TypedNode};
 use crate::sea_of_nodes::nodes::{Node, Nodes, Op, OpVec};
 use std::collections::HashSet;
 use std::ops::{Index, IndexMut};

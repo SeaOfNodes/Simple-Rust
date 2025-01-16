@@ -1,28 +1,24 @@
 use std::collections::HashMap;
 use std::num::NonZeroU32;
 
-pub use cfg::Cfg;
-pub use id::Node;
-pub use index::Op;
-pub use node::{BoolOp, LoadOp, ProjOp, StartOp, StoreOp};
-pub use scope::ScopeOp;
-
 use crate::datastructures::id_set::IdSet;
 use crate::datastructures::id_vec::IdVec;
 use crate::sea_of_nodes::nodes::cfg::CfgData;
 use crate::sea_of_nodes::nodes::gvn::GvnEntry;
-use crate::sea_of_nodes::nodes::index::{Constant, Phi, Proj, Scope, Start, XCtrl};
 use crate::sea_of_nodes::parser::Parser;
 use crate::sea_of_nodes::types::{MemPtr, Struct, Ty, Type, Types};
+pub use cfg::Cfg;
 use iter_peeps::IterPeeps;
+pub use node::{
+    BoolOp, Constant, LoadOp, Node, Op, Phi, Proj, ProjOp, Scope, Start, StartOp, StoreOp, XCtrl,
+};
+pub use scope::ScopeOp;
 
 mod cfg;
 mod gvn;
-mod id;
 mod idealize;
-pub mod index;
 mod iter_peeps;
-mod node;
+pub mod node;
 mod peephole;
 mod print;
 mod scope;

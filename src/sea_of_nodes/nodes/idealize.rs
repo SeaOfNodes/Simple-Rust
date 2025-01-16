@@ -1,9 +1,9 @@
 use crate::datastructures::id::Id;
-use crate::sea_of_nodes::nodes::index::{
+use crate::sea_of_nodes::nodes::node::IfOp;
+use crate::sea_of_nodes::nodes::node::{
     Add, Bool, CProj, Cast, Constant, Div, If, Load, Minus, Mul, Not, Phi, Return, Stop, Store,
     Sub, TypedNode,
 };
-use crate::sea_of_nodes::nodes::node::IfOp;
 use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes, Op};
 use crate::sea_of_nodes::types::{Int, Type};
 

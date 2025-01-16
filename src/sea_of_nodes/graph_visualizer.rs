@@ -5,7 +5,7 @@ use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::time::Duration;
 
-use crate::sea_of_nodes::nodes::index::{Scope, Stop};
+use crate::sea_of_nodes::nodes::node::{Scope, Stop};
 use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
 use crate::sea_of_nodes::types::Type;
 

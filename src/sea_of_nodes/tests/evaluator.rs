@@ -1,6 +1,6 @@
 use crate::datastructures::id_set::IdSet;
 use crate::datastructures::id_vec::IdVec;
-use crate::sea_of_nodes::nodes::index::{Constant, Div, Load, New, Start, Store, TypedNode};
+use crate::sea_of_nodes::nodes::node::{Constant, Div, Load, New, Start, Store, TypedNode};
 use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes};
 use crate::sea_of_nodes::tests::scheduler;
 use crate::sea_of_nodes::tests::scheduler::{Block, BlockId};

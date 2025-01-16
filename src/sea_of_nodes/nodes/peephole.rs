@@ -1,5 +1,5 @@
-use crate::sea_of_nodes::nodes::index::{Constant, XCtrl};
 use crate::sea_of_nodes::nodes::node::IfOp;
+use crate::sea_of_nodes::nodes::node::{Constant, XCtrl};
 use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
 use crate::sea_of_nodes::types::{Int, Ty, Type};
 

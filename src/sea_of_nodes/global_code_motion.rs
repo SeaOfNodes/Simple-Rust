@@ -1,6 +1,6 @@
 use crate::datastructures::id::Id;
 use crate::datastructures::id_set::IdSet;
-use crate::sea_of_nodes::nodes::index::{CProj, If, Load, Loop, Return, Start, Stop, TypedNode};
+use crate::sea_of_nodes::nodes::node::{CProj, If, Load, Loop, Return, Start, Stop, TypedNode};
 use crate::sea_of_nodes::nodes::{Cfg, Node, Nodes};
 use crate::sea_of_nodes::types::Type;
 use std::collections::HashSet;
