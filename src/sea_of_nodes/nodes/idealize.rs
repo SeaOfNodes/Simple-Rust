@@ -312,12 +312,12 @@ impl Phi {
 
             if nullx != 0 {
                 let val = self.inputs(sea)[3 - nullx].unwrap();
-                let region = self.inputs(sea)[0].unwrap();
-                let idom = region.to_cfg(&sea.ops).unwrap().idom(sea).unwrap();
+                let region = self.region(sea);
+                let idom = region.idom(sea).unwrap();
                 if let Some(iff) = idom.node().to_if(sea) {
                     if iff.pred(sea).unwrap().add_dep(*self, sea) == val {
                         // Must walk the idom on the null side to make sure we hit False.
-                        let mut idom = region.inputs(sea)[nullx].unwrap().to_cfg(&sea.ops).unwrap();
+                        let mut idom = region.cfg(nullx, sea).unwrap();
                         while idom.node().inputs(sea)[0] != Some(*iff) {
                             idom = idom.idom(sea).unwrap();
                         }
@@ -469,7 +469,7 @@ impl If {
         let pred = self.pred(sea).unwrap();
         if !pred.ty(sea)?.is_high_or_constant() {
             let mut prior = *self;
-            let mut dom = self.to_cfg(&sea.ops).unwrap().idom(sea);
+            let mut dom = self.as_cfg().idom(sea);
             while let Some(cfg) = dom {
                 let d = cfg.node().add_dep(*self, sea);
                 if let Some(d) = d.to_if(sea) {

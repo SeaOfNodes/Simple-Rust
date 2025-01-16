@@ -23,14 +23,13 @@ fn fix_loops(stop: Stop, sea: &mut Nodes) {
     let mut visit = IdSet::zeros(sea.len());
     let mut unreach = HashSet::with_capacity(sea.len());
 
-    unreach.insert(sea.start.to_cfg(&sea.ops).unwrap());
+    unreach.insert(sea.start.as_cfg());
     for ret in 0..stop.inputs(sea).len() {
         let ret = stop.inputs(sea)[ret];
         ret.unwrap()
             .to_return(sea)
             .unwrap()
-            .to_cfg(&sea.ops)
-            .unwrap()
+            .as_cfg()
             .walk_unreach(&mut visit, &mut unreach, sea);
     }
     if unreach.is_empty() {
@@ -50,8 +49,7 @@ fn fix_loops(stop: Stop, sea: &mut Nodes) {
         ret.unwrap()
             .to_return(sea)
             .unwrap()
-            .to_cfg(&sea.ops)
-            .unwrap()
+            .as_cfg()
             .walk_unreach(&mut visit, &mut unreach, sea);
     }
     assert!(unreach.is_empty());
@@ -193,12 +191,9 @@ fn _sched_early(n: Option<Node>, visit: &mut IdSet<Node>, sea: &mut Nodes) {
     // If not-pinned (e.g. constants, projections, phi) and not-CFG
     if !n.is_pinned(sea) {
         // Schedule at deepest input
-        let mut early = sea.start.to_cfg(&sea.ops).unwrap(); // Maximally early, lowest idepth
+        let mut early = sea.start.as_cfg(); // Maximally early, lowest idepth
         for i in 1..n.inputs(sea).len() {
-            let cfg0 = n.inputs(sea)[i].unwrap().inputs(sea)[0]
-                .unwrap()
-                .to_cfg(&sea.ops)
-                .unwrap();
+            let cfg0 = n.inputs(sea)[i].unwrap().cfg0(sea);
             if sea[cfg0].idepth > sea[early].idepth {
                 early = cfg0; // Latest/deepest input
             }
@@ -281,7 +276,7 @@ fn _sched_late(n: Node, ns: &mut Vec<Option<Node>>, late: &mut Vec<Option<Cfg>>,
     // Need to schedule n
 
     // Walk uses, gathering the LCA (Least Common Ancestor) of uses
-    let early = n.inputs(sea)[0].unwrap().to_cfg(&sea.ops).unwrap();
+    let early = n.cfg0(sea);
     let mut lca = None;
     for i in 0..sea.outputs[n].len() {
         let use_ = sea.outputs[n][i];

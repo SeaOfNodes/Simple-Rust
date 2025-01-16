@@ -560,10 +560,10 @@ impl Loop {
     }
 
     pub fn entry(self, sea: &Nodes) -> Cfg {
-        self.to_cfg(&sea.ops).unwrap().cfg(1, sea).unwrap()
+        self.as_cfg().cfg(1, sea).unwrap()
     }
     pub fn back(self, sea: &Nodes) -> Cfg {
-        self.to_cfg(&sea.ops).unwrap().cfg(2, sea).unwrap()
+        self.as_cfg().cfg(2, sea).unwrap()
     }
 }
 impl Cast {

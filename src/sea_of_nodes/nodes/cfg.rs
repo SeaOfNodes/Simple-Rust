@@ -1,6 +1,6 @@
 use crate::datastructures::id_set::IdSet;
-use crate::sea_of_nodes::nodes::node::{Load, TypedNode};
-use crate::sea_of_nodes::nodes::{Node, Nodes, Op, OpVec};
+use crate::sea_of_nodes::nodes::node::{CProj, If, Load, Loop, Region, Return, Stop, TypedNode};
+use crate::sea_of_nodes::nodes::{Node, Nodes, Op, OpVec, Start, XCtrl};
 use std::collections::HashSet;
 use std::ops::{Index, IndexMut};
 
@@ -49,6 +49,17 @@ impl CfgData {
         }
     }
 }
+
+macro_rules! impl_cfg {
+    ($($T:ident),+) => {
+        $(impl $T {
+            pub fn as_cfg(self) -> Cfg {
+                Cfg(*self)
+            }
+        })+
+    };
+}
+impl_cfg!(CProj, If, Loop, Region, Return, Start, Stop, XCtrl);
 
 impl Node {
     pub fn to_cfg(self, ops: &OpVec) -> Option<Cfg> {
@@ -162,8 +173,8 @@ impl Cfg {
                             for use_ in 0..sea.outputs[i].len() {
                                 let use_ = sea.outputs[i][use_];
                                 if use_ != Node::DUMMY {
-                                    if let Some(proj2) = use_.to_phi(sea) {
-                                        let proj2 = proj2.to_cfg(&sea.ops).unwrap();
+                                    if let Some(proj2) = use_.to_cproj(sea) {
+                                        let proj2 = proj2.as_cfg();
                                         if proj2 != idom {
                                             sea[proj2].loop_depth = d - 1;
                                         }
@@ -198,7 +209,7 @@ impl Cfg {
         match this.downcast(&sea.ops) {
             TypedNode::If(_) => {
                 for proj in &sea.outputs[this] {
-                    let proj = proj.to_cproj(sea).unwrap().to_cfg(&sea.ops).unwrap();
+                    let proj = proj.to_cproj(sea).unwrap().as_cfg();
                     if sea[proj].loop_depth == 0 {
                         unreach.insert(proj);
                     }

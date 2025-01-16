@@ -191,14 +191,15 @@ impl<'t> Node {
             }
             Op::If(IfOp::Never) => types.ty_int_bot,
             Op::If(IfOp::Cond) => {
+                let s = self.to_if(sea).unwrap();
+
                 // If the If node is not reachable then neither is any following Proj
                 let ctrl_ty = self.inputs(sea)[0].unwrap().ty(sea);
                 if ctrl_ty != Some(types.ty_ctrl) && ctrl_ty != Some(types.ty_bot) {
                     return types.ty_if_neither;
                 }
 
-                let pred = self.inputs(sea)[1].unwrap();
-                let t = pred.ty(sea).unwrap();
+                let t = s.pred(sea).unwrap().ty(sea).unwrap();
 
                 // High types mean NEITHER side is reachable.
                 // Wait until the type falls to decide which way to go.
@@ -219,12 +220,12 @@ impl<'t> Node {
                 // Hunt up the immediate dominator tree.  If we find an identical if
                 // test on either the true or false branch, then this test matches.
 
-                let mut dom = self.to_cfg(&sea.ops).unwrap().idom(sea);
+                let mut dom = s.as_cfg().idom(sea);
                 let mut prior = self;
                 while let Some(cfg) = dom {
                     let d = cfg.node();
                     if let Some(d) = d.to_if(sea) {
-                        if d.pred(sea).unwrap() == pred {
+                        if d.pred(sea).unwrap() == s.pred(sea).unwrap() {
                             return if let Op::Proj(proj) = &sea[prior] {
                                 // Repeated test, dominated on one side.  Test result is the same.
                                 if proj.index == 0 {
