@@ -247,120 +247,6 @@ define_ids!(<'t>
     New(Ty<'t>)        to_new      is_new;
 );
 
-impl Start {
-    pub const DUMMY: Start = Start(Node::DUMMY);
-}
-impl Constant {
-    pub const DUMMY: Constant = Constant(Node::DUMMY);
-}
-impl XCtrl {
-    pub const DUMMY: XCtrl = XCtrl(Node::DUMMY);
-}
-
-impl Node {
-    // TODO Mem Node type?
-    pub fn to_mem_name<'t>(self, sea: &Nodes<'t>) -> Option<&'t str> {
-        match self.downcast(&sea.ops) {
-            TypedNode::Load(n) => Some(sea[n].name),
-            TypedNode::Store(n) => Some(sea[n].name),
-            _ => None,
-        }
-    }
-}
-
-impl Load {
-    pub fn mem(self, sea: &Nodes) -> Option<Node> {
-        self.inputs(sea)[1]
-    }
-    pub fn ptr(self, sea: &Nodes) -> Option<Node> {
-        self.inputs(sea)[2]
-    }
-}
-impl Store {
-    pub fn mem(self, sea: &Nodes) -> Option<Node> {
-        self.inputs(sea)[1]
-    }
-    pub fn ptr(self, sea: &Nodes) -> Option<Node> {
-        self.inputs(sea)[2]
-    }
-}
-
-impl Phi {
-    pub fn region(self, sea: &Nodes) -> Cfg {
-        self.inputs(sea)[0].unwrap().to_cfg(&sea.ops).unwrap()
-    }
-}
-
-impl Loop {
-    pub fn entry(self, sea: &Nodes) -> Cfg {
-        self.to_cfg(&sea.ops).unwrap().cfg(1, sea).unwrap()
-    }
-    pub fn back(self, sea: &Nodes) -> Cfg {
-        self.to_cfg(&sea.ops).unwrap().cfg(2, sea).unwrap()
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct StartOp<'t> {
-    pub args: Ty<'t>,
-    pub alias_starts: HashMap<&'t str, u32>,
-}
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum BoolOp {
-    EQ,
-    LT,
-    LE,
-}
-impl BoolOp {
-    pub(crate) fn str(&self) -> &'static str {
-        match self {
-            BoolOp::EQ => "==",
-            BoolOp::LT => "<",
-            BoolOp::LE => "<=",
-        }
-    }
-
-    pub(crate) fn compute(&self, x: i64, y: i64) -> bool {
-        match self {
-            BoolOp::EQ => x == y,
-            BoolOp::LT => x < y,
-            BoolOp::LE => x <= y,
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct ProjOp<'t> {
-    pub index: usize,
-    pub label: &'t str,
-}
-
-#[derive(Clone, Debug)]
-pub struct PhiOp<'t> {
-    pub label: &'t str,
-    pub ty: Ty<'t>,
-}
-
-#[derive(Clone, Debug)]
-pub struct LoadOp<'t> {
-    pub name: &'t str,
-    pub alias: u32,
-    pub declared_type: Ty<'t>,
-}
-
-#[derive(Clone, Debug)]
-pub struct StoreOp<'t> {
-    pub name: &'t str,
-    pub alias: u32,
-}
-
-#[derive(Clone, Debug)]
-pub enum IfOp {
-    Cond,
-    Never,
-}
-
 impl<'t> Op<'t> {
     /// Easy reading label for debugger
     pub fn label(&self) -> Cow<str> {
@@ -462,7 +348,15 @@ impl<'t> Op<'t> {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct StartOp<'t> {
+    pub args: Ty<'t>,
+    pub alias_starts: HashMap<&'t str, u32>,
+}
+
 impl Start {
+    pub const DUMMY: Start = Start(Node::DUMMY);
+
     pub fn new<'t>(args: &[Ty<'t>], sea: &mut Nodes<'t>) -> Self {
         let args = sea.types.get_tuple_from_slice(args);
         let this = Start(sea.create((
@@ -497,12 +391,16 @@ impl Return {
     }
 }
 impl Constant {
+    pub const DUMMY: Constant = Constant(Node::DUMMY);
+
     pub fn new<'t>(ty: Ty<'t>, sea: &mut Nodes<'t>) -> Self {
         let start = sea.start;
         Constant(sea.create((Op::Constant(ty), vec![Some(*start)])))
     }
 }
 impl XCtrl {
+    pub const DUMMY: XCtrl = XCtrl(Node::DUMMY);
+
     pub fn new(sea: &mut Nodes) -> Self {
         let start = sea.start;
         XCtrl(sea.create((Op::XCtrl, vec![Some(*start)])))
@@ -542,6 +440,30 @@ impl Scope {
     }
 }
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum BoolOp {
+    EQ,
+    LT,
+    LE,
+}
+impl BoolOp {
+    pub(crate) fn str(&self) -> &'static str {
+        match self {
+            BoolOp::EQ => "==",
+            BoolOp::LT => "<",
+            BoolOp::LE => "<=",
+        }
+    }
+
+    pub(crate) fn compute(&self, x: i64, y: i64) -> bool {
+        match self {
+            BoolOp::EQ => x == y,
+            BoolOp::LT => x < y,
+            BoolOp::LE => x <= y,
+        }
+    }
+}
+
 impl Bool {
     pub fn new(left: Node, right: Node, op: BoolOp, sea: &mut Nodes) -> Self {
         Bool(sea.create((Op::Bool(op), vec![None, Some(left), Some(right)])))
@@ -552,6 +474,12 @@ impl Not {
     pub fn new(expr: Node, sea: &mut Nodes) -> Self {
         Not(sea.create((Op::Not, vec![None, Some(expr)])))
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct ProjOp<'t> {
+    pub index: usize,
+    pub label: &'t str,
 }
 
 impl Proj {
@@ -576,6 +504,12 @@ impl CProj {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum IfOp {
+    Cond,
+    Never,
+}
+
 impl If {
     pub fn new(ctrl: Node, pred: Option<Node>, sea: &mut Nodes) -> Self {
         let (op, pred) = match pred {
@@ -588,6 +522,12 @@ impl If {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct PhiOp<'t> {
+    pub label: &'t str,
+    pub ty: Ty<'t>,
+}
+
 impl Phi {
     pub fn new<'t>(
         label: &'t str,
@@ -596,6 +536,9 @@ impl Phi {
         sea: &mut Nodes<'t>,
     ) -> Self {
         Phi(sea.create((Op::Phi(PhiOp { label, ty }), inputs)))
+    }
+    pub fn region(self, sea: &Nodes) -> Cfg {
+        self.inputs(sea)[0].unwrap().to_cfg(&sea.ops).unwrap()
     }
 }
 impl Region {
@@ -612,11 +555,25 @@ impl Loop {
     pub fn new(entry: Node, sea: &mut Nodes) -> Self {
         Loop(sea.create((Op::Loop, vec![None, Some(entry), None])))
     }
+
+    pub fn entry(self, sea: &Nodes) -> Cfg {
+        self.to_cfg(&sea.ops).unwrap().cfg(1, sea).unwrap()
+    }
+    pub fn back(self, sea: &Nodes) -> Cfg {
+        self.to_cfg(&sea.ops).unwrap().cfg(2, sea).unwrap()
+    }
 }
 impl Cast {
     pub fn new<'t>(ty: Ty<'t>, ctrl: Node, i: Node, sea: &mut Nodes<'t>) -> Self {
         Cast(sea.create((Op::Cast(ty), vec![Some(ctrl), Some(i)])))
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct LoadOp<'t> {
+    pub name: &'t str,
+    pub alias: u32,
+    pub declared_type: Ty<'t>,
 }
 
 impl Load {
@@ -636,7 +593,20 @@ impl Load {
             vec![None, Some(mem_slice), Some(mem_ptr)],
         )))
     }
+    pub fn mem(self, sea: &Nodes) -> Option<Node> {
+        self.inputs(sea)[1]
+    }
+    pub fn ptr(self, sea: &Nodes) -> Option<Node> {
+        self.inputs(sea)[2]
+    }
 }
+
+#[derive(Clone, Debug)]
+pub struct StoreOp<'t> {
+    pub name: &'t str,
+    pub alias: u32,
+}
+
 impl Store {
     pub fn new<'t>(
         name: &'t str,
@@ -649,7 +619,25 @@ impl Store {
             vec![Some(ctrl), Some(mem_slice), Some(mem_ptr), Some(value)],
         )))
     }
+    pub fn mem(self, sea: &Nodes) -> Option<Node> {
+        self.inputs(sea)[1]
+    }
+    pub fn ptr(self, sea: &Nodes) -> Option<Node> {
+        self.inputs(sea)[2]
+    }
 }
+
+impl Node {
+    // TODO Mem Node type?
+    pub fn to_mem_name<'t>(self, sea: &Nodes<'t>) -> Option<&'t str> {
+        match self.downcast(&sea.ops) {
+            TypedNode::Load(n) => Some(sea[n].name),
+            TypedNode::Store(n) => Some(sea[n].name),
+            _ => None,
+        }
+    }
+}
+
 impl New {
     pub fn new<'t>(ptr: Ty<'t>, ctrl: Node, sea: &mut Nodes<'t>) -> Self {
         New(sea.create((Op::New(ptr), vec![Some(ctrl)])))
