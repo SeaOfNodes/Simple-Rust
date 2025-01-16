@@ -70,9 +70,9 @@ impl<'t> Scope {
                 if let Some(loop_) = loop_.to_scope(sea) {
                     // Lazy Phi!
                     let loop_phi = loop_.inputs(sea)[index];
-                    old = if loop_phi.is_some_and(|p| {
-                        p.to_phi(sea).is_some() && loop_.inputs(sea)[0] == p.inputs(sea)[0]
-                    }) {
+                    old = if loop_phi
+                        .is_some_and(|p| p.is_phi(sea) && loop_.inputs(sea)[0] == p.inputs(sea)[0])
+                    {
                         // Loop already has a real Phi, use it
                         loop_phi
                     } else {
@@ -247,7 +247,7 @@ impl<'t> Scope {
         }
         // Invert the If conditional
         if invert {
-            if pred.to_not(sea).is_some() {
+            if pred.is_not(sea) {
                 pred = pred.inputs(sea)[1].unwrap()
             } else {
                 pred = Not::new(pred, sea).peephole(sea);
@@ -273,7 +273,7 @@ impl<'t> Scope {
             self.replace(pred, Some(c), sea);
         }
 
-        if pred.to_not(sea).is_some() {
+        if pred.is_not(sea) {
             // Direct use of a !value as predicate.  This is a zero/null test.
             let not_in_1 = pred.inputs(sea)[1].unwrap();
             if self.inputs(sea).iter().any(|x| *x == Some(not_in_1)) {

@@ -202,9 +202,9 @@ impl Bool {
             let lhs = self.inputs(sea)[1].unwrap();
             let rhs = self.inputs(sea)[2].unwrap();
 
-            if rhs.to_constant(sea).is_none() {
+            if !rhs.is_constant(sea) {
                 // con==noncon becomes noncon==con
-                if lhs.to_constant(sea).is_some() {
+                if lhs.is_constant(sea) {
                     return Some(*Bool::new(rhs, lhs, op, sea));
                 } else if lhs.index() > rhs.index() {
                     // Equals sorts by NID otherwise: non.high == non.low becomes non.low == non.high
@@ -311,7 +311,7 @@ impl Phi {
                 let val = self.inputs(sea)[3 - nullx].unwrap();
                 let region = self.inputs(sea)[0].unwrap();
                 let idom = region.to_cfg(&sea.ops).unwrap().idom(sea).unwrap();
-                if let Some(iff) = sea.to_if(idom.node()) {
+                if let Some(iff) = idom.node().to_if(sea) {
                     let pred = iff.inputs(sea)[1].unwrap();
                     pred.add_dep(*self, sea);
                     if pred == val {
@@ -320,7 +320,7 @@ impl Phi {
                         while idom.node().inputs(sea)[0] != Some(*iff) {
                             idom = idom.idom(sea).unwrap();
                         }
-                        if sea.to_cproj(idom.node()).is_some_and(|p| sea[p].index == 1) {
+                        if idom.node().to_cproj(sea).is_some_and(|p| sea[p].index == 1) {
                             return Some(val);
                         }
                     }
@@ -529,7 +529,7 @@ impl Load {
                 // Profit on RHS/Loop backedge
                 if self.profit(mem, 2, sea) ||
                     // Else must not be a loop to count profit on LHS.
-                    (mem.inputs(sea)[0].unwrap().to_loop(sea).is_none() && self.profit(mem, 1, sea))
+                    (!mem.inputs(sea)[0].unwrap().is_loop(sea) && self.profit(mem, 1, sea))
                 {
                     let name = sea[self].name;
                     let alias = sea[self].alias;

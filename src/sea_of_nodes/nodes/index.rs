@@ -39,7 +39,7 @@ macro_rules! ite {
 }
 
 macro_rules! define_id {
-    ($Id:ident, $(($op:ty))?, $downcast:ident, $t:lifetime) => {
+    ($Id:ident, $(($op:ty))?, $downcast:ident, $checkcast:ident, $t:lifetime) => {
         #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
         pub struct $Id(Node);
 
@@ -92,6 +92,9 @@ macro_rules! define_id {
                     _ => None,
                 }
             }
+            pub fn $checkcast(self, sea: &Nodes) -> bool {
+                self.$downcast(sea).is_some()
+            }
         }
 
         // generic index
@@ -143,8 +146,8 @@ macro_rules! define_id {
 }
 
 macro_rules! define_ids {
-    (<$t:lifetime> $($Id:ident $(($op:ty))? $downcast:ident;)*) => {
-        $(define_id!($Id, $(($op))?, $downcast, $t);)*
+    (<$t:lifetime> $($Id:ident $(($op:ty))? $downcast:ident $checkcast:ident;)*) => {
+        $(define_id!($Id, $(($op))?, $downcast, $checkcast, $t);)*
 
         /// Node specific operation
         #[derive(Clone, Debug)]
@@ -169,29 +172,29 @@ macro_rules! define_ids {
 }
 
 define_ids!(<'t>
-    Constant(Ty<'t>)   to_constant;
-    XCtrl              to_xctrl;
-    Return             to_return;
-    Start(StartOp<'t>) to_start;
-    Add                to_add;
-    Sub                to_sub;
-    Mul                to_mul;
-    Div                to_div;
-    Minus              to_minus;
-    Scope(ScopeOp<'t>) to_scope;
-    Bool(BoolOp)       to_bool;
-    Not                to_not;
-    Proj(ProjOp<'t>)   to_proj;
-    CProj(ProjOp<'t>)  to_cproj;
-    If(IfOp)           to_if;
-    Phi(PhiOp<'t>)     to_phi;
-    Region             to_region;
-    Loop               to_loop;
-    Stop               to_stop;
-    Cast(Ty<'t>)       to_cast;
-    Load(LoadOp<'t>)   to_load;
-    Store(StoreOp<'t>) to_store;
-    New(Ty<'t>)        to_new;
+    Constant(Ty<'t>)   to_constant is_constant;
+    XCtrl              to_xctrl    is_xctrl;
+    Return             to_return   is_return;
+    Start(StartOp<'t>) to_start    is_start;
+    Add                to_add      is_add;
+    Sub                to_sub      is_sub;
+    Mul                to_mul      is_mul;
+    Div                to_div      is_div;
+    Minus              to_minus    is_minus;
+    Scope(ScopeOp<'t>) to_scope    is_scope;
+    Bool(BoolOp)       to_bool     is_bool;
+    Not                to_not      is_not;
+    Proj(ProjOp<'t>)   to_proj     is_proj;
+    CProj(ProjOp<'t>)  to_cproj    is_cproj;
+    If(IfOp)           to_if       is_if;
+    Phi(PhiOp<'t>)     to_phi      is_phi;
+    Region             to_region   is_region;
+    Loop               to_loop     is_loop;
+    Stop               to_stop     is_stop;
+    Cast(Ty<'t>)       to_cast     is_cast;
+    Load(LoadOp<'t>)   to_load     is_load;
+    Store(StoreOp<'t>) to_store    is_store;
+    New(Ty<'t>)        to_new      is_new;
 );
 
 impl Start {
@@ -204,16 +207,7 @@ impl XCtrl {
     pub const DUMMY: XCtrl = XCtrl(Node::DUMMY);
 }
 
-// TODO impl with macro
 impl Node {
-    pub fn is_load(self, sea: &Nodes) -> bool {
-        self.to_load(sea).is_some()
-    }
-
-    pub fn is_store(self, sea: &Nodes) -> bool {
-        self.to_store(sea).is_some()
-    }
-
     // TODO Mem Node type?
     pub fn to_mem_name<'t>(self, sea: &Nodes<'t>) -> Option<&'t str> {
         match self.downcast(&sea.ops) {

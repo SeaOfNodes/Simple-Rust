@@ -48,10 +48,7 @@ impl<'t> Node {
         // println!("{:<3} {:<8} {}->{}", self, &sea[self].label(), old.map(|t| t.to_string()).unwrap_or("null".to_string()), ty);
 
         // Replace constant computations from non-constants with a constant node
-        if self.to_constant(sea).is_none()
-            && self.to_xctrl(sea).is_none()
-            && ty.is_high_or_constant()
-        {
+        if !self.is_constant(sea) && !self.is_xctrl(sea) && ty.is_high_or_constant() {
             return if ty == sea.types.ty_xctrl {
                 *XCtrl::new(sea)
             } else {
@@ -226,7 +223,7 @@ impl<'t> Node {
                 let mut prior = self;
                 while let Some(cfg) = dom {
                     let d = cfg.node();
-                    if d.to_if(sea).is_some() && d.inputs(sea)[1].unwrap() == pred {
+                    if d.is_if(sea) && d.inputs(sea)[1].unwrap() == pred {
                         return if let Op::Proj(proj) = &sea[prior] {
                             // Repeated test, dominated on one side.  Test result is the same.
                             if proj.index == 0 {

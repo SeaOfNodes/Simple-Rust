@@ -146,7 +146,7 @@ impl Scheduler {
         !node
             .to_constant(sea)
             .is_some_and(|c| sea[c] == sea.types.ty_xctrl)
-            && !node.to_xctrl(sea).is_some()
+            && !node.is_xctrl(sea)
     }
 
     // Return the dominator of <code>a</code> and <code>b</code>
@@ -192,7 +192,7 @@ impl Scheduler {
     // - `data` Node to check.
     // - returns: true if node is placed during the control flow graph build.
     fn is_pinned_node(data: &NodeData, sea: &Nodes) -> bool {
-        data.node.is_cfg(sea) || data.node.to_phi(sea).is_some()
+        data.node.is_cfg(sea) || data.node.is_phi(sea)
     }
 
     // Refine placement of a node.
@@ -311,15 +311,15 @@ impl Scheduler {
     /// - `node` The CFG node to check
     /// - returns: true if all parents of a CFG node are placed.
     fn is_cfg_node_ready(&self, node: Node, sea: &Nodes) -> bool {
-        if node.to_loop(sea).is_some() {
+        if node.is_loop(sea) {
             debug_assert_ne!(self.data[&node.inputs(sea)[1].unwrap()].block, None)
-        } else if node.to_region(sea).is_some() {
+        } else if node.is_region(sea) {
             for i in node.inputs(sea).iter().skip(1).flatten() {
                 if self.data.get(i).is_some_and(|d| d.block.is_none()) {
                     return false;
                 }
             }
-        } else if node.to_xctrl(sea).is_some() {
+        } else if node.is_xctrl(sea) {
             return false;
         } else {
             debug_assert_ne!(self.data[&node.inputs(sea)[0].unwrap()].block, None)
@@ -378,7 +378,7 @@ impl Scheduler {
 
             self.data.get_mut(&node).unwrap().block = Some(block);
 
-            if node.to_region(sea).is_some() || node.to_loop(sea).is_some() {
+            if node.is_region(sea) || node.is_loop(sea) {
                 // Regions might have phis which need to be scheduled.
                 // Put them on a list for later scheduling.
                 for p in sea.outputs[node].iter().flat_map(|o| o.to_phi(sea)) {
@@ -389,7 +389,7 @@ impl Scheduler {
                 }
             }
 
-            if node.to_return(sea).is_none() {
+            if !node.is_return(sea) {
                 for &n in &sea.outputs[node] {
                     if n != Node::DUMMY
                         && n.is_cfg(sea)
@@ -447,7 +447,7 @@ impl Scheduler {
         // Mark all CFG nodes.
         while let Some(node) = cfg_queue.pop() {
             debug_assert!(node.is_cfg(sea));
-            if node.to_return(sea).is_none() {
+            if !node.is_return(sea) {
                 for &out in &sea.outputs[node] {
                     if out != Node::DUMMY && out.is_cfg(sea) && Self::is_not_xctrl(out, sea) {
                         self.mark_alive(&mut cfg_queue, out, true, sea);
@@ -511,7 +511,7 @@ impl Scheduler {
     /// - `node` The node
     /// - returns: THe CFG output of the node.
     fn find_single_cfg_out(node: Node, sea: &Nodes) -> Option<Node> {
-        if node.to_start(sea).is_some() {
+        if node.is_start(sea) {
             return sea.outputs[node]
                 .iter()
                 .copied()
@@ -537,7 +537,7 @@ impl Scheduler {
         while let Some(first) = queue.pop() {
             let mut last = Some(first);
             let mut arr = vec![];
-            if first.to_region(sea).is_some() || first.to_loop(sea).is_some() {
+            if first.is_region(sea) || first.is_loop(sea) {
                 arr.extend(
                     sea.outputs[first]
                         .iter()
@@ -546,23 +546,23 @@ impl Scheduler {
             }
 
             self.append_nodes(&mut arr, None, self.data[&first].block.unwrap());
-            debug_assert!(first.to_if(sea).is_none());
+            debug_assert!(!first.is_if(sea));
             let mut prev;
             loop {
                 prev = last;
                 last = Self::find_single_cfg_out(last.unwrap(), sea);
                 let Some(last) = last else { break };
 
-                if last.to_region(sea).is_some() || last.to_loop(sea).is_some() {
+                if last.is_region(sea) || last.is_loop(sea) {
                     if !blocks.contains_key(&last) && last != first {
                         queue.push(last);
                     }
                     break;
                 }
-                if last.to_return(sea).is_some() {
+                if last.is_return(sea) {
                     break;
                 }
-                if last.to_if(sea).is_some() {
+                if last.is_if(sea) {
                     queue.extend(
                         sea.outputs[last]
                             .iter()
@@ -597,15 +597,15 @@ impl Scheduler {
         for block in block_data.iter_mut() {
             match block.exit {
                 None => {}
-                Some(n) if n.to_if(sea).is_some() => {
+                Some(n) if n.is_if(sea) => {
                     for p in sea.outputs[n].iter().filter_map(|n| n.to_cproj(sea)) {
                         block.next[sea[p].index] = blocks[&*p];
                     }
                 }
-                Some(n) if n.to_region(sea).is_some() || n.to_loop(sea).is_some() => {
+                Some(n) if n.is_region(sea) || n.is_loop(sea) => {
                     block.next[0] = blocks[&n];
                 }
-                _ => debug_assert!(block.exit.unwrap().to_return(sea).is_some()),
+                _ => debug_assert!(block.exit.unwrap().is_return(sea)),
             }
         }
         // And return the block for the start node.

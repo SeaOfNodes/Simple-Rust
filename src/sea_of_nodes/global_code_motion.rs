@@ -67,7 +67,7 @@ impl Loop {
 
         let mut x = self.back(sea);
         while x.node() != *self {
-            if x.node().to_cproj(sea).is_some() {
+            if x.node().is_cproj(sea) {
                 return; // Found an exit, not an infinite loop
             }
             x = x.idom(sea).unwrap()
@@ -130,7 +130,7 @@ fn sched_early(sea: &mut Nodes) {
         // step.  Since _schedEarly modifies the output arrays, the normal
         // region._outputs ArrayList iterator throws CME.  The extra edges
         // are always *added* after any Phis, so just walk the Phi prefix.
-        if cfg.node().to_region(sea).is_some() || cfg.node().to_loop(sea).is_some() {
+        if cfg.node().is_region(sea) || cfg.node().is_loop(sea) {
             let len = sea.outputs[cfg.node()].len();
             for i in 0..len {
                 if sea.outputs[cfg.node()][i] != Node::DUMMY {
@@ -166,7 +166,7 @@ impl Node {
         match self.downcast(&sea.ops) {
             TypedNode::Constant(_) => self == *sea.zero,
             TypedNode::New(_) | TypedNode::Phi(_) | TypedNode::Proj(_) => true,
-            _ => self.to_cfg(&sea.ops).is_some(),
+            _ => self.is_cfg(sea),
         }
     }
 }
@@ -308,7 +308,7 @@ fn _sched_late(n: Node, ns: &mut Vec<Option<Node>>, late: &mut Vec<Option<Cfg>>,
         lca = lca.unwrap().idom(sea);
     }
 
-    assert!(best.node().to_if(sea).is_none());
+    assert!(!best.node().is_if(sea));
     ns[n.index()] = Some(n);
     late[n.index()] = Some(best);
 }
@@ -335,7 +335,7 @@ fn use_block(n: Node, use_: Node, late: &[Option<Cfg>], sea: &Nodes) -> Cfg {
 /// Least loop depth first, then largest idepth
 fn better(lca: Cfg, best: Cfg, sea: &Nodes) -> bool {
     sea[lca].loop_depth < sea[best].loop_depth
-        || (sea[lca].idepth > sea[best].idepth || best.node().to_if(sea).is_some())
+        || (sea[lca].idepth > sea[best].idepth || best.node().is_if(sea))
 }
 
 /// Skip iteration if a backedge
@@ -346,10 +346,10 @@ fn is_forwards_edge(use_: Option<Node>, def: Option<Node>, sea: &Nodes) -> bool 
     let uin = use_.inputs(sea);
     !(uin.len() > 2
         && uin[2] == Some(def)
-        && (use_.to_loop(sea).is_some()
+        && (use_.is_loop(sea)
             || (use_
                 .to_phi(sea)
-                .is_some_and(|phi| phi.region(sea).node().to_loop(sea).is_some()))))
+                .is_some_and(|phi| phi.region(sea).node().is_loop(sea)))))
 }
 
 impl Node {

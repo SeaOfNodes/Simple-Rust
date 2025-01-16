@@ -279,7 +279,7 @@ fn node_edges(sb: &mut String, sea: &Nodes, all: &HashSet<Node>) -> fmt::Result 
 
             write!(sb, "[taillabel={i}")?;
 
-            if n.to_new(sea).is_some() {
+            if n.is_new(sea) {
                 write!(sb, " color=green")?;
             } else if def.is_cfg(sea) {
                 write!(sb, " color=red")?;

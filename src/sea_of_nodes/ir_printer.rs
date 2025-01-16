@@ -389,19 +389,11 @@ fn pretty_print_scheduled(
         // Print block header
         write!(sb, "{:<13.13}:                     [[  ", blk.label(sea))?;
 
-        if blk.node().to_region(sea).is_some()
-            || blk.node().to_loop(sea).is_some()
-            || blk.node().to_stop(sea).is_some()
-        {
-            for i in if blk.node().to_stop(sea).is_some() {
-                0
-            } else {
-                1
-            }..blk.node().inputs(sea).len()
-            {
+        if blk.node().is_region(sea) || blk.node().is_loop(sea) || blk.node().is_stop(sea) {
+            for i in if blk.node().is_stop(sea) { 0 } else { 1 }..blk.node().inputs(sea).len() {
                 label(&mut sb, blk.cfg(i, sea).unwrap(), sea)?
             }
-        } else if !blk.node().to_start(sea).is_some() {
+        } else if !blk.node().is_start(sea) {
             label(&mut sb, blk.cfg(0, sea).unwrap(), sea)?;
         }
         sb += " ]]  \n";
@@ -466,9 +458,9 @@ fn walk_(ds: &mut HashMap<Node, usize>, node: Node, d: usize, sea: &Nodes) {
 
 impl Cfg {
     fn label(self, sea: &Nodes) -> Cow<'static, str> {
-        if self.node().to_start(sea).is_some() {
+        if self.node().is_start(sea) {
             Cow::Borrowed("START")
-        } else if self.node().to_loop(sea).is_some() {
+        } else if self.node().is_loop(sea) {
             Cow::Borrowed("LOOP")
         } else {
             Cow::Owned(format!("L{}", self.node()))

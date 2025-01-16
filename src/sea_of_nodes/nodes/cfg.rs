@@ -156,7 +156,7 @@ impl Cfg {
 
                         if let Some(proj) = idom.node().to_cproj(sea) {
                             let i = proj.inputs(sea)[0].unwrap();
-                            debug_assert!(i.to_if(sea).is_some(), "expected loop exit test");
+                            debug_assert!(i.is_if(sea), "expected loop exit test");
 
                             // Find the loop exit CProj, and set loop_depth
                             for use_ in 0..sea.outputs[i].len() {

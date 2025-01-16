@@ -364,8 +364,7 @@ impl Node {
 impl Phi {
     fn single_unique_input(self, sea: &mut Nodes) -> Option<Node> {
         let region = self.inputs(sea)[0].unwrap();
-        if region.to_loop(sea).is_some()
-            && region.inputs(sea)[1].unwrap().ty(sea) == Some(sea.types.ty_xctrl)
+        if region.is_loop(sea) && region.inputs(sea)[1].unwrap().ty(sea) == Some(sea.types.ty_xctrl)
         {
             return None; // Dead entry loops just ignore and let the loop collapse
         }
