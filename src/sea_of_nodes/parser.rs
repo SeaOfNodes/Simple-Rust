@@ -493,7 +493,7 @@ impl<'s, 't> Parser<'s, 't> {
     }
 
     pub fn print(&mut self, node: impl Into<Node>) -> String {
-        self.nodes.print(Some(node.into())).to_string()
+        node.into().print(&self.nodes).to_string()
     }
 
     /// Parses an expression statement or a declaration statement where type is a struct

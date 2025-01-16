@@ -90,7 +90,7 @@ pub fn generate_dot_output(
 fn nodes_by_cluster(
     sb: &mut String,
     do_ctrl: bool,
-    nodes: &Nodes,
+    sea: &Nodes,
     all: &HashSet<Node>,
     separate_control_cluster: bool,
 ) -> fmt::Result {
@@ -104,19 +104,19 @@ fn nodes_by_cluster(
     }
 
     for &n in all.iter() {
-        if matches!(&nodes[n], Op::Proj(_) | Op::CProj(_) | Op::Scope(_)) || n == *nodes.xctrl {
+        if matches!(&sea[n], Op::Proj(_) | Op::CProj(_) | Op::Scope(_)) || n == *sea.xctrl {
             continue;
         }
-        if separate_control_cluster && do_ctrl && !n.is_cfg(nodes) {
+        if separate_control_cluster && do_ctrl && !n.is_cfg(sea) {
             continue;
         }
-        if separate_control_cluster && !do_ctrl && n.is_cfg(nodes) {
+        if separate_control_cluster && !do_ctrl && n.is_cfg(sea) {
             continue;
         }
 
-        write!(sb, "\t\t{} [ ", nodes.unique_name(n))?;
-        let lab = nodes[n].glabel();
-        if nodes[n].is_multi_node() {
+        write!(sb, "\t\t{} [ ", n.unique_name(sea))?;
+        let lab = sea[n].glabel();
+        if sea[n].is_multi_node() {
             writeln!(sb, "shape=plaintext label=<")?;
             writeln!(
                 sb,
@@ -126,8 +126,8 @@ fn nodes_by_cluster(
             write!(sb, "\t\t\t<TR>")?;
 
             let mut do_proj_table = false;
-            for use_ in &nodes.outputs[n] {
-                if let proj @ Op::Proj(p) = &nodes[*use_] {
+            for use_ in &sea.outputs[n] {
+                if let proj @ Op::Proj(p) = &sea[*use_] {
                     if !do_proj_table {
                         do_proj_table = true;
                         writeln!(sb, "<TD>")?;
@@ -139,7 +139,7 @@ fn nodes_by_cluster(
                     }
                     write!(sb, "<TD PORT=\"p{}\">{}</TD>", p.index, proj.glabel())?;
                 }
-                if let proj @ Op::CProj(p) = &nodes[*use_] {
+                if let proj @ Op::CProj(p) = &sea[*use_] {
                     if !do_proj_table {
                         do_proj_table = true;
                         writeln!(sb, "<TD>")?;
@@ -165,9 +165,9 @@ fn nodes_by_cluster(
             writeln!(sb, "</TR>")?;
             write!(sb, "\t\t\t</TABLE>>\n\t\t")?;
         } else {
-            if n.is_cfg(nodes) {
+            if n.is_cfg(sea) {
                 write!(sb, "shape=box style=filled fillcolor=yellow ")?;
-            } else if matches!(&nodes[n], Op::Phi(_)) {
+            } else if matches!(&sea[n], Op::Phi(_)) {
                 write!(sb, "style=filled fillcolor=lightyellow ")?;
             }
             write!(sb, "label=\"{lab}\" ")?;
@@ -178,11 +178,11 @@ fn nodes_by_cluster(
     if !separate_control_cluster {
         // Force Region & Phis to line up
         for &n in all {
-            if let Op::Region { .. } | Op::Loop = &nodes[n] {
-                write!(sb, "\t\t{{ rank=same; {};", nodes.print(Some(n)))?;
-                for &phi in &nodes.outputs[n] {
-                    if let Op::Phi(_) = &nodes[phi] {
-                        write!(sb, "{};", nodes.unique_name(phi))?;
+            if let Op::Region { .. } | Op::Loop = &sea[n] {
+                write!(sb, "\t\t{{ rank=same; {};", n.print(sea))?;
+                for &phi in &sea.outputs[n] {
+                    if let Op::Phi(_) = &sea[phi] {
+                        write!(sb, "{};", phi.unique_name(sea))?;
                     }
                 }
                 writeln!(sb, "}}")?;
@@ -234,7 +234,7 @@ fn do_scope(sb: &mut String, nodes: &Nodes, scope: Scope) -> fmt::Result {
 }
 
 fn make_scope_name(sea: &Nodes, scope: Scope, level: usize) -> String {
-    format!("{}_{level}", sea.unique_name(*scope))
+    format!("{}_{level}", scope.unique_name(sea))
 }
 
 fn make_port_name(scope_name: &str, var_name: &str) -> String {
@@ -269,13 +269,13 @@ fn node_edges(sb: &mut String, sea: &Nodes, all: &HashSet<Node>) -> fmt::Result 
                 writeln!(
                     sb,
                     "\t{} -> {} [style=dotted taillabel={i}];",
-                    sea.unique_name(n),
-                    sea.unique_name(def)
+                    n.unique_name(sea),
+                    def.unique_name(sea)
                 )?;
                 continue;
             }
 
-            write!(sb, "\t{} -> {}", sea.unique_name(n), def_name(sea, def))?;
+            write!(sb, "\t{} -> {}", n.unique_name(sea), def_name(sea, def))?;
 
             write!(sb, "[taillabel={i}")?;
 
@@ -326,10 +326,10 @@ fn scope_edges(sb: &mut String, sea: &Nodes, scope: Scope) -> fmt::Result {
 fn def_name(sea: &Nodes, def: Node) -> String {
     match &sea[def] {
         Op::CProj(p) | Op::Proj(p) => {
-            let mname = sea.unique_name(sea.inputs[def][0].unwrap());
+            let mname = sea.inputs[def][0].unwrap().unique_name(sea);
             format!("{mname}:p{}", p.index)
         }
-        _ => sea.unique_name(def),
+        _ => def.unique_name(sea),
     }
 }
 

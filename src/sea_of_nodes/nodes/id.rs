@@ -23,16 +23,16 @@ impl Node {
         &vec[self]
     }
 
-    pub fn inputs<'a>(self, nodes: &'a Nodes) -> &'a Vec<Option<Node>> {
-        self.get(&nodes.inputs)
+    pub fn inputs<'a>(self, sea: &'a Nodes) -> &'a Vec<Option<Node>> {
+        self.get(&sea.inputs)
     }
 
-    pub fn node<'a, 't>(self, nodes: &'a Nodes<'t>) -> &'a Op<'t> {
-        &nodes[self]
+    pub fn node<'a, 't>(self, sea: &'a Nodes<'t>) -> &'a Op<'t> {
+        &sea[self]
     }
 
-    pub fn ty<'t>(self, nodes: &Nodes<'t>) -> Option<Ty<'t>> {
-        *self.get(&nodes.ty)
+    pub fn ty<'t>(self, sea: &Nodes<'t>) -> Option<Ty<'t>> {
+        *self.get(&sea.ty)
     }
 }
 

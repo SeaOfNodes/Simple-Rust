@@ -7,22 +7,22 @@ use crate::datastructures::id_set::IdSet;
 use crate::sea_of_nodes::nodes::{Cfg, Node, Nodes, Op};
 use crate::sea_of_nodes::types::{Int, Ty, Type};
 
-pub fn pretty_print_llvm(nodes: &Nodes, node: impl Into<Node>, depth: usize) -> String {
-    pretty_print_(nodes, node.into(), depth, true)
+pub fn pretty_print_llvm(node: impl Into<Node>, depth: usize, sea: &Nodes) -> String {
+    pretty_print_(node.into(), depth, true, sea)
 }
 
 /// Another bulk pretty-printer.  Makes more effort at basic-block grouping.
-pub fn pretty_print(nodes: &Nodes, node: impl Into<Node>, depth: usize) -> String {
-    if nodes.scheduled {
-        pretty_print_scheduled(node.into(), depth, false, nodes).unwrap()
+pub fn pretty_print(node: impl Into<Node>, depth: usize, sea: &Nodes) -> String {
+    if sea.scheduled {
+        pretty_print_scheduled(node.into(), depth, false, sea).unwrap()
     } else {
-        pretty_print_(nodes, node.into(), depth, false)
+        pretty_print_(node.into(), depth, false, sea)
     }
 }
 
-fn pretty_print_(sea: &Nodes, node: Node, depth: usize, llvm_format: bool) -> String {
+fn pretty_print_(node: Node, depth: usize, llvm_format: bool, sea: &Nodes) -> String {
     // First, a Breadth First Search at a fixed depth.
-    let bfs = BFS::run(sea, node, depth);
+    let bfs = BFS::run(node, depth, sea);
 
     // Convert just that set to a post-order
     let mut rpos = Vec::with_capacity(bfs._bfs.len());
@@ -38,13 +38,13 @@ fn pretty_print_(sea: &Nodes, node: Node, depth: usize, llvm_format: bool) -> St
 
     let mut iter = rpos.iter().rev().peekable();
     while let Some(&n) = iter.next() {
-        if n.is_cfg(sea) || sea.is_multi_head(n) {
+        if n.is_cfg(sea) || n.is_multi_head(sea) {
             if !gap {
                 sb.push('\n'); // Blank before multihead
             };
             print_line(sea, n, &mut sb, llvm_format).unwrap(); // Print head
             while let Some(&&t) = iter.peek() {
-                if sea.is_multi_tail(t) {
+                if t.is_multi_tail(sea) {
                     break;
                 }
                 iter.next();
@@ -169,9 +169,9 @@ fn print_line_llvm(nodes: &Nodes, n: Node, sb: &mut String) -> fmt::Result {
     writeln!(sb, ")")
 }
 
-impl<'t> Nodes<'t> {
-    pub fn is_multi_head(&self, node: Node) -> bool {
-        match &self[node] {
+impl Node {
+    pub fn is_multi_head(self, sea: &Nodes) -> bool {
+        match &sea[self] {
             Op::If(_) | Op::Region { .. } | Op::Loop | Op::Start { .. } => true,
             Op::Constant(_)
             | Op::XCtrl
@@ -195,12 +195,12 @@ impl<'t> Nodes<'t> {
         }
     }
 
-    pub fn is_multi_tail(&self, node: Node) -> bool {
-        match &self[node] {
+    pub fn is_multi_tail(self, sea: &Nodes) -> bool {
+        match &sea[self] {
             Op::Constant(_) | Op::XCtrl | Op::Phi(_) => true,
             Op::Proj(_) | Op::CProj(_) => {
-                let ctrl = self.inputs[node][0].unwrap();
-                self.is_multi_head(ctrl)
+                let ctrl = self.inputs(sea)[0].unwrap();
+                ctrl.is_multi_head(sea)
             }
             Op::Return
             | Op::Start { .. }
@@ -278,10 +278,10 @@ struct BFS {
 }
 
 impl BFS {
-    fn run<'t>(nodes: &Nodes<'t>, base: Node, mut d: usize) -> Self {
+    fn run(base: Node, mut d: usize, sea: &Nodes) -> Self {
         let mut bfs = Self {
             _bfs: vec![],
-            _bs: IdSet::zeros(nodes.len()),
+            _bs: IdSet::zeros(sea.len()),
             _depth: d,
             _lim: 0,
         };
@@ -296,7 +296,7 @@ impl BFS {
             let n = bfs._bfs[idx];
             idx += 1;
 
-            for &def in nodes.inputs[n].iter().flatten() {
+            for &def in sea.inputs[n].iter().flatten() {
                 if !bfs._bs.get(def) {
                     bfs.add(def);
                 }
@@ -314,7 +314,7 @@ impl BFS {
         // Toss things past the limit except multi-heads
         while idx < bfs._bfs.len() {
             let n = bfs._bfs[idx];
-            if nodes.is_multi_head(n) {
+            if n.is_multi_head(sea) {
                 idx += 1;
             } else {
                 bfs.del(idx);
@@ -325,7 +325,7 @@ impl BFS {
         lim = bfs._bfs.len();
 
         for i in (0..bfs._bfs.len()).rev() {
-            if !bfs.any_visited(nodes, bfs._bfs[i]) {
+            if !bfs.any_visited(sea, bfs._bfs[i]) {
                 lim -= 1;
                 bfs.swap(i, lim);
             }

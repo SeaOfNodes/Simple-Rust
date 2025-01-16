@@ -31,22 +31,22 @@ pub struct PrintNodes2<'a, 'b, 't> {
     visited: &'b RefCell<IdSet<Node>>,
 }
 
-impl<'t> Nodes<'t> {
-    pub(crate) fn print(&self, node: Option<Node>) -> PrintNodes<'_, 't> {
+impl Node {
+    pub(crate) fn print<'a, 't>(self, sea: &'a Nodes<'t>) -> PrintNodes<'a, 't> {
         PrintNodes {
-            node,
-            sea: self,
-            visited: RefCell::new(IdSet::zeros(self.len())),
+            node: Some(self),
+            sea,
+            visited: RefCell::new(IdSet::zeros(sea.len())),
         }
     }
 
     // Unique label for graph visualization, e.g. "Add12" or "Region30" or "EQ99"
-    pub fn unique_name(&self, node: Node) -> String {
-        match &self[node] {
-            Op::Constant(_) => format!("Con_{node}"),
-            Op::Cast(_) => format!("Cast_{node}"),
+    pub fn unique_name(self, sea: &Nodes) -> String {
+        match &sea[self] {
+            Op::Constant(_) => format!("Con_{self}"),
+            Op::Cast(_) => format!("Cast_{self}"),
             // Get rid of $ as graphviz doesn't like it
-            _ => format!("{}{}", self[node].label().replace('$', ""), node),
+            _ => format!("{}{}", sea[self].label().replace('$', ""), self),
         }
     }
 }
@@ -74,7 +74,7 @@ impl Display for PrintNodes2<'_, '_, '_> {
         let mut binary = |op: &str| write!(f, "({}{}{})", input(1), op, input(2));
 
         match &sea[node] {
-            _ if node.is_dead(sea) => write!(f, "{}:DEAD", sea.unique_name(node)),
+            _ if node.is_dead(sea) => write!(f, "{}:DEAD", node.unique_name(sea)),
             Op::Add => binary("+"),
             Op::Sub => binary("-"),
             Op::Mul => binary("*"),

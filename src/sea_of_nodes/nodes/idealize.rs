@@ -10,7 +10,6 @@ use crate::sea_of_nodes::types::{Int, Type};
 impl Node {
     /// do not peephole directly returned values!
     pub(super) fn idealize(self, sea: &mut Nodes) -> Option<Node> {
-        let s = self;
         match self.downcast(&sea.ops) {
             TypedNode::Add(n) => n.idealize_add(sea),
             TypedNode::Sub(n) => n.idealize_sub(sea),
@@ -21,8 +20,8 @@ impl Node {
             TypedNode::Return(n) => n.idealize_return(sea),
             TypedNode::Proj(_) => None,
             TypedNode::CProj(n) => n.idealize_cproj(sea),
-            TypedNode::Region(_) | TypedNode::Loop(_) => sea.idealize_region(s),
-            TypedNode::If(_) => sea.idealize_if(s),
+            TypedNode::Region(_) | TypedNode::Loop(_) => self.idealize_region(sea),
+            TypedNode::If(n) => n.idealize_if(sea),
             TypedNode::Cast(n) => n.idealize_cast(sea),
             TypedNode::Load(n) => n.idealize_load(sea),
             TypedNode::Store(n) => n.idealize_store(sea),
@@ -384,67 +383,66 @@ impl CProj {
     }
 }
 
-impl<'t> Nodes<'t> {
-    fn idealize_region(&mut self, node: Node) -> Option<Node> {
-        if Self::in_progress(&self.ops, &self.inputs, node) {
+impl Node {
+    fn idealize_region(self, sea: &mut Nodes) -> Option<Node> {
+        if Nodes::in_progress(&sea.ops, &sea.inputs, self) {
             return None;
         }
 
         // Delete dead paths into a Region
-        if let Some(path) = node.find_dead_input(self) {
+        if let Some(path) = self.find_dead_input(sea) {
             // Do not delete the entry path of a loop (ok to remove the back
             // edge and make the loop a single-entry Region which folds away
             // the Loop).  Folding the entry path confused the loop structure,
             // moving the backedge to the entry point.
-            if !(matches!(&self[node], Op::Loop) && self.inputs[node][1] == self.inputs[node][path])
-            {
+            if !(matches!(&sea[self], Op::Loop) && self.inputs(sea)[1] == self.inputs(sea)[path]) {
                 // Cannot use the obvious output iterator here, because a Phi
                 // deleting an input might recursively delete *itself*.  This
                 // shuffles the output array, and we might miss iterating an
                 // unrelated Phi. So on rare occasions we repeat the loop to get
                 // all the Phis.
                 let mut nouts = 0;
-                while nouts != self.outputs[node].len() {
-                    nouts = self.outputs[node].len();
+                while nouts != sea.outputs[self].len() {
+                    nouts = sea.outputs[self].len();
 
                     for i in 0.. {
-                        if i >= self.outputs[node].len() {
+                        if i >= sea.outputs[self].len() {
                             break;
                         }
-                        let phi = self.outputs[node][i];
-                        if matches!(&self[phi], Op::Phi(_))
-                            && self.inputs[node].len() == self.inputs[phi].len()
+                        let phi = sea.outputs[self][i];
+                        if matches!(&sea[phi], Op::Phi(_))
+                            && self.inputs(sea).len() == phi.inputs(sea).len()
                         {
-                            phi.del_def(path, self);
-                            for &o in &self.outputs[phi] {
-                                self.iter_peeps.add(o);
+                            phi.del_def(path, sea);
+                            for &o in &sea.outputs[phi] {
+                                sea.iter_peeps.add(o);
                             }
                         }
                     }
                 }
 
-                return if node.is_dead(self) {
-                    Some(*self.xctrl)
+                return if self.is_dead(sea) {
+                    Some(*sea.xctrl)
                 } else {
-                    node.del_def(path, self);
-                    Some(node)
+                    self.del_def(path, sea);
+                    Some(self)
                 };
             }
         }
 
         // If down to a single input, become that input - but also make all
-        if self.inputs[node].len() == 2 && !self.has_phi(node) {
-            return self.inputs[node][1]; // Collapse if no Phis; 1-input Phis will collapse on their own
+        if self.inputs(sea).len() == 2 && !self.has_phi(sea) {
+            return self.inputs(sea)[1]; // Collapse if no Phis; 1-input Phis will collapse on their own
         }
 
         // If a CFG diamond with no merging, delete: "if( pred ) {} else {};"
-        if !self.has_phi(node) {
+        if !self.has_phi(sea) {
             // No Phi users, just a control user
-            if let Some(p1) = node.inputs(self)[1].and_then(|n| n.to_proj(self)) {
-                if let Some(p2) = node.inputs(self)[2].and_then(|n| n.to_proj(self)) {
-                    if p1.inputs(self)[0] == p2.inputs(self)[0] {
-                        if let Some(iff) = p1.inputs(self)[0].and_then(|n| n.to_if(self)) {
-                            return iff.inputs(self)[0];
+            if let Some(p1) = self.inputs(sea)[1].and_then(|n| n.to_proj(sea)) {
+                if let Some(p2) = self.inputs(sea)[2].and_then(|n| n.to_proj(sea)) {
+                    if p1.inputs(sea)[0] == p2.inputs(sea)[0] {
+                        if let Some(iff) = p1.inputs(sea)[0].and_then(|n| n.to_if(sea)) {
+                            return iff.inputs(sea)[0];
                         }
                     }
                 }
@@ -454,43 +452,41 @@ impl<'t> Nodes<'t> {
         None
     }
 
-    fn has_phi(&self, node: Node) -> bool {
-        self.outputs[node]
-            .iter()
-            .any(|phi| matches!(&self[*phi], Op::Phi(_)))
+    fn has_phi(self, sea: &Nodes) -> bool {
+        sea.outputs[self].iter().any(|phi| phi.is_phi(sea))
     }
+}
 
-    fn idealize_if(&mut self, node: Node) -> Option<Node> {
-        if matches!(self[node], Op::If(IfOp::Never)) {
+impl If {
+    fn idealize_if(self, sea: &mut Nodes) -> Option<Node> {
+        if matches!(sea[self], IfOp::Never) {
             return None;
         }
         // Hunt up the immediate dominator tree.  If we find an identical if
         // test on either the true or false branch, that side wins.
-        let pred = self.inputs[node][1]?;
-        if !self.ty[pred]?.is_high_or_constant() {
-            let mut prior = node;
-            let mut dom = node.to_cfg(&self.ops).unwrap().idom(self);
+        let pred = self.inputs(sea)[1]?;
+        if !pred.ty(sea)?.is_high_or_constant() {
+            let mut prior = *self;
+            let mut dom = self.to_cfg(&sea.ops).unwrap().idom(sea);
             while let Some(cfg) = dom {
-                let d = cfg.node();
-                d.add_dep(node, self);
-                if matches!(&self[d], Op::If(_)) {
-                    let if_pred = self.inputs[d][1]?;
-                    if_pred.add_dep(node, self);
+                let d = cfg.node().add_dep(*self, sea);
+                if let Some(d) = d.to_if(sea) {
+                    let if_pred = d.inputs(sea)[1]?.add_dep(*self, sea);
                     if if_pred == pred {
-                        if let Op::CProj(p) = &self[prior] {
+                        if let Op::CProj(p) = &sea[prior] {
                             let value = if p.index == 0 {
-                                self.types.ty_int_one
+                                sea.types.ty_int_one
                             } else {
-                                self.types.ty_int_zero
+                                sea.types.ty_int_zero
                             };
-                            let new_constant = Constant::new(value, self).peephole(self);
-                            node.set_def(1, Some(new_constant), self);
-                            return Some(node);
+                            let new_constant = Constant::new(value, sea).peephole(sea);
+                            self.set_def(1, Some(new_constant), sea);
+                            return Some(*self);
                         }
                     }
                 }
                 prior = d;
-                dom = cfg.idom(self);
+                dom = cfg.idom(sea);
             }
         }
         None
