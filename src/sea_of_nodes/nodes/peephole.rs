@@ -263,11 +263,10 @@ impl<'t> Node {
                     for i in 1..self.inputs(sea).len() {
                         // If the region's control input is live, add this as a dependency
                         // to the control because we can be peeped should it become dead.
-                        let r_in_i = region.inputs(sea)[i].unwrap();
-                        r_in_i.add_dep(self, sea);
-                        let in_i = self.inputs(sea)[i].unwrap();
-                        if r_in_i.ty(sea) != Some(types.ty_xctrl) {
-                            t = types.meet(t, in_i.ty(sea).unwrap())
+                        if region.inputs(sea)[i].unwrap().add_dep(self, sea).ty(sea)
+                            != Some(types.ty_xctrl)
+                        {
+                            t = types.meet(t, self.inputs(sea)[i].unwrap().ty(sea).unwrap())
                         }
                     }
                     t

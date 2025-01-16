@@ -103,8 +103,14 @@ impl Add {
         // If lhs.in(2) is not a constant, we add ourselves as a dependency
         // because if it later became a constant then we could make this
         // transformation.
-        lhs.inputs(sea)[2]?.add_dep(*self, sea);
-        if lhs.inputs(sea)[2].unwrap().ty(sea).unwrap().is_constant() && t2.is_constant() {
+        if lhs.inputs(sea)[2]
+            .unwrap()
+            .add_dep(*self, sea)
+            .ty(sea)
+            .unwrap()
+            .is_constant()
+            && t2.is_constant()
+        {
             let x = lhs.inputs(sea)[1]?;
             let con1 = lhs.inputs(sea)[2]?;
             let con2 = rhs;
@@ -276,16 +282,14 @@ impl Phi {
         // If merging Phi(N, cast(N)) - we are losing the cast JOIN effects, so just remove.
         if self.inputs(sea).len() == 3 {
             if let Some(cast) = self.inputs(sea)[1].unwrap().to_cast(sea) {
-                let in_1 = cast.inputs(sea)[1];
-                in_1.unwrap().add_dep(*self, sea);
-                if in_1 == self.inputs(sea)[2] {
+                let in_1 = cast.inputs(sea)[1].unwrap().add_dep(*self, sea);
+                if Some(in_1) == self.inputs(sea)[2] {
                     return self.inputs(sea)[2];
                 }
             }
             if let Some(cast) = self.inputs(sea)[2].unwrap().to_cast(sea) {
-                let in_1 = cast.inputs(sea)[1];
-                in_1.unwrap().add_dep(*self, sea);
-                if in_1 == self.inputs(sea)[1] {
+                let in_1 = cast.inputs(sea)[1].unwrap().add_dep(*self, sea);
+                if Some(in_1) == self.inputs(sea)[1] {
                     return self.inputs(sea)[1];
                 }
             }
@@ -311,8 +315,7 @@ impl Phi {
                 let region = self.inputs(sea)[0].unwrap();
                 let idom = region.to_cfg(&sea.ops).unwrap().idom(sea).unwrap();
                 if let Some(iff) = idom.node().to_if(sea) {
-                    let pred = iff.inputs(sea)[1].unwrap();
-                    pred.add_dep(*self, sea);
+                    let pred = iff.inputs(sea)[1].unwrap().add_dep(*self, sea);
                     if pred == val {
                         // Must walk the idom on the null side to make sure we hit False.
                         let mut idom = region.inputs(sea)[nullx].unwrap().to_cfg(&sea.ops).unwrap();
@@ -471,8 +474,7 @@ impl If {
             while let Some(cfg) = dom {
                 let d = cfg.node().add_dep(*self, sea);
                 if let Some(d) = d.to_if(sea) {
-                    let if_pred = d.inputs(sea)[1]?.add_dep(*self, sea);
-                    if if_pred == pred {
+                    if d.inputs(sea)[1].unwrap().add_dep(*self, sea) == pred {
                         if let Op::CProj(p) = &sea[prior] {
                             let value = if p.index == 0 {
                                 sea.types.ty_int_one
