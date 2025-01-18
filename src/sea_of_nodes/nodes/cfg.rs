@@ -1,11 +1,39 @@
 use crate::datastructures::id_set::IdSet;
+use crate::datastructures::id_vec::IdVec;
 use crate::sea_of_nodes::nodes::node::{CProj, If, Load, Loop, Region, Return, Stop, TypedNode};
 use crate::sea_of_nodes::nodes::{Node, Nodes, Op, OpVec, Start, XCtrl};
 use std::collections::HashSet;
-use std::ops::{Index, IndexMut};
+use std::fmt;
+use std::ops::{Deref, Index, IndexMut};
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Cfg(Node);
+
+impl Deref for Cfg {
+    type Target = Node;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl fmt::Display for Cfg {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl<T> Index<Cfg> for IdVec<Node, T> {
+    type Output = T;
+    fn index(&self, index: Cfg) -> &Self::Output {
+        &self[*index]
+    }
+}
+impl<T> IndexMut<Cfg> for IdVec<Node, T> {
+    fn index_mut(&mut self, index: Cfg) -> &mut Self::Output {
+        &mut self[index.0]
+    }
+}
 
 impl Index<Cfg> for Nodes<'_> {
     type Output = CfgData;
@@ -17,11 +45,6 @@ impl Index<Cfg> for Nodes<'_> {
 impl IndexMut<Cfg> for Nodes<'_> {
     fn index_mut(&mut self, index: Cfg) -> &mut Self::Output {
         &mut self.cfg_data[index.0]
-    }
-}
-impl Cfg {
-    pub fn node(self) -> Node {
-        self.0
     }
 }
 
@@ -152,7 +175,7 @@ impl Cfg {
     // Loop nesting depth
     pub fn loop_depth(self, sea: &mut Nodes) -> u32 {
         if sea[self].loop_depth == 0 {
-            sea[self].loop_depth = match self.node().downcast(&sea.ops) {
+            sea[self].loop_depth = match self.downcast(&sea.ops) {
                 TypedNode::Start(_) | TypedNode::Stop(_) => 1,
                 TypedNode::Loop(l) => {
                     let d = sea[l.entry(sea)].loop_depth + 1; // Entry depth plus one
@@ -165,7 +188,7 @@ impl Cfg {
                         // Loop exit hits the CProj before the If, instead of jumping from
                         // Region directly to If.
 
-                        if let Some(proj) = idom.node().to_cproj(sea) {
+                        if let Some(proj) = idom.to_cproj(sea) {
                             let i = proj.inputs(sea)[0].unwrap();
                             debug_assert!(i.is_if(sea), "expected loop exit test");
 
@@ -200,15 +223,14 @@ impl Cfg {
         unreach: &mut HashSet<Cfg>,
         sea: &mut Nodes,
     ) {
-        let this = self.node();
-        if visit.get(this) {
+        if visit.get(*self) {
             return;
         }
-        visit.add(this);
+        visit.add(*self);
 
-        match this.downcast(&sea.ops) {
+        match self.downcast(&sea.ops) {
             TypedNode::If(_) => {
-                for proj in &sea.outputs[this] {
+                for proj in &sea.outputs[self] {
                     let proj = proj.to_cproj(sea).unwrap().as_cfg();
                     if sea[proj].loop_depth == 0 {
                         unreach.insert(proj);
@@ -217,7 +239,7 @@ impl Cfg {
                 self.cfg(0, sea).unwrap().walk_unreach(visit, unreach, sea);
             }
             TypedNode::Region(_) | TypedNode::Loop(_) => {
-                for i in 1..this.inputs(sea).len() {
+                for i in 1..self.inputs(sea).len() {
                     self.cfg(i, sea).unwrap().walk_unreach(visit, unreach, sea);
                 }
             }

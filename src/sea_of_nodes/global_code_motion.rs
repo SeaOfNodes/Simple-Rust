@@ -64,15 +64,15 @@ impl Loop {
         // directly on the If) we found our exit.
 
         let mut x = self.back(sea);
-        while x.node() != *self {
-            if x.node().is_cproj(sea) {
+        while *x != *self {
+            if x.is_cproj(sea) {
                 return; // Found an exit, not an infinite loop
             }
             x = x.idom(sea).unwrap()
         }
 
         // Found a no-exit loop.  Insert an exit
-        let iff = If::new(self.back(sea).node(), None, sea);
+        let iff = If::new(*self.back(sea), None, sea);
         for i in 0..sea.outputs[self].len() {
             let use_ = sea.outputs[self][i];
             if use_ != Node::DUMMY {
@@ -92,7 +92,7 @@ impl Loop {
 /// Forwards walk over previously unreachable, looking for loops with no
 /// exit test.
 fn walk_infinite(n: Cfg, visit: &mut IdSet<Node>, stop: Stop, sea: &mut Nodes) {
-    let n = n.node();
+    let n = *n;
     if visit.get(n) {
         return; // Been there, done that
     }
@@ -118,8 +118,8 @@ fn sched_early(sea: &mut Nodes) {
     // Reverse Post-Order on CFG
     for cfg in rpo.into_iter().rev() {
         cfg.loop_depth(sea);
-        for i in 0..cfg.node().inputs(sea).len() {
-            let n = cfg.node().inputs(sea)[i];
+        for i in 0..cfg.inputs(sea).len() {
+            let n = cfg.inputs(sea)[i];
             _sched_early(n, &mut visit, sea);
         }
 
@@ -128,11 +128,11 @@ fn sched_early(sea: &mut Nodes) {
         // step.  Since _schedEarly modifies the output arrays, the normal
         // region._outputs ArrayList iterator throws CME.  The extra edges
         // are always *added* after any Phis, so just walk the Phi prefix.
-        if cfg.node().is_region(sea) || cfg.node().is_loop(sea) {
-            let len = sea.outputs[cfg.node()].len();
+        if cfg.is_region(sea) || cfg.is_loop(sea) {
+            let len = sea.outputs[cfg].len();
             for i in 0..len {
-                if sea.outputs[cfg.node()][i] != Node::DUMMY {
-                    if let Some(phi) = sea.outputs[cfg.node()][i].to_phi(sea) {
+                if sea.outputs[cfg][i] != Node::DUMMY {
+                    if let Some(phi) = sea.outputs[cfg][i].to_phi(sea) {
                         _sched_early(Some(*phi), &mut visit, sea);
                     }
                 }
@@ -198,7 +198,7 @@ fn _sched_early(n: Option<Node>, visit: &mut IdSet<Node>, sea: &mut Nodes) {
                 early = cfg0; // Latest/deepest input
             }
         }
-        n.set_def(0, Some(early.node()), sea); // First place this can go
+        n.set_def(0, Some(*early), sea); // First place this can go
     }
 }
 
@@ -208,14 +208,14 @@ fn sched_late(start: Start, sea: &mut Nodes) {
     _sched_late(*start, &mut ns, &mut late, sea);
     for i in 0..late.len() {
         if let Some(n) = &ns[i] {
-            n.set_def(0, late[i].map(|n| n.node()), sea);
+            n.set_def(0, late[i].map(|n| *n), sea);
         }
     }
 }
 
 impl Cfg {
     pub(crate) fn block_head(self, sea: &Nodes) -> bool {
-        match self.node().downcast(&sea.ops) {
+        match self.downcast(&sea.ops) {
             TypedNode::Start(_)
             | TypedNode::CProj(_)
             | TypedNode::Region(_)
@@ -303,7 +303,7 @@ fn _sched_late(n: Node, ns: &mut Vec<Option<Node>>, late: &mut Vec<Option<Cfg>>,
         lca = lca.unwrap().idom(sea);
     }
 
-    assert!(!best.node().is_if(sea));
+    assert!(!best.is_if(sea));
     ns[n.index()] = Some(n);
     late[n.index()] = Some(best);
 }
@@ -330,7 +330,7 @@ fn use_block(n: Node, use_: Node, late: &[Option<Cfg>], sea: &Nodes) -> Cfg {
 /// Least loop depth first, then largest idepth
 fn better(lca: Cfg, best: Cfg, sea: &Nodes) -> bool {
     sea[lca].loop_depth < sea[best].loop_depth
-        || (sea[lca].idepth > sea[best].idepth || best.node().is_if(sea))
+        || (sea[lca].idepth > sea[best].idepth || best.is_if(sea))
 }
 
 /// Skip iteration if a backedge
@@ -344,7 +344,7 @@ fn is_forwards_edge(use_: Option<Node>, def: Option<Node>, sea: &Nodes) -> bool 
         && (use_.is_loop(sea)
             || (use_
                 .to_phi(sea)
-                .is_some_and(|phi| phi.region(sea).node().is_loop(sea)))))
+                .is_some_and(|phi| phi.region(sea).is_loop(sea)))))
 }
 
 impl Node {

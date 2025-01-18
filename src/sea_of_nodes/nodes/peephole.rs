@@ -222,8 +222,7 @@ impl<'t> Node {
 
                 let mut dom = s.as_cfg().idom(sea);
                 let mut prior = self;
-                while let Some(cfg) = dom {
-                    let d = cfg.node();
+                while let Some(d) = dom {
                     if let Some(d) = d.to_if(sea) {
                         if d.pred(sea).unwrap() == s.pred(sea).unwrap() {
                             return if let Op::Proj(proj) = &sea[prior] {
@@ -240,8 +239,8 @@ impl<'t> Node {
                         }
                     }
 
-                    prior = d;
-                    dom = cfg.idom(sea);
+                    prior = *d;
+                    dom = d.idom(sea);
                 }
 
                 types.ty_if_both

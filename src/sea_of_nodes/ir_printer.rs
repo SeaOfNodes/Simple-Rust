@@ -384,16 +384,16 @@ fn pretty_print_scheduled(
             }
         }
         let blk = blk.unwrap();
-        ds.remove(&blk.node());
+        ds.remove(&blk);
 
         // Print block header
         write!(sb, "{:<13.13}:                     [[  ", blk.label(sea))?;
 
-        if blk.node().is_region(sea) || blk.node().is_loop(sea) || blk.node().is_stop(sea) {
-            for i in if blk.node().is_stop(sea) { 0 } else { 1 }..blk.node().inputs(sea).len() {
+        if blk.is_region(sea) || blk.is_loop(sea) || blk.is_stop(sea) {
+            for i in if blk.is_stop(sea) { 0 } else { 1 }..blk.inputs(sea).len() {
                 label(&mut sb, blk.cfg(i, sea).unwrap(), sea)?
             }
-        } else if !blk.node().is_start(sea) {
+        } else if !blk.is_start(sea) {
             label(&mut sb, blk.cfg(0, sea).unwrap(), sea)?;
         }
         sb += " ]]  \n";
@@ -401,7 +401,7 @@ fn pretty_print_scheduled(
         // Collect block contents that are in the depth limit
         bns.clear();
         let mut xd = usize::MAX;
-        for &use_ in &sea.outputs[blk.node()] {
+        for &use_ in &sea.outputs[blk] {
             if let Some(i) = ds.get(&use_) {
                 if !use_.to_cfg(&sea.ops).is_some_and(|cfg| cfg.block_head(sea)) {
                     bns.push(use_);
@@ -458,12 +458,12 @@ fn walk_(ds: &mut HashMap<Node, usize>, node: Node, d: usize, sea: &Nodes) {
 
 impl Cfg {
     fn label(self, sea: &Nodes) -> Cow<'static, str> {
-        if self.node().is_start(sea) {
+        if self.is_start(sea) {
             Cow::Borrowed("START")
-        } else if self.node().is_loop(sea) {
+        } else if self.is_loop(sea) {
             Cow::Borrowed("LOOP")
         } else {
-            Cow::Owned(format!("L{}", self.node()))
+            Cow::Owned(format!("L{}", self))
         }
     }
 }
