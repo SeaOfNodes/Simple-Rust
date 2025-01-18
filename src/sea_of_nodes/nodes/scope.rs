@@ -242,7 +242,7 @@ impl<'t> Scope {
         invert: bool,
         sea: &mut Nodes<'t>,
     ) -> Option<Node> {
-        if ctrl.ty(sea)? == sea.types.ty_xctrl {
+        if ctrl.ty(sea)? == sea.types.xctrl {
             return None;
         }
         // Invert the If conditional
@@ -263,11 +263,11 @@ impl<'t> Scope {
                 // being tested. No representation for a generic not-null int, so no upcast.
                 return None;
             };
-            if sea.types.isa(tmp, sea.types.ty_pointer_void) {
+            if sea.types.isa(tmp, sea.types.pointer_void) {
                 return None; // Already not-null, no reason to upcast
             }
             // Upcast the ptr to not-null ptr, and replace in scope
-            let c = Cast::new(sea.types.ty_pointer_void, ctrl, pred, sea).peephole(sea);
+            let c = Cast::new(sea.types.pointer_void, ctrl, pred, sea).peephole(sea);
             let t = c.compute(sea);
             c.set_type(t, sea);
             self.replace(pred, Some(c), sea);

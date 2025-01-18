@@ -145,7 +145,7 @@ impl Scheduler {
     fn is_not_xctrl(node: Node, sea: &Nodes) -> bool {
         !node
             .to_constant(sea)
-            .is_some_and(|c| sea[c] == sea.types.ty_xctrl)
+            .is_some_and(|c| sea[c] == sea.types.xctrl)
             && !node.is_xctrl(sea)
     }
 

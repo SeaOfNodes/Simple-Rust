@@ -83,7 +83,7 @@ else
     b=5;
 return b;",
         &types,
-        types.ty_int_bot,
+        types.int_bot,
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
@@ -110,7 +110,7 @@ else
     b=5;
 return b;",
         &types,
-        types.ty_int_bot,
+        types.int_bot,
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
@@ -191,7 +191,7 @@ else
 return a;
 ",
         &types,
-        types.ty_int_bot,
+        types.int_bot,
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);

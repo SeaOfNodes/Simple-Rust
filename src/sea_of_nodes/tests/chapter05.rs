@@ -41,7 +41,7 @@ if (arg == 1) {
 }
 return c;",
         &types,
-        types.ty_int_bot,
+        types.int_bot,
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
@@ -62,7 +62,7 @@ else
     return 4;
 ",
         &types,
-        types.ty_int_bot,
+        types.int_bot,
     );
     let stop = parser.parse().unwrap();
     assert_eq!(parser.print(stop), "Stop[ return 3; return 4; ]");
@@ -134,7 +134,7 @@ else
 return a;
 ",
         &types,
-        types.ty_int_bot,
+        types.int_bot,
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
@@ -161,7 +161,7 @@ if( arg==0 )
 return arg+a+b;
 ",
         &types,
-        types.ty_int_bot,
+        types.int_bot,
     );
     let stop = parser.parse().unwrap();
     assert_eq!(

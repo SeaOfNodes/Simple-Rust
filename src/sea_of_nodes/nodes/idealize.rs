@@ -45,13 +45,13 @@ impl Add {
 
         // Add of 0.  We do not check for (0+x) because this will already
         // canonicalize to (x+0)
-        if t2 == sea.types.ty_int_zero {
+        if t2 == sea.types.int_zero {
             return Some(lhs);
         }
 
         // Add of same to a multiply by 2
         if lhs == rhs {
-            let two = Constant::new(sea.types.ty_int_two, sea).peephole(sea);
+            let two = Constant::new(sea.types.int_two, sea).peephole(sea);
             return Some(*Mul::new(lhs, two, sea));
         }
 
@@ -195,9 +195,9 @@ impl Bool {
         let op = sea[self];
         if self.inputs(sea)[1]? == self.inputs(sea)[2]? {
             let value = if op.compute(3, 3) {
-                sea.types.ty_int_one
+                sea.types.int_one
             } else {
-                sea.types.ty_int_zero
+                sea.types.int_zero
             };
             return Some(*Constant::new(value, sea));
         }
@@ -217,8 +217,8 @@ impl Bool {
                 }
             }
             // Equals X==0 becomes a !X
-            if rhs.ty(sea) == Some(sea.types.ty_int_zero)
-                || rhs.ty(sea) == Some(sea.types.ty_pointer_null)
+            if rhs.ty(sea) == Some(sea.types.int_zero)
+                || rhs.ty(sea) == Some(sea.types.pointer_null)
             {
                 return Some(*Not::new(lhs, sea));
             }
@@ -338,7 +338,7 @@ impl Stop {
         let mut result = None;
         let mut i = 0;
         while i < self.inputs(sea).len() {
-            if self.inputs(sea)[i].unwrap().ty(sea) == Some(sea.types.ty_xctrl) {
+            if self.inputs(sea)[i].unwrap().ty(sea) == Some(sea.types.xctrl) {
                 self.del_def(i, sea);
                 result = Some(*self);
             } else {
@@ -351,7 +351,7 @@ impl Stop {
 
 impl Return {
     fn idealize_return(self, sea: &mut Nodes) -> Option<Node> {
-        self.inputs(sea)[0].filter(|ctrl| ctrl.ty(sea) == Some(sea.types.ty_xctrl))
+        self.inputs(sea)[0].filter(|ctrl| ctrl.ty(sea) == Some(sea.types.xctrl))
     }
 }
 
@@ -360,7 +360,7 @@ impl CProj {
         let index = sea[self].index;
         if let Some(iff) = self.inputs(sea)[0]?.to_if(sea) {
             if let Some(Type::Tuple { types: ts }) = iff.ty(sea).as_deref() {
-                if ts[1 - index] == sea.types.ty_xctrl {
+                if ts[1 - index] == sea.types.xctrl {
                     return iff.inputs(sea)[0]; // We become our input control
                 }
             }
@@ -476,9 +476,9 @@ impl If {
                     if d.pred(sea).unwrap().add_dep(*self, sea) == pred {
                         if let Op::CProj(p) = &sea[prior] {
                             let value = if p.index == 0 {
-                                sea.types.ty_int_one
+                                sea.types.int_one
                             } else {
-                                sea.types.ty_int_zero
+                                sea.types.int_zero
                             };
                             let new_constant = Constant::new(value, sea).peephole(sea);
                             self.set_def(1, Some(new_constant), sea);
@@ -521,8 +521,7 @@ impl Load {
         //   else       ptr.x = e1;                    : e1;
         //   val = ptr.x;                   ptr.x = val;
         if let Some(mem) = mem.to_phi(sea) {
-            if mem.inputs(sea)[0]?.ty(sea) == Some(sea.types.ty_ctrl) && mem.inputs(sea).len() == 3
-            {
+            if mem.inputs(sea)[0]?.ty(sea) == Some(sea.types.ctrl) && mem.inputs(sea).len() == 3 {
                 // Profit on RHS/Loop backedge
                 if self.profit(mem, 2, sea) ||
                     // Else must not be a loop to count profit on LHS.
@@ -643,7 +642,7 @@ impl Div {
 impl Node {
     fn find_dead_input(self, sea: &Nodes) -> Option<usize> {
         (1..self.inputs(sea).len())
-            .find(|&i| self.inputs(sea)[i].unwrap().ty(sea).unwrap() == sea.types.ty_xctrl)
+            .find(|&i| self.inputs(sea)[i].unwrap().ty(sea).unwrap() == sea.types.xctrl)
     }
 }
 
@@ -662,12 +661,12 @@ impl<'t> Nodes<'t> {
         }
 
         if matches!(self[lo], Op::Phi(_))
-            && self.ty[self.inputs[lo][0].unwrap()] == Some(self.types.ty_xctrl)
+            && self.ty[self.inputs[lo][0].unwrap()] == Some(self.types.xctrl)
         {
             return false;
         }
         if matches!(self[hi], Op::Phi(_))
-            && self.ty[self.inputs[hi][0].unwrap()] == Some(self.types.ty_xctrl)
+            && self.ty[self.inputs[hi][0].unwrap()] == Some(self.types.xctrl)
         {
             return false;
         }

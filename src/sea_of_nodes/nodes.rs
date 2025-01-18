@@ -292,7 +292,7 @@ impl Node {
     pub fn err(self, sea: &Nodes) -> Option<String> {
         if let Some(memop) = self.to_mem_name(sea) {
             let ptr = self.inputs(sea)[2]?.ty(sea)?;
-            if ptr == sea.types.ty_bot || matches!(*ptr, Type::Pointer(MemPtr { nil: true, .. })) {
+            if ptr == sea.types.bot || matches!(*ptr, Type::Pointer(MemPtr { nil: true, .. })) {
                 return Some(format!("Might be null accessing '{memop}'"));
             }
         }
@@ -360,8 +360,7 @@ impl Node {
 impl Phi {
     fn single_unique_input(self, sea: &mut Nodes) -> Option<Node> {
         let region = self.inputs(sea)[0].unwrap();
-        if region.is_loop(sea) && region.inputs(sea)[1].unwrap().ty(sea) == Some(sea.types.ty_xctrl)
-        {
+        if region.is_loop(sea) && region.inputs(sea)[1].unwrap().ty(sea) == Some(sea.types.xctrl) {
             return None; // Dead entry loops just ignore and let the loop collapse
         }
 
@@ -370,8 +369,7 @@ impl Phi {
             // If the region's control input is live, add this as a dependency
             // to the control because we can be peeped should it become dead.
             let region_in_i = region.inputs(sea)[i].unwrap().add_dep(*self, sea);
-            if region_in_i.ty(sea) != Some(sea.types.ty_xctrl) && self.inputs(sea)[i] != Some(*self)
-            {
+            if region_in_i.ty(sea) != Some(sea.types.xctrl) && self.inputs(sea)[i] != Some(*self) {
                 if live.is_none() || live == self.inputs(sea)[i] {
                     live = self.inputs(sea)[i];
                 } else {

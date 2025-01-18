@@ -59,20 +59,20 @@ pub fn is_keyword(s: &str) -> bool {
 
 impl<'s, 't> Parser<'s, 't> {
     pub fn new(source: &'s str, types: &'t Types<'t>) -> Self {
-        Self::new_with_arg(source, types, types.ty_int_bot)
+        Self::new_with_arg(source, types, types.int_bot)
     }
 
     pub fn new_with_arg(source: &'s str, types: &'t Types<'t>, arg: Ty<'t>) -> Self {
         let mut nodes = Nodes::new(types);
 
         let scope = Scope::new(&mut nodes);
-        nodes.ty[scope] = Some(types.ty_bot); // in java this is done by the constructor
+        nodes.ty[scope] = Some(types.bot); // in java this is done by the constructor
 
-        nodes.start = Start::new(&[types.ty_ctrl, arg], &mut nodes);
+        nodes.start = Start::new(&[types.ctrl, arg], &mut nodes);
 
         let stop = Stop::new(&mut nodes);
 
-        nodes.zero = Constant::new(types.ty_int_zero, &mut nodes)
+        nodes.zero = Constant::new(types.int_zero, &mut nodes)
             .peephole(&mut nodes)
             .keep(&mut nodes)
             .to_constant(&nodes)
@@ -117,18 +117,18 @@ impl<'s, 't> Parser<'s, 't> {
         let start = self.nodes.start;
         let ctrl = CProj::new(start, 0, Scope::CTRL, &mut self.nodes).peephole(&mut self.nodes);
         self.scope
-            .define(Scope::CTRL, self.types.ty_ctrl, ctrl, &mut self.nodes)
+            .define(Scope::CTRL, self.types.ctrl, ctrl, &mut self.nodes)
             .expect("not in scope");
         let arg0 = Proj::new(start, 1, Scope::ARG0, &mut self.nodes).peephole(&mut self.nodes);
         self.scope
-            .define(Scope::ARG0, self.types.ty_int_bot, arg0, &mut self.nodes)
+            .define(Scope::ARG0, self.types.int_bot, arg0, &mut self.nodes)
             .expect("not in scope");
 
         self.parse_block()?;
-        if self.ctrl().ty(&self.nodes) == Some(self.types.ty_ctrl) {
+        if self.ctrl().ty(&self.nodes) == Some(self.types.ctrl) {
             let ctrl = self.ctrl();
             let expr =
-                Constant::new(self.types.ty_int_zero, &mut self.nodes).peephole(&mut self.nodes);
+                Constant::new(self.types.int_zero, &mut self.nodes).peephole(&mut self.nodes);
             let ret = Return::new(ctrl, expr, Some(self.scope), &mut self.nodes)
                 .peephole(&mut self.nodes);
             self.stop.add_def(Some(ret), &mut self.nodes);
@@ -178,7 +178,7 @@ impl<'s, 't> Parser<'s, 't> {
         if self.matchx("return") {
             self.parse_return()
         } else if self.matchx("int") {
-            self.parse_decl(self.types.ty_int_bot)
+            self.parse_decl(self.types.int_bot)
         } else if self.match_("{") {
             self.parse_block()?;
             self.require("}")
@@ -212,7 +212,7 @@ impl<'s, 't> Parser<'s, 't> {
         if self.matchx("int") {
             let name = self.types.get_str(self.require_id()?);
             self.require(";")?;
-            return Ok((name, self.types.ty_int_bot));
+            return Ok((name, self.types.int_bot));
         }
         Err("A field type is expected, only type 'int' is supported at present".to_string())
     }
@@ -561,7 +561,7 @@ impl<'s, 't> Parser<'s, 't> {
         let old = self.lexer.remaining;
         let tname = self.lexer.match_id()?;
         if tname == "int" {
-            Some(self.types.ty_int_bot)
+            Some(self.types.int_bot)
         } else if let Some(&obj) = self.name_to_type.get(tname) {
             let nil = self.match_("?");
             Some(self.types.get_pointer(obj, nil))
@@ -717,14 +717,11 @@ impl<'s, 't> Parser<'s, 't> {
             self.require(")")?;
             Ok(e)
         } else if self.matchx("true") {
-            Ok(Constant::new(self.types.ty_int_one, &mut self.nodes).peephole(&mut self.nodes))
+            Ok(Constant::new(self.types.int_one, &mut self.nodes).peephole(&mut self.nodes))
         } else if self.matchx("false") {
             Ok(*self.nodes.zero)
         } else if self.matchx("null") {
-            Ok(
-                Constant::new(self.types.ty_pointer_null, &mut self.nodes)
-                    .peephole(&mut self.nodes),
-            )
+            Ok(Constant::new(self.types.pointer_null, &mut self.nodes).peephole(&mut self.nodes))
         } else if self.matchx("new") {
             let ty_name = self.require_id()?;
             let ty = self.name_to_type.get(ty_name);

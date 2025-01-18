@@ -423,13 +423,13 @@ fn test_fuzz_8() {
 fn test_meet() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
-    let mut t1 = types.ty_top;
-    let mut t2 = types.ty_int_top;
+    let mut t1 = types.top;
+    let mut t2 = types.int_top;
 
-    assert_eq!(types.ty_int_top.clone(), types.meet(t1, t2));
-    assert_eq!(types.ty_int_top.clone(), types.meet(t2, t1));
-    t1 = types.ty_bot;
-    t2 = types.ty_int_bot;
-    assert_eq!(types.ty_bot.clone(), types.meet(t1, t2));
-    assert_eq!(types.ty_bot.clone(), types.meet(t2, t1));
+    assert_eq!(types.int_top.clone(), types.meet(t1, t2));
+    assert_eq!(types.int_top.clone(), types.meet(t2, t1));
+    t1 = types.bot;
+    t2 = types.int_bot;
+    assert_eq!(types.bot.clone(), types.meet(t1, t2));
+    assert_eq!(types.bot.clone(), types.meet(t2, t1));
 }

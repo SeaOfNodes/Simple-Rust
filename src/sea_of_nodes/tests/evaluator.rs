@@ -250,7 +250,7 @@ impl<'a, 't> Evaluator<'a, 't> {
     pub fn evaluate(&mut self, parameter: i64, mut loops: usize) -> EResult {
         self.values[self.start] = Object::Obj(self.heap.objs.len());
         self.heap.objs.push(Obj {
-            ty: self.sea.types.ty_struct_bot.try_into().unwrap(), // dummy
+            ty: self.sea.types.struct_bot.try_into().unwrap(), // dummy
             fields: {
                 let Type::Tuple { types } = &*self.sea[self.start].args else {
                     unreachable!();

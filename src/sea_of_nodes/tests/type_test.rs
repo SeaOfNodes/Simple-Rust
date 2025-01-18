@@ -8,8 +8,8 @@ fn test_type_ad_hoc() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
 
-    let s1 = types.get_struct("s1", &[("a", types.ty_int_bot), ("b", types.ty_int_bot)]);
-    let s2 = types.get_struct("s2", &[("a", types.ty_int_bot), ("b", types.ty_int_bot)]);
+    let s1 = types.get_struct("s1", &[("a", types.int_bot), ("b", types.int_bot)]);
+    let s2 = types.get_struct("s2", &[("a", types.int_bot), ("b", types.int_bot)]);
     assert_eq!(s1, types.glb(s1));
     assert_ne!(s1, types.dual(s1));
     assert_eq!(s1, types.glb(types.dual(s1)));
@@ -23,14 +23,14 @@ fn test_type_ad_hoc() {
     assert_ne!(m2, m3);
     assert_ne!(m3, m4);
 
-    assert_eq!(types.ty_struct_bot, types.meet(s1, s2));
-    assert_eq!(types.ty_memory_bot, types.meet(m1, m2));
-    assert_eq!(types.ty_memory_bot, types.meet(m2, m3));
-    assert_eq!(types.ty_memory_bot, types.meet(m3, m4));
+    assert_eq!(types.struct_bot, types.meet(s1, s2));
+    assert_eq!(types.memory_bot, types.meet(m1, m2));
+    assert_eq!(types.memory_bot, types.meet(m2, m3));
+    assert_eq!(types.memory_bot, types.meet(m3, m4));
 
-    assert_eq!(types.ty_memory_bot, types.glb(m1));
+    assert_eq!(types.memory_bot, types.glb(m1));
     assert_eq!(m1, types.dual(m1));
-    assert_eq!(types.ty_memory_top, types.dual(types.glb(m1)));
+    assert_eq!(types.memory_top, types.dual(types.glb(m1)));
 
     let ptr1 = types.get_pointer(s1, false);
     assert!(matches!(*ptr1, Type::Pointer(MemPtr {to, nil: false}) if to == s1));
@@ -48,13 +48,13 @@ fn test_type_ad_hoc() {
 
     assert_eq!(ptr1, types.dual(types.dual(ptr1)));
     assert_eq!(types.glb(ptr1), types.glb(types.dual(ptr1)));
-    assert_eq!(types.ty_pointer_bot, types.meet(ptr1, ptr2nil));
-    assert_eq!(types.glb(ptr1), types.meet(ptr1, types.ty_pointer_null));
+    assert_eq!(types.pointer_bot, types.meet(ptr1, ptr2nil));
+    assert_eq!(types.glb(ptr1), types.meet(ptr1, types.pointer_null));
 
-    let top = types.ty_pointer_top;
-    let bot = types.ty_pointer_bot;
-    let ptr = types.ty_pointer_void;
-    let null = types.ty_pointer_null;
+    let top = types.pointer_top;
+    let bot = types.pointer_bot;
+    let ptr = types.pointer_void;
+    let null = types.pointer_null;
 
     assert_eq!(bot, types.meet(ptr, null));
     assert_eq!(ptr, types.meet(ptr1, ptr2));
@@ -151,26 +151,26 @@ impl<'t> Types<'t> {
     }
 
     fn gather(&self) -> Vec<Ty<'t>> {
-        let struct_test = self.get_struct("test", &[("test", self.ty_int_zero)]);
+        let struct_test = self.get_struct("test", &[("test", self.int_zero)]);
         let pointer_test = self.get_pointer(struct_test, false);
         let mut ts = vec![
-            self.ty_bot,
-            self.ty_ctrl,
+            self.bot,
+            self.ctrl,
             //
-            self.ty_int_zero,
-            self.ty_bot,
+            self.int_zero,
+            self.bot,
             //
             self.get_mem(1),
-            self.ty_memory_bot,
+            self.memory_bot,
             //
-            self.ty_pointer_null,
-            self.ty_pointer_bot,
+            self.pointer_null,
+            self.pointer_bot,
             pointer_test,
             //
             struct_test,
-            self.ty_struct_bot,
+            self.struct_bot,
             //
-            self.get_tuple_from_array([self.ty_int_bot, pointer_test]),
+            self.get_tuple_from_array([self.int_bot, pointer_test]),
         ];
         let t2 = ts.iter().map(|t| self.dual(*t)).collect::<Vec<_>>();
         ts.extend(t2);
