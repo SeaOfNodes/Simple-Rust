@@ -58,12 +58,12 @@ impl Add {
         // Goal: a left-spine set of adds, with constants on the rhs (which then fold).
 
         // Move non-adds to RHS
-        if !matches!(sea[lhs], Op::Add) && matches!(sea[rhs], Op::Add) {
+        if !lhs.is_add(sea) && rhs.is_add(sea) {
             return Some(self.swap_12(sea));
         }
 
         // x+(-y) becomes x-y
-        if matches!(&sea[rhs], Op::Minus) {
+        if rhs.is_minus(sea) {
             let y = rhs.inputs(sea)[1].unwrap();
             return Some(*Sub::new(lhs, y, sea));
         }
@@ -73,7 +73,7 @@ impl Add {
         // Do we have  x + (y + z) ?
         // Swap to    (x + y) + z
         // Rotate (add add add) to remove the add on RHS
-        if let Op::Add = &sea[rhs] {
+        if rhs.is_add(sea) {
             let x = lhs;
             let y = rhs.inputs(sea)[1]?;
             let z = rhs.inputs(sea)[2]?;
@@ -81,7 +81,7 @@ impl Add {
         }
 
         // Now we might see (add add non) or (add non non) but never (add non add) nor (add add add)
-        if !matches!(sea[lhs], Op::Add) {
+        if !lhs.is_add(sea) {
             return if sea.spine_cmp(lhs, rhs, *self) {
                 Some(self.swap_12(sea))
             } else {
@@ -397,7 +397,7 @@ impl Node {
             // edge and make the loop a single-entry Region which folds away
             // the Loop).  Folding the entry path confused the loop structure,
             // moving the backedge to the entry point.
-            if !(matches!(&sea[self], Op::Loop) && self.inputs(sea)[1] == self.inputs(sea)[path]) {
+            if !(self.is_loop(sea) && self.inputs(sea)[1] == self.inputs(sea)[path]) {
                 // Cannot use the obvious output iterator here, because a Phi
                 // deleting an input might recursively delete *itself*.  This
                 // shuffles the output array, and we might miss iterating an
@@ -412,9 +412,7 @@ impl Node {
                             break;
                         }
                         let phi = sea.outputs[self][i];
-                        if matches!(&sea[phi], Op::Phi(_))
-                            && self.inputs(sea).len() == phi.inputs(sea).len()
-                        {
+                        if phi.is_phi(sea) && self.inputs(sea).len() == phi.inputs(sea).len() {
                             phi.del_def(path, sea);
                             for &o in &sea.outputs[phi] {
                                 sea.iter_peeps.add(o);
@@ -653,35 +651,31 @@ impl<'t> Nodes<'t> {
     // Ties with in a category sort by node ID.
     // TRUE if swapping hi and lo.
     fn spine_cmp(&mut self, hi: Node, lo: Node, dep: Node) -> bool {
-        if self.ty[lo].is_some_and(|t| t.is_constant()) {
+        if lo.ty(self).is_some_and(|t| t.is_constant()) {
             return false;
         }
-        if self.ty[hi].is_some_and(|t| t.is_constant()) {
+        if hi.ty(self).is_some_and(|t| t.is_constant()) {
             return true;
         }
 
-        if matches!(self[lo], Op::Phi(_))
-            && self.ty[self.inputs[lo][0].unwrap()] == Some(self.types.xctrl)
-        {
+        if lo.is_phi(self) && lo.inputs(self)[0].unwrap().ty(self) == Some(self.types.xctrl) {
             return false;
         }
-        if matches!(self[hi], Op::Phi(_))
-            && self.ty[self.inputs[hi][0].unwrap()] == Some(self.types.xctrl)
-        {
+        if hi.is_phi(self) && hi.inputs(self)[0].unwrap().ty(self) == Some(self.types.xctrl) {
             return false;
         }
 
-        if matches!(self[lo], Op::Phi(_)) && lo.all_cons(dep, self) {
+        if lo.is_phi(self) && lo.all_cons(dep, self) {
             return false;
         }
-        if matches!(self[hi], Op::Phi(_)) && hi.all_cons(dep, self) {
+        if hi.is_phi(self) && hi.all_cons(dep, self) {
             return true;
         }
 
-        if matches!(self[lo], Op::Phi(_)) && !matches!(self[hi], Op::Phi(_)) {
+        if lo.is_phi(self) && !hi.is_phi(self) {
             return true;
         }
-        if matches!(self[hi], Op::Phi(_)) && !matches!(self[lo], Op::Phi(_)) {
+        if hi.is_phi(self) && !lo.is_phi(self) {
             return false;
         }
 
@@ -692,28 +686,28 @@ impl<'t> Nodes<'t> {
     // Do we have ((phi cons)|(x + (phi cons)) + con|(phi cons)) ?
     // Push constant up through the phi: x + (phi con0+con0 con1+con1...)
     fn phi_con(&mut self, op: Node, rotate: bool) -> Option<Node> {
-        let lhs = self.inputs[op][1]?;
-        let rhs = self.inputs[op][2]?;
+        let lhs = op.inputs(self)[1]?;
+        let rhs = op.inputs(self)[2]?;
 
         // LHS is either a Phi of constants, or another op with Phi of constants
         let mut lphi = self.pcon(Some(lhs), op);
-        if rotate && lphi.is_none() && self.inputs[lhs].len() > 2 {
+        if rotate && lphi.is_none() && lhs.inputs(self).len() > 2 {
             // Only valid to rotate constants if both are same associative ops
             if self[lhs].operation() != self[op].operation() {
                 return None;
             }
-            lphi = self.pcon(self.inputs[lhs][2], op); // Will rotate with the Phi push
+            lphi = self.pcon(lhs.inputs(self)[2], op); // Will rotate with the Phi push
         }
 
         let lphi = lphi?;
 
         // RHS is a constant or a Phi of constants
-        if !matches!(&self[rhs], Op::Constant(_)) && self.pcon(Some(rhs), op).is_none() {
+        if !rhs.is_constant(self) && self.pcon(Some(rhs), op).is_none() {
             return None;
         }
 
         // If both are Phis, must be same Region
-        if matches!(&self[rhs], Op::Phi(_)) && self.inputs[lphi][0] != self.inputs[rhs][0] {
+        if rhs.is_phi(self) && lphi.inputs(self)[0] != rhs.inputs(self)[0] {
             return None;
         }
 
@@ -721,8 +715,8 @@ impl<'t> Nodes<'t> {
         // to reduce total op-count.  We don't get in an endless push-up
         // push-down peephole cycle because the constants all fold first.
 
-        let mut ns = vec![None; self.inputs[lphi].len()];
-        ns[0] = self.inputs[lphi][0];
+        let mut ns = vec![None; lphi.inputs(self).len()];
+        ns[0] = lphi.inputs(self)[0];
 
         // Push constant up through the phi: x + (phi con0+con0 con1+con1...)
         for i in 1..ns.len() {
@@ -731,9 +725,9 @@ impl<'t> Nodes<'t> {
                     self[op].clone(),
                     vec![
                         None,
-                        self.inputs[lphi][i],
-                        if matches!(&self[rhs], Op::Phi(_)) {
-                            self.inputs[rhs][i]
+                        lphi.inputs(self)[i],
+                        if rhs.is_phi(self) {
+                            rhs.inputs(self)[i]
                         } else {
                             Some(rhs)
                         },
@@ -758,7 +752,7 @@ impl<'t> Nodes<'t> {
         } else {
             self.create((
                 self[lhs].clone(),
-                vec![None, self.inputs[lhs][1], Some(phi)],
+                vec![None, lhs.inputs(self)[1], Some(phi)],
             ))
         })
     }
