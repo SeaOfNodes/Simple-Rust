@@ -1,5 +1,6 @@
 use crate::datastructures::arena::DroplessArena;
 use crate::sea_of_nodes::parser::Parser;
+use crate::sea_of_nodes::tests::evaluator::evaluate;
 use crate::sea_of_nodes::tests::test_error;
 use crate::sea_of_nodes::tests::test_error_iterate;
 use crate::sea_of_nodes::types::Types;
@@ -45,12 +46,12 @@ fn test_struct() {
 struct Bar {
     int a;
     int b;
-}
+};
 struct Foo {
     int x;
-}
+};
 Foo? foo = null;
-Bar bar = new Bar;
+Bar !bar = new Bar;
 bar.a = 1;
 bar.a = 2;
 return bar.a;
@@ -70,8 +71,8 @@ fn test_example() {
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
-struct Vector2D { int x; int y; }
-Vector2D v = new Vector2D;
+struct Vector2D { int x; int y; };
+Vector2D !v = new Vector2D;
 v.x = 1;
 if (arg)
     v.y = 2;
@@ -85,7 +86,7 @@ return v;
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "return new Vector2D;");
+    assert_eq!(parser.print(stop), "return Vector2D;");
 }
 
 #[test]
@@ -94,7 +95,7 @@ fn test_bug() {
         "\
 struct s0 {
     int v0;
-}
+};
 s0? v1=null;
 int v3=v1.zAicm;
 ",
@@ -106,7 +107,7 @@ int v3=v1.zAicm;
 fn test_bug_2() {
     test_error(
         "\
-struct s0 { int v0; }
+struct s0 { int v0; };
 arg=0+new s0.0;
 ",
         "Expected an identifier, found 'null'",
@@ -119,8 +120,8 @@ fn test_loop() {
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
-struct Bar { int a; }
-Bar bar = new Bar;
+struct Bar { int a; };
+Bar !bar = new Bar;
 while (arg) {
     bar.a = bar.a + 2;
     arg = arg + 1;
@@ -133,15 +134,15 @@ return bar.a;
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "return Phi(Loop11,0,(Phi_a+2));");
+    assert_eq!(parser.print(stop), "return Phi(Loop,0,(Phi_a+2));");
 }
 
 #[test]
 fn test_if() {
     test_error_iterate(
         "\
-struct Bar { int a; }
-Bar bar = new Bar;
+struct Bar { int a; };
+Bar !bar = new Bar;
 if (arg) bar = null;
 bar.a = 1;
 return bar.a;
@@ -154,8 +155,8 @@ return bar.a;
 fn test_if_2() {
     test_error_iterate(
         "\
-struct Bar { int a; }
-Bar? bar = null;
+struct Bar { int a; };
+Bar? !bar = null;
 if (arg) bar = new Bar;
 bar.a = 1;
 return bar.a;
@@ -168,7 +169,7 @@ return bar.a;
 fn test_if_3() {
     test_error(
         "\
-struct Bar { int a; }
+struct Bar { int a; };
 Bar bar = null;
 if (arg) bar = null;
 bar.a = 1;
@@ -184,8 +185,8 @@ fn test_if_or_null() {
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
-struct Bar { int a; }
-Bar? bar = new Bar;
+struct Bar { int a; };
+Bar? !bar = new Bar;
 if (arg) bar = null;
 if( bar ) bar.a = 1;
 return bar;
@@ -196,7 +197,10 @@ return bar;
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "return Phi(Region16,null,new Bar);");
+    assert_eq!(
+        parser.print(stop),
+        "return Phi(Region,(*void)Phi(Region,null,Bar),null);"
+    );
 }
 
 #[test]
@@ -205,8 +209,8 @@ fn test_if_or_null_2() {
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
-struct Bar { int a; }
-Bar? bar = new Bar;
+struct Bar { int a; };
+Bar? !bar = new Bar;
 if (arg) bar = null;
 int rez = 3;
 if( !bar ) rez=4;
@@ -219,15 +223,15 @@ return rez;
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "return Phi(Region33,4,3);");
+    assert_eq!(parser.print(stop), "return Phi(Region,4,3);");
 }
 
 #[test]
 fn test_while_with_null_inside() {
     test_error_iterate(
         "\
-struct s0 {int v0;}
-s0? v0 = new s0;
+struct s0 {int v0;};
+s0? !v0 = new s0;
 int ret = 0;
 while(arg) {
     ret = v0.v0;
@@ -246,7 +250,7 @@ fn test_redeclare_struct() {
         "\
 struct s0 {
     int v0;
-}
+};
 s0? v1=new s0;
 s0? v1;
 v1=new s0;
@@ -264,8 +268,8 @@ fn test_iter() {
 struct Iter {
     int x;
     int len;
-}
-Iter i = new Iter;
+};
+Iter !i = new Iter;
 i.len = arg;
 int sum=0;
 while( i.x < i.len ) {
@@ -282,7 +286,7 @@ return sum;
 
     assert_eq!(
         parser.print(stop),
-        "return Phi(Loop15,0,(Phi(Loop,0,(Phi_x+1))+Phi_sum));"
+        "return Phi(Loop,0,(Phi(Loop,0,(Phi_x+1))+Phi_sum));"
     );
 }
 
@@ -292,10 +296,10 @@ fn test_1() {
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
-struct s0 {int v0;}
-s0 ret = new s0;
+struct s0 {int v0;};
+s0 !ret = new s0;
 while(arg) {
-    s0 v0 = new s0;
+    s0 !v0 = new s0;
     v0.v0 = arg;
     arg = arg-1;
     if (arg==5) ret=v0;
@@ -311,7 +315,7 @@ return ret;
 
     assert_eq!(
         parser.print(stop),
-        "return Phi(Loop11,new s0,Phi(Region31,new s0,Phi_ret));"
+        "return Phi(Loop,s0,Phi(Region,s0,Phi_ret));"
     );
 }
 
@@ -321,9 +325,9 @@ fn test_2() {
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
-struct s0 {int v0;}
-s0 ret = new s0;
-s0 v0 = new s0;
+struct s0 {int v0;};
+s0 !ret = new s0;
+s0 !v0 = new s0;
 while(arg) {
     v0.v0 = arg;
     arg = arg-1;
@@ -340,7 +344,7 @@ return ret;
 
     assert_eq!(
         parser.print(stop),
-        "return Phi(Loop13,new s0,Phi(Region32,new s0,Phi_ret));"
+        "return Phi(Loop,s0,Phi(Region,s0,Phi_ret));"
     );
 }
 
@@ -350,10 +354,10 @@ fn test_3() {
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
-struct s0 {int v0;}
-s0 ret = new s0;
+struct s0 {int v0;};
+s0 !ret = new s0;
 while(arg < 10) {
-    s0 v0 = new s0;
+    s0 !v0 = new s0;
     if (arg == 5) ret=v0;
     arg = arg + 1;
 }
@@ -367,22 +371,30 @@ return ret;
 
     assert_eq!(
         parser.print(stop),
-        "return Phi(Loop11,new s0,Phi(Region30,new s0,Phi_ret));"
+        "return Phi(Loop,s0,Phi(Region,s0,Phi_ret));"
     );
 }
 
 #[test]
 fn test_bug_3() {
-    test_error(
+    let arena = DroplessArena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new(
         "\
-struct s0 {
-    int f0;
-}
-if(0>=0) return new s0;
+struct s0 { int f0; };
 return new s0;
 int v0=null.f0;
 ",
-        "Accessing unknown field 'f0' from 'null'",
+        &types,
+    );
+    let stop = parser.parse().unwrap();
+    parser.iterate(stop);
+    parser.type_check(stop).unwrap();
+
+    assert_eq!(parser.print(stop), "return s0;");
+    assert_eq!(
+        "Obj<s0>{f0=0}",
+        evaluate(&parser.nodes, stop, Some(0), None).to_string()
     );
 }
 
@@ -418,7 +430,7 @@ fn test_bug_5() {
         "\
 struct s0 {
     int f0;
-}
+};
 if(0) return 0;
 else return new s0;
 if(new s0.f0) return 0;
@@ -429,7 +441,7 @@ if(new s0.f0) return 0;
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "return new s0;");
+    assert_eq!(parser.print(stop), "return s0;");
 }
 
 #[test]
@@ -460,7 +472,7 @@ fn test_bug_7() {
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
-struct s0 {  int f0; }
+struct s0 {  int f0; };
 s0 v0 = new s0;
 while(v0.f0) {}
 s0 v1 = v0;
@@ -472,7 +484,7 @@ return v1;
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "return new s0;");
+    assert_eq!(parser.print(stop), "return (const)s0;");
 }
 
 #[test]

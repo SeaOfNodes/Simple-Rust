@@ -57,6 +57,12 @@ impl<'a> Deref for Ty<'a> {
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct TyStruct<'t>(Ty<'t>);
 
+impl<'t> TyStruct<'t> {
+    pub fn as_ty(self) -> Ty<'t> {
+        self.0
+    }
+}
+
 impl<'a> TryFrom<Ty<'a>> for TyStruct<'a> {
     type Error = ();
 

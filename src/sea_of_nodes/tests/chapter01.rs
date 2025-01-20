@@ -61,7 +61,7 @@ fn test_bad_2() {
 fn test_not_bad_3() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new("return --12;", &types);
+    let mut parser = Parser::new("return - -12;", &types);
     let stop = parser.parse().unwrap();
     assert_eq!(parser.print(stop), "return 12;");
 }

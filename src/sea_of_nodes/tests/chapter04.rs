@@ -128,7 +128,7 @@ fn test_comp_neq_2() {
 fn test_bug_1() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new("int a=arg+1; int b=a; b=1; return a+2; ", &types);
+    let mut parser = Parser::new("int a=arg+1; int !b=a; b=1; return a+2; ", &types);
     let stop = parser.parse().unwrap();
     assert_eq!(parser.print(stop), "return (arg+3);");
 }
@@ -137,7 +137,7 @@ fn test_bug_1() {
 fn test_bug_2() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new("int a=arg+1; a=a; return a; ", &types);
+    let mut parser = Parser::new("int !a=arg+1; a=a; return a; ", &types);
     let stop = parser.parse().unwrap();
     assert_eq!(parser.print(stop), "return (arg+1);");
 }
@@ -154,4 +154,13 @@ fn test_bug_4() {
     let mut parser = Parser::new("return -arg;", &types);
     let stop = parser.parse().unwrap();
     assert_eq!(parser.print(stop), "return (-arg);");
+}
+
+#[test]
+fn test_bug_5() {
+    let arena = DroplessArena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new("return arg--2;", &types);
+    let stop = parser.parse().unwrap();
+    assert_eq!(parser.print(stop), "return (arg--2);");
 }

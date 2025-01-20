@@ -1,6 +1,7 @@
 use crate::datastructures::arena::DroplessArena;
 use crate::sea_of_nodes::parser::Parser;
-use crate::sea_of_nodes::tests::evaluator::{evaluate, Object};
+use crate::sea_of_nodes::tests::evaluator::evaluate;
+use crate::sea_of_nodes::tests::evaluator::Object;
 use crate::sea_of_nodes::types::Types;
 
 #[test]
@@ -8,7 +9,7 @@ fn test_fuzzer() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new("\
-while(-----arg) {
+while(---- -arg) {
     while(-arg) {
         while(-----arg*---0) {
                 int N=--false==false<--arg;
@@ -97,7 +98,7 @@ while(-----arg) {
             int UX=arg;
             while(UX<-3*arg) {
                 UX=UX+arg/-1;
-                arg=-3--(-UX--47<arg==--arg==arg)/arg--UX>=-arg;
+                arg=-3--(-UX- -47<arg==--arg==arg)/arg- -UX>=-arg;
                 if(---12) while(-UX) break;
                 break;
             }
@@ -218,9 +219,9 @@ if(arg!=62==arg) {
                 }
             }
             arg=-arg+arg;
-            arg=--47+-arg<1>arg*(-arg==-arg--0>3);
+            arg=--47+-arg<1>arg*(-arg==-arg- -0>3);
             arg=(----arg)!=arg+--59;
-            arg=--4+arg==-(arg)-arg;
+            arg=- -4+arg==-(arg)-arg;
         }
         else {
             while(--true-----true*-25+-18>arg>=-----(-arg)---13) {
@@ -289,7 +290,10 @@ else {
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "Stop[ return 9; return 0; return 0; ]");
+    assert_eq!(
+        parser.print(stop),
+        "Stop[ return 9; return 0; return 0; return 0; return 0; ]"
+    );
 }
 
 #[test]
@@ -327,30 +331,30 @@ return primeCount;
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "Stop[ return 0; return Phi(Loop19,1,Phi(Region81,Phi_primeCount,Phi(Region76,(Phi_primeCount+1),Phi_primeCount))); ]");
+    assert_eq!(parser.print(stop), "Stop[ return 0; return Phi(Loop,1,Phi(Region,Phi_primeCount,Phi(Region,(Phi_primeCount+1),Phi_primeCount))); ]");
     assert_eq!(
         Object::Long(0),
-        evaluate(&parser.nodes, stop, Some(1), None).1
+        evaluate(&parser.nodes, stop, Some(1), None).object
     );
     assert_eq!(
         Object::Long(1),
-        evaluate(&parser.nodes, stop, Some(2), None).1
+        evaluate(&parser.nodes, stop, Some(2), None).object
     );
     assert_eq!(
         Object::Long(2),
-        evaluate(&parser.nodes, stop, Some(3), None).1
+        evaluate(&parser.nodes, stop, Some(3), None).object
     );
     assert_eq!(
         Object::Long(2),
-        evaluate(&parser.nodes, stop, Some(4), None).1
+        evaluate(&parser.nodes, stop, Some(4), None).object
     );
     assert_eq!(
         Object::Long(3),
-        evaluate(&parser.nodes, stop, Some(5), None).1
+        evaluate(&parser.nodes, stop, Some(5), None).object
     );
     assert_eq!(
         Object::Long(4),
-        evaluate(&parser.nodes, stop, Some(10), None).1
+        evaluate(&parser.nodes, stop, Some(10), None).object
     );
 }
 
@@ -360,8 +364,8 @@ fn test_anti_deps_1() {
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
-struct S { int f; }
-S v=new S;
+struct S { int f; };
+S !v=new S;
 v.f = 2;
 int i=new S.f;
 i=v.f;
@@ -374,7 +378,15 @@ return i;
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "return .f;");
+    assert_eq!(parser.print(stop), "return 2;");
+    assert_eq!(
+        Object::Long(2),
+        evaluate(&parser.nodes, stop, Some(0), None).object
+    );
+    assert_eq!(
+        Object::Long(2),
+        evaluate(&parser.nodes, stop, Some(1), None).object
+    );
 }
 
 #[test]
@@ -383,9 +395,10 @@ fn test_anti_deps_2() {
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
-struct S { int f; }
-S v = new S;
-S t = new S;
+struct S { int f; };
+S !v = new S;
+v.f = arg;
+S !t = new S;
 int i = 0;
 if (arg) {
     if (arg+1) v = t;
@@ -401,7 +414,7 @@ return i;
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "return Phi(Region31,.f,0);");
+    assert_eq!(parser.print(stop), "return Phi(Region,.f,0);");
 }
 
 #[test]
@@ -410,8 +423,8 @@ fn test_anti_deps_3() {
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
-struct S { int f; }
-S v0 = new S;
+struct S { int f; };
+S !v0 = new S;
 S? v1;
 if (arg) v1 = new S;
 if (v1) {
@@ -427,7 +440,7 @@ return v0;
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "return new S;");
+    assert_eq!(parser.print(stop), "return S;");
 }
 
 #[test]
@@ -436,8 +449,9 @@ fn test_anti_deps_4() {
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
-struct S { int f; }
-S v = new S;
+struct S { int f; };
+S !v = new S;
+v.f = arg;
 S t = new S;
 int i = v.f;
 if (arg+1) arg= 0;
@@ -450,7 +464,7 @@ return i;
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "return .f;");
+    assert_eq!(parser.print(stop), "return arg;");
 }
 
 #[test]
@@ -459,8 +473,8 @@ fn test_anti_deps_5() {
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
-struct S { int f; }
-S v = new S;
+struct S { int f; };
+S !v = new S;
 while(1) {
     while(arg+1) { arg=arg-1; }
     if (arg) break;
@@ -474,7 +488,7 @@ return v;
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "return new S;");
+    assert_eq!(parser.print(stop), "return S;");
 }
 
 #[test]
@@ -483,8 +497,8 @@ fn test_anti_deps_6() {
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
-struct s { int v; }
-s ptr=new s;
+struct s { int v; };
+s !ptr=new s;
 while( -arg )
   ptr = new s;
 while(1)
@@ -505,8 +519,8 @@ fn test_anti_deps_7() {
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
-struct S { int f; }
-S v = new S;
+struct S { int f; };
+S !v = new S;
 S t = new S;
 int i = v.f;
 while (arg) {
@@ -521,7 +535,7 @@ return i;
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "return .f;");
+    assert_eq!(parser.print(stop), "return 0;");
 }
 
 #[test]
@@ -530,8 +544,8 @@ fn test_anti_deps_8() {
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
-struct S { int f; }
-S v = new S;
+struct S { int f; };
+S !v = new S;
 S t = new S;
 while(arg) {
     arg=arg-1;
@@ -548,10 +562,7 @@ return arg;
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(
-        parser.print(stop),
-        "return Phi(Loop13,arg,Phi(Region35,.f,0));"
-    );
+    assert_eq!(parser.print(stop), "return 0;");
 }
 
 #[test]
@@ -560,8 +571,8 @@ fn test_anti_deps_9() {
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
-struct S { int f; }
-S v = new S;
+struct S { int f; };
+S !v = new S;
 S t = new S;
 if (arg) {
     v.f=2;
@@ -576,7 +587,7 @@ return v;
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "return new S;");
+    assert_eq!(parser.print(stop), "return S;");
 }
 
 #[test]
@@ -585,8 +596,8 @@ fn test_example_2() {
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
-struct S { int f; }
-S v = new S;
+struct S { int f; };
+S !v = new S;
 int i = arg;
 while (arg > 0) {
     int j = i/3;
@@ -604,42 +615,6 @@ return v;
 }
 
 #[test]
-fn test_split() {
-    let arena = DroplessArena::new();
-    let types = Types::new(&arena);
-    let mut parser = Parser::new(
-        "\
-struct S { int f; }
-S s = new S;
-if( arg==0 ) s.f = 1;
-else if (arg == 1) s.f = 1;
-return s.f;
-",
-        &types,
-    );
-    let stop = parser.parse().unwrap();
-    parser.iterate(stop);
-    parser.type_check(stop).unwrap();
-
-    assert_eq!(
-        parser.print(stop),
-        "return Phi(Region35,1,Phi(Region33,1,0));"
-    );
-    assert_eq!(
-        Object::Long(1),
-        evaluate(&parser.nodes, stop, Some(0), None).1
-    );
-    assert_eq!(
-        Object::Long(1),
-        evaluate(&parser.nodes, stop, Some(1), None).1
-    );
-    assert_eq!(
-        Object::Long(0),
-        evaluate(&parser.nodes, stop, Some(2), None).1
-    );
-}
-
-#[test]
 fn test_schedule_use() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
@@ -647,7 +622,7 @@ fn test_schedule_use() {
         "\
 int v0=0;
 while(0>=0) {
-    int v1=0;
+    u1 v1=0;
     v1=v0;
     if(v1*0)
         v0=-v1;
@@ -669,11 +644,11 @@ fn test_loop_carried_dep() {
     let types = Types::new(&arena);
     let mut parser = Parser::new(
         "\
-int v0=0;
+u32 v0=0;
 {
     int v1=0;
     while(v1) {
-        v1=1+(v0!=0);
+        v1=1>>>v0!=0;
         v0=v1/0;
     }
 }

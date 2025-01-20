@@ -1,7 +1,8 @@
 use crate::datastructures::arena::DroplessArena;
 use crate::sea_of_nodes::nodes::{Op, ProjOp};
 use crate::sea_of_nodes::parser::Parser;
-use crate::sea_of_nodes::tests::evaluator::{evaluate, Object};
+use crate::sea_of_nodes::tests::evaluator::evaluate;
+use crate::sea_of_nodes::tests::evaluator::Object;
 use crate::sea_of_nodes::tests::test_error;
 use crate::sea_of_nodes::types::Types;
 
@@ -28,16 +29,16 @@ return arg;
 
     assert_eq!(
         parser.print(stop),
-        "return Phi(Region36,Phi(Region26,Phi(Loop8,arg,(Phi_arg+1)),Add),Add);"
+        "return Phi(Region,Phi(Region,Phi(Loop,arg,(Phi_arg+1)),Add),Add);"
     );
     assert!(matches!(parser.nodes.ret_ctrl(stop), Op::Region { .. }));
     assert_eq!(
         Object::Long(5),
-        evaluate(&parser.nodes, stop, Some(1), None).1
+        evaluate(&parser.nodes, stop, Some(1), None).object
     );
     assert_eq!(
         Object::Long(10),
-        evaluate(&parser.nodes, stop, Some(6), None).1
+        evaluate(&parser.nodes, stop, Some(6), None).object
     );
 }
 
@@ -66,7 +67,7 @@ return a;
 
     assert_eq!(
         parser.print(stop),
-        "return Phi(Loop9,1,Phi(Region41,Phi_a,(Phi_a+1)));"
+        "return Phi(Loop,1,Phi(Region,Phi_a,(Phi_a+1)));"
     );
     assert!(matches!(parser.nodes.ret_ctrl(stop), Op::CProj(_)));
 }
@@ -94,7 +95,7 @@ return arg;
 
     assert_eq!(
         parser.print(stop),
-        "return Phi(Region34,Phi(Loop8,arg,(Phi_arg+1)),Add);"
+        "return Phi(Region,Phi(Loop,arg,(Phi_arg+1)),Add);"
     );
     assert!(matches!(parser.nodes.ret_ctrl(stop), Op::Region { .. }));
 }
@@ -120,7 +121,7 @@ return arg;
 
     assert_eq!(
         parser.print(stop),
-        "return Phi(Region26,Phi(Loop8,arg,(Phi_arg+1)),Add);"
+        "return Phi(Region,Phi(Loop,arg,(Phi_arg+1)),Add);"
     );
     assert!(matches!(parser.nodes.ret_ctrl(stop), Op::Region { .. }));
 }
@@ -146,7 +147,7 @@ return arg;
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "return Phi(Loop8,arg,(Phi_arg+1));");
+    assert_eq!(parser.print(stop), "return Phi(Loop,arg,(Phi_arg+1));");
     assert!(matches!(parser.nodes.ret_ctrl(stop), Op::CProj(_)));
 }
 
@@ -169,7 +170,7 @@ return arg;
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "return Phi(Loop8,arg,(Phi_arg+1));");
+    assert_eq!(parser.print(stop), "return Phi(Loop,arg,(Phi_arg+1));");
     assert!(matches!(parser.nodes.ret_ctrl(stop), Op::CProj(_)));
 }
 
@@ -200,7 +201,7 @@ fn test_regress_2() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
-        "if(1) return 0;  else while(arg>--arg) arg=arg+1; return 0;",
+        "if(1) return 0;  else while(arg>- -arg) arg=arg+1; return 0;",
         &types,
     );
     let stop = parser.parse().unwrap();
@@ -268,7 +269,7 @@ return a;
 
     assert_eq!(
         parser.print(stop),
-        "return Phi(Region29,Phi(Loop9,1,(Phi_a+1)),Add);"
+        "return Phi(Region,Phi(Loop,1,(Phi_a+1)),Add);"
     );
     assert!(matches!(parser.nodes.ret_ctrl(stop), Op::Region { .. }));
 }
@@ -293,9 +294,6 @@ return a;
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "return (Phi(Loop9,1,Add)+1);");
-    assert!(matches!(
-        parser.nodes.ret_ctrl(stop),
-        Op::CProj(ProjOp { index: 1, .. })
-    ));
+    assert_eq!(parser.print(stop), "return (Phi(Loop,1,Add)+1);");
+    assert!(matches!(parser.nodes.ret_ctrl(stop), Op::CProj(ProjOp { index: 5,.. })));
 }

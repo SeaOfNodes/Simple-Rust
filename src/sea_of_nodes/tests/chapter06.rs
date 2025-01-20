@@ -31,7 +31,7 @@ fn test_peephole_rotate() {
 int a = 1;
 if (arg)
     a = 2;
-return (arg < a) < 3;
+return (arg < a) < 3; // Because (arg < a) is a bool/uint1/[0-1], its always less than 3
 ",
         &types,
     );
@@ -39,7 +39,7 @@ return (arg < a) < 3;
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "return ((arg<Phi(Region14,2,1))<3);");
+    assert_eq!(parser.print(stop), "return 1;");
 }
 
 #[test]
@@ -89,7 +89,7 @@ return b;",
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "return Phi(Region39,42,5);");
+    assert_eq!(parser.print(stop), "return Phi(Region,42,5);");
 }
 
 #[test]
@@ -116,7 +116,7 @@ return b;",
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "return Phi(Region32,2,5);");
+    assert_eq!(parser.print(stop), "return Phi(Region,2,5);");
 }
 
 #[test]
@@ -197,10 +197,7 @@ return a;
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(
-        parser.print(stop),
-        "return Phi(Region43,3,Phi(Region41,4,5));"
-    );
+    assert_eq!(parser.print(stop), "return Phi(Region,3,Phi(Region,4,5));");
 }
 
 #[test]
@@ -280,7 +277,7 @@ return a+b;
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "return Phi(Region26,4,1);");
+    assert_eq!(parser.print(stop), "return Phi(Region,4,1);");
 }
 
 #[test]
@@ -358,7 +355,7 @@ return a+b+c;
 
     assert_eq!(
         parser.print(stop),
-        "return (Phi(Region38,Phi(Region25,2,3),0)+Phi(Region,3,1));"
+        "return (Phi(Region,Phi(Region,2,3),0)+Phi(Region,3,1));"
     );
 }
 

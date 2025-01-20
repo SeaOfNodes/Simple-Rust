@@ -14,17 +14,16 @@ if (arg == 1)
     a = arg+2;
 else {
     a = arg-3;
-
 }
-
-return a;",
+return a;
+",
         &types,
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "return Phi(Region20,(arg+2),(arg-3));");
+    assert_eq!(parser.print(stop), "return Phi(Region,(arg+2),(arg-3));");
 }
 
 #[test]
@@ -47,7 +46,7 @@ return c;",
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "return Phi(Region18,4,3);");
+    assert_eq!(parser.print(stop), "return Phi(Region,4,3);");
 }
 
 #[test]
@@ -87,7 +86,7 @@ return a+b;",
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "return ((arg*2)+Phi(Region23,2,3));");
+    assert_eq!(parser.print(stop), "return ((arg*2)+Phi(Region,2,3));");
 }
 
 #[test]
@@ -111,7 +110,7 @@ return a+b;",
 
     assert_eq!(
         parser.print(stop),
-        "return ((Phi(Region34,(arg*2),arg)+arg)+Phi(Region,4,5));"
+        "return ((Phi(Region,(arg*2),arg)+arg)+Phi(Region,4,5));"
     );
 }
 
@@ -142,7 +141,7 @@ return a;
 
     assert_eq!(
         parser.print(stop),
-        "return Phi(Region38,Phi(Region24,2,3),Phi(Region36,4,5));"
+        "return Phi(Region,Phi(Region,2,3),Phi(Region,4,5));"
     );
 }
 
@@ -166,7 +165,7 @@ return arg+a+b;
     let stop = parser.parse().unwrap();
     assert_eq!(
         parser.print(stop),
-        "return ((arg+Phi(Region15,1,0))+Phi(Region30,2,0));"
+        "return ((arg+Phi(Region,1,0))+Phi(Region,2,0));"
     );
 }
 
@@ -188,7 +187,7 @@ return a;",
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "return (arg==Phi(Region18,3,2));");
+    assert_eq!(parser.print(stop), "return (arg==Phi(Region,3,2));");
 }
 
 #[test]

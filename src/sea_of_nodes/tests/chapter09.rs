@@ -1,6 +1,7 @@
 use crate::datastructures::arena::DroplessArena;
 use crate::sea_of_nodes::parser::Parser;
-use crate::sea_of_nodes::tests::evaluator::{evaluate, Object};
+use crate::sea_of_nodes::tests::evaluator::evaluate;
+use crate::sea_of_nodes::tests::evaluator::Object;
 use crate::sea_of_nodes::types::Types;
 
 #[test]
@@ -49,11 +50,11 @@ return x;
     );
     assert_eq!(
         Object::Long(2),
-        evaluate(&parser.nodes, stop, Some(1), None).1
+        evaluate(&parser.nodes, stop, Some(1), None).object
     );
     assert_eq!(
         Object::Long(23),
-        evaluate(&parser.nodes, stop, Some(11), None).1
+        evaluate(&parser.nodes, stop, Some(11), None).object
     );
 }
 
@@ -71,7 +72,7 @@ return arg*arg-arg*arg;
     assert_eq!(parser.print(stop), "return 0;");
     assert_eq!(
         Object::Long(0),
-        evaluate(&parser.nodes, stop, Some(1), None).1
+        evaluate(&parser.nodes, stop, Some(1), None).object
     );
 }
 
@@ -93,10 +94,10 @@ return arg;
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "return Phi(Loop9,arg,(Phi_arg+2));");
+    assert_eq!(parser.print(stop), "return Phi(Loop,arg,(Phi_arg+2));");
     assert_eq!(
         Object::Long(11),
-        evaluate(&parser.nodes, stop, Some(1), None).1
+        evaluate(&parser.nodes, stop, Some(1), None).object
     );
 }
 
@@ -120,10 +121,10 @@ return arg;
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "return Phi(Loop10,arg,(Phi_arg+4));");
+    assert_eq!(parser.print(stop), "return Phi(Loop,arg,(Phi_arg+4));");
     assert_eq!(
         Object::Long(13),
-        evaluate(&parser.nodes, stop, Some(1), None).1
+        evaluate(&parser.nodes, stop, Some(1), None).object
     );
 }
 
@@ -159,7 +160,7 @@ return arg;
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "return Phi(Loop16,arg,(Phi_arg+1));");
+    assert_eq!(parser.print(stop), "return 0;");
 }
 
 #[test]
@@ -265,7 +266,7 @@ return a;
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "return Phi(Loop11,0,(-(Phi_a+3)));");
+    assert_eq!(parser.print(stop), "return Phi(Loop,0,(-(Phi_a+3)));");
 }
 
 #[test]
@@ -416,7 +417,7 @@ fn test_fuzz_8() {
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "return Phi(Loop8,arg,(Phi_arg-1));");
+    assert_eq!(parser.print(stop), "return 0;");
 }
 
 #[test]

@@ -18,7 +18,7 @@ return arg;
     );
     parser.nodes.disable_peephole = true;
     let stop = parser.parse().unwrap();
-    assert_eq!(parser.print(stop), "return Phi(Loop8,arg,(Phi_arg+1));");
+    assert_eq!(parser.print(stop), "return Phi(Loop,arg,(Phi_arg+1));");
     assert!(matches!(parser.nodes.ret_ctrl(stop), Op::CProj(_)));
 }
 
@@ -44,7 +44,7 @@ return a;
 
     assert_eq!(
         parser.print(stop),
-        "return Phi(Region26,1,Phi(Loop15,1,(Phi_a+1)));"
+        "return Phi(Region,1,Phi(Loop,1,(Phi_a+1)));"
     );
 }
 
@@ -74,7 +74,7 @@ return sum;
 
     assert_eq!(
         parser.print(stop),
-        "return Phi(Loop10,0,Phi(Loop22,Phi_sum,(Phi_sum+Phi(Loop,0,(Phi_j+1)))));"
+        "return Phi(Loop,0,Phi(Loop,Phi_sum,(Phi_sum+Phi(Loop,0,(Phi_j+1)))));"
     );
 }
 
@@ -98,7 +98,7 @@ return b;
     let stop = parser.parse().unwrap();
     assert_eq!(
         parser.print(stop),
-        "return Phi(Loop10,2,Phi(Region29,Phi_b,4));"
+        "return Phi(Loop,2,Phi(Region,Phi_b,4));"
     );
     assert!(matches!(parser.nodes.ret_ctrl(stop), Op::CProj(_)));
 }
@@ -127,7 +127,7 @@ return b;
 
     assert_eq!(
         parser.print(stop),
-        "return Phi(Loop10,2,(Phi(Region29,Phi_b,4)+1));"
+        "return Phi(Loop,2,(Phi(Region,Phi_b,4)+1));"
     );
     assert!(matches!(parser.nodes.ret_ctrl(stop), Op::CProj(_)));
 }
@@ -149,7 +149,7 @@ return a;
     );
     parser.nodes.disable_peephole = true;
     let stop = parser.parse().unwrap();
-    assert_eq!(parser.print(stop), "return Phi(Loop9,1,((Phi_a+1)+2));");
+    assert_eq!(parser.print(stop), "return Phi(Loop,1,((Phi_a+1)+2));");
     assert!(matches!(parser.nodes.ret_ctrl(stop), Op::CProj(_)));
 }
 
@@ -172,7 +172,7 @@ return a;
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "return Phi(Loop9,1,(Phi_a+3));");
+    assert_eq!(parser.print(stop), "return Phi(Loop,1,(Phi_a+3));");
     assert!(matches!(parser.nodes.ret_ctrl(stop), Op::CProj(_)));
 }
 
@@ -190,7 +190,7 @@ return a;
     );
     parser.nodes.disable_peephole = true;
     let stop = parser.parse().unwrap();
-    assert_eq!(parser.print(stop), "return Phi(Loop9,1,2);");
+    assert_eq!(parser.print(stop), "return Phi(Loop,1,2);");
     assert!(matches!(parser.nodes.ret_ctrl(stop), Op::CProj(_)));
 }
 
@@ -210,7 +210,7 @@ return a;
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "return Phi(Loop9,1,2);");
+    assert_eq!(parser.print(stop), "return Phi(Loop,1,2);");
     assert!(matches!(parser.nodes.ret_ctrl(stop), Op::CProj(_)));
 }
 
@@ -231,7 +231,7 @@ return a;
     );
     parser.nodes.disable_peephole = true;
     let stop = parser.parse().unwrap();
-    assert_eq!(parser.print(stop), "return Phi(Loop9,1,((Phi_a+1)+2));");
+    assert_eq!(parser.print(stop), "return Phi(Loop,1,((Phi_a+1)+2));");
     assert!(matches!(parser.nodes.ret_ctrl(stop), Op::CProj(_)));
 }
 
@@ -254,7 +254,7 @@ return a;
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "return Phi(Loop9,1,(Phi_a+3));");
+    assert_eq!(parser.print(stop), "return Phi(Loop,1,(Phi_a+3));");
     assert!(matches!(parser.nodes.ret_ctrl(stop), Op::CProj(_)));
 }
 
@@ -276,7 +276,7 @@ return a;
     );
     parser.nodes.disable_peephole = true;
     let stop = parser.parse().unwrap();
-    assert_eq!(parser.print(stop), "return Phi(Loop10,1,((Phi_a+1)+2));");
+    assert_eq!(parser.print(stop), "return Phi(Loop,1,((Phi_a+1)+2));");
     assert!(matches!(parser.nodes.ret_ctrl(stop), Op::CProj(_)));
 }
 
@@ -300,6 +300,6 @@ return a;
     parser.iterate(stop);
     parser.type_check(stop).unwrap();
 
-    assert_eq!(parser.print(stop), "return Phi(Loop10,1,(Phi_a+3));");
+    assert_eq!(parser.print(stop), "return Phi(Loop,1,(Phi_a+3));");
     assert!(matches!(parser.nodes.ret_ctrl(stop), Op::CProj(_)));
 }

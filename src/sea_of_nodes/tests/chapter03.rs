@@ -38,7 +38,7 @@ fn test_var_scope_no_peephole() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
     let mut parser = Parser::new(
-        "int a=1; int b=2; int c=0; { int b=3; c=a+b;  } return c; ",
+        "int a=1; int b=2; int !c=0; { int b=3; c=a+b;  } return c; ",
         &types,
     );
     parser.nodes.disable_peephole = true;
@@ -64,9 +64,17 @@ fn test_self_assign() {
 }
 
 #[test]
+fn test_redeclare_var() {
+    test_error(
+        "int a=1; int b=2; int c=0; int b=3; c=a+b;",
+        "Redefining name 'b'",
+    );
+}
+
+#[test]
 fn test_bad_1() {
     test_error(
-        "int a=1; int b=2; int c=0; { int b=3; c=a+b;",
+        "int a=1; int b=2; int !c=0; { int b=3; c=a+b;",
         "Syntax error, expected }: ",
     );
 }

@@ -7,11 +7,12 @@ use crate::sea_of_nodes::tests::scheduler::{Block, BlockId};
 use crate::sea_of_nodes::types::{Int, TyStruct, Type};
 use std::fmt::{Display, Formatter};
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Object {
     Long(i64),
     Null,
     Memory,
+    Double(f64),
     Obj(usize),
 }
 
@@ -26,6 +27,18 @@ pub struct Heap<'t> {
     pub objs: Vec<Obj<'t>>,
 }
 
+#[derive(Debug)]
+pub struct ResultObject<'t> {
+    pub heap: Heap<'t>,
+    pub object: Object,
+}
+
+impl<'t> Display for ResultObject<'t> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        PrintableObject { object: self.object, heap: &self.heap }.fmt(f)
+    }
+}
+
 pub struct PrintableObject<'o, 't> {
     pub object: Object,
     pub heap: &'o Heap<'t>,
@@ -35,6 +48,7 @@ impl<'a, 't> Display for PrintableObject<'a, 't> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self.object {
             Object::Long(l) => l.fmt(f),
+            Object::Double(d) => d.fmt(f),
             Object::Null => "null".fmt(f),
             Object::Memory => "memory".fmt(f),
             Object::Obj(obj) => {
@@ -63,7 +77,7 @@ fn get_field_index(s: TyStruct, name: &str) -> usize {
         .unwrap_or_else(|| unreachable!("Field {name} not found in struct {}", s.name()))
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum EResult {
     Timeout,
     Fallthrough,
@@ -162,6 +176,7 @@ impl<'a, 't> Evaluator<'a, 't> {
     fn is_true(&self, obj: Object) -> bool {
         match obj {
             Object::Long(n) => n != 0,
+            Object::Double(n) => n.abs() != 0.0,
             Object::Null => false,
             Object::Obj(_) => true,
             Object::Memory => unreachable!(),
@@ -323,14 +338,14 @@ pub fn evaluate<'t>(
     graph: impl Into<Node>,
     parameter: Option<i64>,
     loops: Option<usize>,
-) -> (Heap<'t>, Object) {
+) -> ResultObject<'t> {
     let parameter = parameter.unwrap_or(0);
     let loops = loops.unwrap_or(1000);
 
     let (heap, res) = evaluate_with_result(nodes, graph.into(), parameter, loops);
 
     match res {
-        EResult::Value(v) => (heap, v),
+        EResult::Value(object) => ResultObject { heap, object },
         EResult::Fallthrough => panic!("fallthrough"),
         EResult::Timeout => panic!("timeout"),
     }
