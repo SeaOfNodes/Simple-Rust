@@ -163,7 +163,7 @@ impl Node {
     fn is_pinned(self, sea: &Nodes) -> bool {
         match self.downcast(&sea.ops) {
             TypedNode::Constant(_) => self == *sea.zero,
-            TypedNode::New(_) | TypedNode::Phi(_) | TypedNode::Proj(_) => true,
+            TypedNode::Cast(_) | TypedNode::Phi(_) | TypedNode::Proj(_) => true,
             _ => self.is_cfg(sea),
         }
     }
