@@ -222,29 +222,45 @@ macro_rules! define_ids {
 }
 
 define_ids!(<'t>
-    Add                to_add      is_add;
-    Bool(BoolOp)       to_bool     is_bool;
-    CProj(ProjOp<'t>)  to_cproj    is_cproj;
-    Cast(Ty<'t>)       to_cast     is_cast;
-    Constant(Ty<'t>)   to_constant is_constant;
-    Div                to_div      is_div;
-    If(IfOp)           to_if       is_if;
-    Load(LoadOp<'t>)   to_load     is_load;
-    Loop               to_loop     is_loop;
-    Minus              to_minus    is_minus;
-    Mul                to_mul      is_mul;
-    New(Ty<'t>)        to_new      is_new;
-    Not                to_not      is_not;
-    Phi(PhiOp<'t>)     to_phi      is_phi;
-    Proj(ProjOp<'t>)   to_proj     is_proj;
-    Region             to_region   is_region;
-    Return             to_return   is_return;
-    Scope(ScopeOp<'t>) to_scope    is_scope;
-    Start(StartOp<'t>) to_start    is_start;
-    Stop               to_stop     is_stop;
-    Store(StoreOp<'t>) to_store    is_store;
-    Sub                to_sub      is_sub;
-    XCtrl              to_xctrl    is_xctrl;
+    Add                to_add       is_add;
+    AddF               to_addf      is_addf;
+    And                to_and       is_and;
+    Bool(BoolOp)       to_bool      is_bool;
+    CProj(ProjOp<'t>)  to_cproj     is_cproj;
+    Cast(Ty<'t>)       to_cast      is_cast;
+    Constant(Ty<'t>)   to_constant  is_constant;
+    Div                to_div       is_div;
+    DivF               to_divf      is_divf;
+    If(IfOp)           to_if        is_if;
+    Load(LoadOp<'t>)   to_load      is_load;
+    Loop               to_loop      is_loop;
+    Minus              to_minus     is_minus;
+    MinusF             to_minusf    is_minusf;
+    Mul                to_mul       is_mul;
+    MulF               to_mulf      is_mulf;
+    New(Ty<'t>)        to_new       is_new;
+    Not                to_not       is_not;
+    Or                 to_or        is_or;
+    Phi(PhiOp<'t>)     to_phi       is_phi;
+    Proj(ProjOp<'t>)   to_proj      is_proj;
+    ReadOnly           to_ronly     is_ronly;
+    Region             to_region    is_region;
+    Return             to_return    is_return;
+    RoundF32           to_roundf32  is_roundf32;
+    Sar                to_sar       is_sar;
+    Scope(ScopeOp<'t>) to_scope     is_scope;
+    ScopeMin           to_scope_min is_scope_min;
+    Shl                to_shl       is_shl;
+    Shr                to_shr       is_shr;
+    Start(StartOp<'t>) to_start     is_start;
+    Stop               to_stop      is_stop;
+    Store(StoreOp<'t>) to_store     is_store;
+    Struct             to_struct    is_struct;
+    Sub                to_sub       is_sub;
+    SubF               to_subf      is_subf;
+    ToFloat            to_tofloat   is_tofloat;
+    XCtrl              to_xctrl     is_xctrl;
+    Xor                to_xor       is_xor;
 );
 
 impl<'t> Op<'t> {
