@@ -4,6 +4,7 @@ use crate::sea_of_nodes::nodes::{Nodes, Op};
 use crate::sea_of_nodes::parser::Parser;
 use crate::sea_of_nodes::types::Types;
 
+mod brainfuck;
 mod chapter01;
 mod chapter02;
 mod chapter03;
