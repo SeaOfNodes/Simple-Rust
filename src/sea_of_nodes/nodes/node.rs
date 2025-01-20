@@ -222,29 +222,29 @@ macro_rules! define_ids {
 }
 
 define_ids!(<'t>
-    Constant(Ty<'t>)   to_constant is_constant;
-    XCtrl              to_xctrl    is_xctrl;
-    Return             to_return   is_return;
-    Start(StartOp<'t>) to_start    is_start;
     Add                to_add      is_add;
-    Sub                to_sub      is_sub;
-    Mul                to_mul      is_mul;
-    Div                to_div      is_div;
-    Minus              to_minus    is_minus;
-    Scope(ScopeOp<'t>) to_scope    is_scope;
     Bool(BoolOp)       to_bool     is_bool;
-    Not                to_not      is_not;
-    Proj(ProjOp<'t>)   to_proj     is_proj;
     CProj(ProjOp<'t>)  to_cproj    is_cproj;
-    If(IfOp)           to_if       is_if;
-    Phi(PhiOp<'t>)     to_phi      is_phi;
-    Region             to_region   is_region;
-    Loop               to_loop     is_loop;
-    Stop               to_stop     is_stop;
     Cast(Ty<'t>)       to_cast     is_cast;
+    Constant(Ty<'t>)   to_constant is_constant;
+    Div                to_div      is_div;
+    If(IfOp)           to_if       is_if;
     Load(LoadOp<'t>)   to_load     is_load;
-    Store(StoreOp<'t>) to_store    is_store;
+    Loop               to_loop     is_loop;
+    Minus              to_minus    is_minus;
+    Mul                to_mul      is_mul;
     New(Ty<'t>)        to_new      is_new;
+    Not                to_not      is_not;
+    Phi(PhiOp<'t>)     to_phi      is_phi;
+    Proj(ProjOp<'t>)   to_proj     is_proj;
+    Region             to_region   is_region;
+    Return             to_return   is_return;
+    Scope(ScopeOp<'t>) to_scope    is_scope;
+    Start(StartOp<'t>) to_start    is_start;
+    Stop               to_stop     is_stop;
+    Store(StoreOp<'t>) to_store    is_store;
+    Sub                to_sub      is_sub;
+    XCtrl              to_xctrl    is_xctrl;
 );
 
 impl<'t> Op<'t> {
