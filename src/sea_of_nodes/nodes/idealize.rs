@@ -33,6 +33,7 @@ impl Node {
             | TypedNode::Scope(_)
             | TypedNode::New(_)
             | TypedNode::Not(_) => None,
+            n => todo!("{n:?}"),
         }
     }
 }

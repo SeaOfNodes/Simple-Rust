@@ -267,63 +267,91 @@ impl<'t> Op<'t> {
     /// Easy reading label for debugger
     pub fn label(&self) -> Cow<str> {
         Borrowed(match self {
-            Op::Constant(ty) => return Owned(format!("#{ty}")),
-            Op::XCtrl => "Xctrl",
-            Op::Return => "Return",
-            Op::Start { .. } => "Start",
             Op::Add => "Add",
-            Op::Sub => "Sub",
-            Op::Mul => "Mul",
-            Op::Div => "Div",
-            Op::Minus => "Minus",
-            Op::Scope(_) => "Scope",
+            Op::AddF => "AddF",
+            Op::And => "And",
             Op::Bool(op) => match op {
                 BoolOp::EQ => "EQ",
-                BoolOp::LT => "LT",
                 BoolOp::LE => "LE",
+                BoolOp::LT => "LT",
             },
-            Op::Not => "Not",
-            Op::Proj(p) => p.label,
             Op::CProj(p) => p.label,
+            Op::Cast(t) => return Owned(format!("({})", t.str())),
+            Op::Constant(ty) => return Owned(format!("#{ty}")),
+            Op::Div => "Div",
+            Op::DivF => "DivF",
             Op::If(IfOp::Cond) => "If",
             Op::If(IfOp::Never) => "Never",
-            Op::Phi(p) => return Owned(format!("Phi_{}", p.label)),
-            Op::Region { .. } => "Region",
-            Op::Loop => "Loop",
-            Op::Stop => "Stop",
-            Op::Cast(t) => return Owned(format!("({})", t.str())),
-            Op::New(_) => "new",
             Op::Load(_) => "Load",
+            Op::Loop => "Loop",
+            Op::Minus => "Minus",
+            Op::MinusF => "MinusF",
+            Op::Mul => "Mul",
+            Op::MulF => "MulF",
+            Op::New(_) => "new",
+            Op::Not => "Not",
+            Op::Or => "Or",
+            Op::Phi(p) => return Owned(format!("Phi_{}", p.label)),
+            Op::Proj(p) => p.label,
+            Op::ReadOnly => "ReadOnly",
+            Op::Region { .. } => "Region",
+            Op::Return => "Return",
+            Op::RoundF32 => "RoundF32",
+            Op::Sar => "Sar",
+            Op::Scope(_) => "Scope",
+            Op::ScopeMin => "MEM",
+            Op::Shl => "Shl",
+            Op::Shr => "Shr",
+            Op::Start { .. } => "Start",
+            Op::Stop => "Stop",
             Op::Store(_) => "Store",
+            Op::Struct => todo!(),
+            Op::Sub => "Sub",
+            Op::SubF => "SubF",
+            Op::ToFloat => "ToFloat",
+            Op::XCtrl => "Xctrl",
+            Op::Xor => "Xor",
         })
     }
 
     // Graphical label, e.g. "+" or "Region" or "=="
     pub fn glabel(&self) -> Cow<str> {
         match self {
-            Op::Constant(_) => self.label(),
-            Op::XCtrl => self.label(),
-            Op::Return => self.label(),
-            Op::Start { .. } => self.label(),
-            Op::Add => Borrowed("+"),
-            Op::Sub => Borrowed("-"),
-            Op::Mul => Borrowed("*"),
+            Op::Add | Op::AddF => Borrowed("+"),
+            Op::Sub | Op::SubF => Borrowed("-"),
+            Op::Mul | Op::MulF => Borrowed("*"),
             Op::Div => Borrowed("//"),
-            Op::Minus => Borrowed("-"),
-            Op::Scope(_) => self.label(),
+            Op::DivF => Borrowed("/"),
+            Op::Or => Borrowed("|"),
+            Op::And => Borrowed("&"),
+            Op::Xor => Borrowed("^"),
+            Op::Minus | Op::MinusF => Borrowed("-"),
             Op::Bool(op) => Borrowed(op.str()),
             Op::Not => Borrowed("!"),
-            Op::Proj(_) => self.label(),
-            Op::CProj(_) => self.label(),
-            Op::If(_) => self.label(),
             Op::Phi(p) => Owned(format!("&phi;_{}", p.label)),
-            Op::Region { .. } => self.label(),
-            Op::Loop => self.label(),
-            Op::Stop => self.label(),
             Op::Cast(t) => Owned(format!("({})", t.str())),
             Op::New(_) => Borrowed("new"),
             Op::Load(_) => Borrowed("Load"),
             Op::Store(_) => Borrowed("Store"),
+            Op::RoundF32 => Borrowed("(f32)"),
+            Op::ToFloat => Borrowed("(flt)"),
+            Op::Sar => Borrowed(">>"),
+            Op::Shl => Borrowed("<<"),
+            Op::Shr => Borrowed(">>>"),
+            Op::CProj(_)
+            | Op::Constant(_)
+            | Op::If(_)
+            | Op::Loop
+            | Op::Proj(_)
+            | Op::ReadOnly
+            | Op::Region { .. }
+            | Op::Return
+            | Op::Scope(_)
+            | Op::ScopeMin
+            | Op::Start { .. }
+            | Op::Stop
+            | Op::Struct
+            | Op::XCtrl => self.label(),
         }
     }
 
@@ -360,6 +388,22 @@ impl<'t> Op<'t> {
             Op::New(_) => 23,
             Op::Load(_) => 24,
             Op::Store(_) => 25,
+            Op::AddF => 26,
+            Op::SubF => 27,
+            Op::MulF => 28,
+            Op::DivF => 29,
+            Op::Or => 30,
+            Op::And => 31,
+            Op::Xor => 32,
+            Op::MinusF => 33,
+            Op::ReadOnly => 34,
+            Op::ScopeMin => 35,
+            Op::RoundF32 => 36,
+            Op::Sar => 37,
+            Op::Shl => 38,
+            Op::Shr => 39,
+            Op::Struct => 40,
+            Op::ToFloat => 41,
         }
     }
 }

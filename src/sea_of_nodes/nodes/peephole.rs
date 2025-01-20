@@ -295,6 +295,7 @@ impl<'t> Node {
             Op::Load(l) => l.declared_type,
             Op::Store(s) => types.get_mem(s.alias),
             Op::New(t) => *t,
+            op => todo!("{op:?}"),
         }
     }
 

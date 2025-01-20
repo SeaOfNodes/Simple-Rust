@@ -171,28 +171,10 @@ fn print_line_llvm(nodes: &Nodes, n: Node, sb: &mut String) -> fmt::Result {
 
 impl Node {
     pub fn is_multi_head(self, sea: &Nodes) -> bool {
-        match &sea[self] {
-            Op::If(_) | Op::Region { .. } | Op::Loop | Op::Start { .. } => true,
-            Op::Constant(_)
-            | Op::XCtrl
-            | Op::Return
-            | Op::Add
-            | Op::Sub
-            | Op::Mul
-            | Op::Div
-            | Op::Minus
-            | Op::Scope(_)
-            | Op::Bool(_)
-            | Op::Not
-            | Op::Proj(_)
-            | Op::CProj(_)
-            | Op::Phi(_)
-            | Op::Cast(_)
-            | Op::New(_)
-            | Op::Load(_)
-            | Op::Store(_)
-            | Op::Stop => false,
-        }
+        matches!(
+            &sea[self],
+            Op::If(_) | Op::Region { .. } | Op::Loop | Op::Start { .. }
+        )
     }
 
     pub fn is_multi_tail(self, sea: &Nodes) -> bool {
@@ -202,24 +184,7 @@ impl Node {
                 let ctrl = self.inputs(sea)[0].unwrap();
                 ctrl.is_multi_head(sea)
             }
-            Op::Return
-            | Op::Start { .. }
-            | Op::Add
-            | Op::Sub
-            | Op::Mul
-            | Op::Div
-            | Op::Minus
-            | Op::Scope(_)
-            | Op::Bool(_)
-            | Op::Not
-            | Op::If(_)
-            | Op::Region { .. }
-            | Op::Loop
-            | Op::Cast(_)
-            | Op::New(_)
-            | Op::Load(_)
-            | Op::Store(_)
-            | Op::Stop => false,
+            _ => false,
         }
     }
 }

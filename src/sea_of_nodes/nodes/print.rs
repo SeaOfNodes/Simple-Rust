@@ -75,16 +75,25 @@ impl Display for PrintNodes2<'_, '_, '_> {
 
         match &sea[node] {
             _ if node.is_dead(sea) => write!(f, "{}:DEAD", node.unique_name(sea)),
-            Op::Add => binary("+"),
-            Op::Sub => binary("-"),
-            Op::Mul => binary("*"),
-            Op::Div => binary("/"),
+            Op::Add | Op::AddF => binary("+"),
+            Op::Sub | Op::SubF => binary("-"),
+            Op::Mul | Op::MulF => binary("*"),
+            Op::Div | Op::DivF => binary("/"),
+            Op::And => binary("&"),
+            Op::Or => binary("|"),
+            Op::Xor => binary("^"),
+            Op::Sar => binary(">>"),
+            Op::Shl => binary("<<"),
+            Op::Shr => binary(">>>"),
             Op::Bool(op) => binary(op.str()),
             Op::Return => write!(f, "return {};", input(1)),
             Op::Constant(ty) => write!(f, "{}", ty),
             Op::XCtrl => write!(f, "Xctrl"),
             n @ Op::Start { .. } => write!(f, "{}", n.label()),
-            Op::Minus => write!(f, "(-{})", input(1)),
+            Op::Minus | Op::MinusF => write!(f, "(-{})", input(1)),
+            Op::RoundF32 => write!(f, "((f32){})", input(1)),
+            Op::ToFloat => write!(f, "((flt){})", input(1)),
+            Op::ReadOnly => write!(f, "((const){})", input(1)),
             Op::Scope(_) => {
                 write!(f, "Scope[ ")?;
                 let names = sea.to_scope(node).unwrap().reverse_names(sea);
@@ -103,6 +112,8 @@ impl Display for PrintNodes2<'_, '_, '_> {
                 }
                 write!(f, "]")
             }
+            Op::ScopeMin => todo!(),
+            Op::Struct => todo!(),
             Op::Not => write!(f, "(!{})", input(1)),
             Op::Proj(proj) | Op::CProj(proj) => write!(f, "{}", proj.label),
             Op::If(op) => match op {

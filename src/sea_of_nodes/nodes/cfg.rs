@@ -95,21 +95,7 @@ impl Node {
             | Op::Start(_)
             | Op::Stop
             | Op::XCtrl => Some(Cfg(self)),
-            Op::Constant(_)
-            | Op::Add
-            | Op::Sub
-            | Op::Mul
-            | Op::Div
-            | Op::Minus
-            | Op::Scope(_)
-            | Op::Bool(_)
-            | Op::Not
-            | Op::Proj(_)
-            | Op::Phi(_)
-            | Op::Cast(_)
-            | Op::Load(_)
-            | Op::Store(_)
-            | Op::New(_) => None,
+            _ => None,
         }
     }
 }
