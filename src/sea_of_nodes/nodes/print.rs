@@ -139,7 +139,7 @@ impl Display for PrintNodes2<'_, '_, '_> {
                 }
                 write!(f, ")")
             }
-            n @ Op::Region { .. } | n @ Op::Loop => write!(f, "{}{}", n.label(), node.index()),
+            n @ Op::Region { .. } | n @ Op::Loop => write!(f, "{}", n.label()),
             Op::Stop => {
                 if let ret @ Some(_) = node.unique_input(sea) {
                     write!(f, "{}", print(ret))
