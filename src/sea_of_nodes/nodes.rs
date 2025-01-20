@@ -7,10 +7,10 @@ use crate::sea_of_nodes::nodes::cfg::CfgData;
 use crate::sea_of_nodes::nodes::gvn::GvnEntry;
 use crate::sea_of_nodes::parser::Parser;
 use crate::sea_of_nodes::types::{MemPtr, Struct, Ty, Type, Types};
-pub use cfg::Cfg;
 use iter_peeps::IterPeeps;
 pub use node::{
-    BoolOp, Constant, LoadOp, Node, Op, Phi, Proj, ProjOp, Scope, Start, StartOp, StoreOp, XCtrl,
+    BoolOp, Cfg, Constant, LoadOp, Node, Op, Phi, Proj, ProjOp, Scope, Start, StartOp, StoreOp,
+    XCtrl,
 };
 pub use scope::ScopeOp;
 
@@ -63,7 +63,7 @@ pub struct Nodes<'t> {
 
     /// Control Flow Graph Nodes
     /// CFG nodes have a immediate dominator depth (idepth) and a loop nesting depth(loop_depth).
-    cfg_data: IdVec<Node, CfgData>,
+    pub cfg: IdVec<Cfg, CfgData>,
 
     /// If this is true peephole only computes the type.
     pub disable_peephole: bool,
@@ -115,7 +115,7 @@ impl<'t> Nodes<'t> {
             outputs: IdVec::new(vec![vec![]]),
             ty: IdVec::new(vec![None]),
             deps: IdVec::new(vec![vec![]]),
-            cfg_data: IdVec::new(vec![CfgData::new()]),
+            cfg: IdVec::new(vec![CfgData::new()]),
             disable_peephole: false,
             // TODO get rid of DUMMYs
             start: Start::DUMMY,
@@ -145,7 +145,7 @@ impl<'t> Nodes<'t> {
         self.outputs.push(vec![]);
         self.ty.push(None);
         self.deps.push(vec![]);
-        self.cfg_data.push(CfgData::new());
+        self.cfg.push(CfgData::new());
         self.hash.push(None);
         for i in 0..self.inputs[id].len() {
             if let Some(input) = self.inputs[id][i] {
@@ -297,10 +297,6 @@ impl Node {
             }
         }
         None
-    }
-
-    pub fn is_cfg(self, sea: &Nodes) -> bool {
-        self.to_cfg(&sea.ops).is_some()
     }
 
     pub fn unique_input(self, sea: &Nodes) -> Option<Node> {

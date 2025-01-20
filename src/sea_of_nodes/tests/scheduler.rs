@@ -378,7 +378,7 @@ impl Scheduler {
 
             self.data.get_mut(&node).unwrap().block = Some(block);
 
-            if node.is_region(sea) || node.is_loop(sea) {
+            if node.is_region(sea) {
                 // Regions might have phis which need to be scheduled.
                 // Put them on a list for later scheduling.
                 for p in sea.outputs[node].iter().flat_map(|o| o.to_phi(sea)) {
@@ -537,7 +537,7 @@ impl Scheduler {
         while let Some(first) = queue.pop() {
             let mut last = Some(first);
             let mut arr = vec![];
-            if first.is_region(sea) || first.is_loop(sea) {
+            if first.is_region(sea) {
                 arr.extend(
                     sea.outputs[first]
                         .iter()
@@ -553,7 +553,7 @@ impl Scheduler {
                 last = Self::find_single_cfg_out(last.unwrap(), sea);
                 let Some(last) = last else { break };
 
-                if last.is_region(sea) || last.is_loop(sea) {
+                if last.is_region(sea) {
                     if !blocks.contains_key(&last) && last != first {
                         queue.push(last);
                     }
@@ -602,7 +602,7 @@ impl Scheduler {
                         block.next[sea[p].index] = blocks[&*p];
                     }
                 }
-                Some(n) if n.is_region(sea) || n.is_loop(sea) => {
+                Some(n) if n.is_region(sea) => {
                     block.next[0] = blocks[&n];
                 }
                 _ => debug_assert!(block.exit.unwrap().is_return(sea)),

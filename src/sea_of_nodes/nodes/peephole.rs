@@ -220,7 +220,7 @@ impl<'t> Node {
                 // Hunt up the immediate dominator tree.  If we find an identical if
                 // test on either the true or false branch, then this test matches.
 
-                let mut dom = s.as_cfg().idom(sea);
+                let mut dom = s.to_cfg().idom(sea);
                 let mut prior = self;
                 while let Some(d) = dom {
                     if let Some(d) = d.to_if(sea) {

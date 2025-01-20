@@ -468,7 +468,7 @@ impl If {
         let pred = self.pred(sea).unwrap();
         if !pred.ty(sea)?.is_high_or_constant() {
             let mut prior = *self;
-            let mut dom = self.as_cfg().idom(sea);
+            let mut dom = self.to_cfg().idom(sea);
             while let Some(cfg) = dom {
                 let d = cfg.add_dep(*self, sea);
                 if let Some(d) = d.to_if(sea) {

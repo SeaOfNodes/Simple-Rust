@@ -339,12 +339,12 @@ fn pretty_print_scheduled(
     while !ds.is_empty() {
         let mut blk: Option<Cfg> = None;
         for &n in ds.keys() {
-            let mut cfg = n.to_cfg(&sea.ops);
+            let mut cfg = n.to_cfg(sea);
             if cfg.is_none() || !cfg.unwrap().block_head(sea) {
-                cfg = n.inputs(sea)[0].unwrap().to_cfg(&sea.ops);
+                cfg = n.inputs(sea)[0].unwrap().to_cfg(sea);
             }
             let cfg = cfg.unwrap();
-            if blk.is_none() || sea[cfg].idepth < sea[blk.unwrap()].idepth {
+            if blk.is_none() || sea.cfg[cfg].idepth < sea.cfg[blk.unwrap()].idepth {
                 blk = Some(cfg);
             }
         }
@@ -354,7 +354,7 @@ fn pretty_print_scheduled(
         // Print block header
         write!(sb, "{:<13.13}:                     [[  ", blk.label(sea))?;
 
-        if blk.is_region(sea) || blk.is_loop(sea) || blk.is_stop(sea) {
+        if blk.is_region(sea) || blk.is_stop(sea) {
             for i in if blk.is_stop(sea) { 0 } else { 1 }..blk.inputs(sea).len() {
                 label(&mut sb, blk.cfg(i, sea).unwrap(), sea)?
             }
@@ -368,7 +368,7 @@ fn pretty_print_scheduled(
         let mut xd = usize::MAX;
         for &use_ in &sea.outputs[blk] {
             if let Some(i) = ds.get(&use_) {
-                if !use_.to_cfg(&sea.ops).is_some_and(|cfg| cfg.block_head(sea)) {
+                if !use_.to_cfg(sea).is_some_and(|cfg| cfg.block_head(sea)) {
                     bns.push(use_);
                     xd = xd.min(*i);
                 }

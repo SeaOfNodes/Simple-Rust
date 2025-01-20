@@ -8,7 +8,7 @@ use Cow::*;
 
 use crate::datastructures::id::Id;
 use crate::datastructures::id_vec::IdVec;
-use crate::sea_of_nodes::nodes::{Cfg, Nodes, OpVec, ScopeOp};
+use crate::sea_of_nodes::nodes::{Nodes, OpVec, ScopeOp};
 use crate::sea_of_nodes::types::Ty;
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
@@ -43,6 +43,11 @@ impl Node {
 impl Id for Node {
     fn index(&self) -> usize {
         self.0.get() as usize
+    }
+}
+impl Id for Cfg {
+    fn index(&self) -> usize {
+        self.0.index()
     }
 }
 
@@ -89,7 +94,7 @@ macro_rules! ite {
 }
 
 macro_rules! define_id {
-    ($Id:ident, $(($op:ty))?, $downcast:ident, $checkcast:ident, $t:lifetime) => {
+    ($Id:ident, $(($op:ty))?, $downcast:ident, $checkcast:ident, $t:lifetime, {$($Child:ident),*}) => {
         #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
         pub struct $Id(Node);
 
@@ -120,8 +125,9 @@ macro_rules! define_id {
         impl OpVec<'_> {
             pub fn $downcast<N: Into<Option<Node>>>(&self, node: N) -> Option<$Id> {
                 let node = node.into()?;
-                match &self[node] {
-                    ite!(($($op)?) (Op::$Id(_)) (Op::$Id)) => Some($Id(node)),
+                match node.downcast(self) {
+                    TypedNode::$Id(_) => Some($Id(node)),
+                    $(TypedNode::$Child(_) => Some($Id(node)),)*
                     _ => None,
                 }
             }
@@ -137,15 +143,19 @@ macro_rules! define_id {
         // downcast
         impl Node {
             pub fn $downcast(self, sea: &Nodes) -> Option<$Id> {
-                match &sea[self] {
-                    ite!(($($op)?) (Op::$Id(_)) (Op::$Id)) => Some($Id(self)),
-                    _ => None,
-                }
+                sea.ops.$downcast(self)
             }
             pub fn $checkcast(self, sea: &Nodes) -> bool {
                 self.$downcast(sea).is_some()
             }
         }
+
+        // upcast
+        $(impl $Child {
+            pub fn $downcast(self) -> $Id {
+                $Id(*self)
+            }
+        })*
 
         // generic index
         impl<T> Index<$Id> for IdVec<Node, T> {
@@ -196,8 +206,8 @@ macro_rules! define_id {
 }
 
 macro_rules! define_ids {
-    (<$t:lifetime> $($Id:ident $(($op:ty))? $downcast:ident $checkcast:ident;)*) => {
-        $(define_id!($Id, $(($op))?, $downcast, $checkcast, $t);)*
+    (<$t:lifetime> $($Id:ident $(($op:ty))? $downcast:ident $checkcast:ident { $($Child:ident),* };)*) => {
+        $(define_id!($Id, $(($op))?, $downcast, $checkcast, $t, {$($Child),*});)*
 
         /// Node specific operation
         #[derive(Clone, Debug)]
@@ -222,45 +232,46 @@ macro_rules! define_ids {
 }
 
 define_ids!(<'t>
-    Add                to_add       is_add;
-    AddF               to_addf      is_addf;
-    And                to_and       is_and;
-    Bool(BoolOp)       to_bool      is_bool;
-    CProj(ProjOp<'t>)  to_cproj     is_cproj;
-    Cast(Ty<'t>)       to_cast      is_cast;
-    Constant(Ty<'t>)   to_constant  is_constant;
-    Div                to_div       is_div;
-    DivF               to_divf      is_divf;
-    If(IfOp)           to_if        is_if;
-    Load(LoadOp<'t>)   to_load      is_load;
-    Loop               to_loop      is_loop;
-    Minus              to_minus     is_minus;
-    MinusF             to_minusf    is_minusf;
-    Mul                to_mul       is_mul;
-    MulF               to_mulf      is_mulf;
-    New(Ty<'t>)        to_new       is_new;
-    Not                to_not       is_not;
-    Or                 to_or        is_or;
-    Phi(PhiOp<'t>)     to_phi       is_phi;
-    Proj(ProjOp<'t>)   to_proj      is_proj;
-    ReadOnly           to_ronly     is_ronly;
-    Region             to_region    is_region;
-    Return             to_return    is_return;
-    RoundF32           to_roundf32  is_roundf32;
-    Sar                to_sar       is_sar;
-    Scope(ScopeOp<'t>) to_scope     is_scope;
-    ScopeMin           to_scope_min is_scope_min;
-    Shl                to_shl       is_shl;
-    Shr                to_shr       is_shr;
-    Start(StartOp<'t>) to_start     is_start;
-    Stop               to_stop      is_stop;
-    Store(StoreOp<'t>) to_store     is_store;
-    Struct             to_struct    is_struct;
-    Sub                to_sub       is_sub;
-    SubF               to_subf      is_subf;
-    ToFloat            to_tofloat   is_tofloat;
-    XCtrl              to_xctrl     is_xctrl;
-    Xor                to_xor       is_xor;
+    Add                to_add       is_add        {};
+    AddF               to_addf      is_addf       {};
+    And                to_and       is_and        {};
+    Bool(BoolOp)       to_bool      is_bool       {};
+    CProj(ProjOp<'t>)  to_cproj     is_cproj      {};
+    Cast(Ty<'t>)       to_cast      is_cast       {};
+    Cfg                to_cfg       is_cfg        {CProj,If,Loop,Region,Return,Start,Stop,XCtrl};
+    Constant(Ty<'t>)   to_constant  is_constant   {};
+    Div                to_div       is_div        {};
+    DivF               to_divf      is_divf       {};
+    If(IfOp)           to_if        is_if         {};
+    Load(LoadOp<'t>)   to_load      is_load       {};
+    Loop               to_loop      is_loop       {Start};
+    Minus              to_minus     is_minus      {};
+    MinusF             to_minusf    is_minusf     {};
+    Mul                to_mul       is_mul        {};
+    MulF               to_mulf      is_mulf       {};
+    New(Ty<'t>)        to_new       is_new        {};
+    Not                to_not       is_not        {};
+    Or                 to_or        is_or         {};
+    Phi(PhiOp<'t>)     to_phi       is_phi        {};
+    Proj(ProjOp<'t>)   to_proj      is_proj       {};
+    ReadOnly           to_ronly     is_ronly      {};
+    Region             to_region    is_region     {Loop, Start};
+    Return             to_return    is_return     {};
+    RoundF32           to_roundf32  is_roundf32   {};
+    Sar                to_sar       is_sar        {};
+    Scope(ScopeOp<'t>) to_scope     is_scope      {};
+    ScopeMin           to_scope_min is_scope_min  {Scope};
+    Shl                to_shl       is_shl        {};
+    Shr                to_shr       is_shr        {};
+    Start(StartOp<'t>) to_start     is_start      {};
+    Stop               to_stop      is_stop       {};
+    Store(StoreOp<'t>) to_store     is_store      {};
+    Struct             to_struct    is_struct     {};
+    Sub                to_sub       is_sub        {};
+    SubF               to_subf      is_subf       {};
+    ToFloat            to_tofloat   is_tofloat    {};
+    XCtrl              to_xctrl     is_xctrl      {};
+    Xor                to_xor       is_xor        {};
 );
 
 impl<'t> Op<'t> {
@@ -277,6 +288,7 @@ impl<'t> Op<'t> {
             },
             Op::CProj(p) => p.label,
             Op::Cast(t) => return Owned(format!("({})", t.str())),
+            Op::Cfg => unreachable!(),
             Op::Constant(ty) => return Owned(format!("#{ty}")),
             Op::Div => "Div",
             Op::DivF => "DivF",
@@ -352,6 +364,7 @@ impl<'t> Op<'t> {
             | Op::Stop
             | Op::Struct
             | Op::XCtrl => self.label(),
+            Op::Cfg => unreachable!(),
         }
     }
 
@@ -404,6 +417,7 @@ impl<'t> Op<'t> {
             Op::Shr => 39,
             Op::Struct => 40,
             Op::ToFloat => 41,
+            Op::Cfg => unreachable!(),
         }
     }
 }
@@ -601,7 +615,7 @@ impl Phi {
         Phi(sea.create((Op::Phi(PhiOp { label, ty }), inputs)))
     }
     pub fn region(self, sea: &Nodes) -> Cfg {
-        self.inputs(sea)[0].unwrap().to_cfg(&sea.ops).unwrap()
+        self.inputs(sea)[0].unwrap().to_cfg(sea).unwrap()
     }
 }
 impl Region {
@@ -620,10 +634,10 @@ impl Loop {
     }
 
     pub fn entry(self, sea: &Nodes) -> Cfg {
-        self.as_cfg().cfg(1, sea).unwrap()
+        self.to_cfg().cfg(1, sea).unwrap()
     }
     pub fn back(self, sea: &Nodes) -> Cfg {
-        self.as_cfg().cfg(2, sea).unwrap()
+        self.to_cfg().cfg(2, sea).unwrap()
     }
 }
 impl Cast {

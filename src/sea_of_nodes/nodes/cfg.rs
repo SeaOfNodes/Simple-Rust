@@ -1,52 +1,7 @@
 use crate::datastructures::id_set::IdSet;
-use crate::datastructures::id_vec::IdVec;
-use crate::sea_of_nodes::nodes::node::{CProj, If, Load, Loop, Region, Return, Stop, TypedNode};
-use crate::sea_of_nodes::nodes::{Node, Nodes, Op, OpVec, Start, XCtrl};
+use crate::sea_of_nodes::nodes::node::{Load, TypedNode};
+use crate::sea_of_nodes::nodes::{Cfg, Node, Nodes, Op};
 use std::collections::HashSet;
-use std::fmt;
-use std::ops::{Deref, Index, IndexMut};
-
-#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
-pub struct Cfg(Node);
-
-impl Deref for Cfg {
-    type Target = Node;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl fmt::Display for Cfg {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&self.0, f)
-    }
-}
-
-impl<T> Index<Cfg> for IdVec<Node, T> {
-    type Output = T;
-    fn index(&self, index: Cfg) -> &Self::Output {
-        &self[*index]
-    }
-}
-impl<T> IndexMut<Cfg> for IdVec<Node, T> {
-    fn index_mut(&mut self, index: Cfg) -> &mut Self::Output {
-        &mut self[index.0]
-    }
-}
-
-impl Index<Cfg> for Nodes<'_> {
-    type Output = CfgData;
-
-    fn index(&self, index: Cfg) -> &Self::Output {
-        &self.cfg_data[index.0]
-    }
-}
-impl IndexMut<Cfg> for Nodes<'_> {
-    fn index_mut(&mut self, index: Cfg) -> &mut Self::Output {
-        &mut self.cfg_data[index.0]
-    }
-}
 
 /// Control Flow Graph Nodes
 ///
@@ -73,64 +28,37 @@ impl CfgData {
     }
 }
 
-macro_rules! impl_cfg {
-    ($($T:ident),+) => {
-        $(impl $T {
-            pub fn as_cfg(self) -> Cfg {
-                Cfg(*self)
-            }
-        })+
-    };
-}
-impl_cfg!(CProj, If, Loop, Region, Return, Start, Stop, XCtrl);
-
-impl Node {
-    pub fn to_cfg(self, ops: &OpVec) -> Option<Cfg> {
-        match ops[self] {
-            Op::CProj(_)
-            | Op::If(_)
-            | Op::Loop
-            | Op::Region
-            | Op::Return
-            | Op::Start(_)
-            | Op::Stop
-            | Op::XCtrl => Some(Cfg(self)),
-            _ => None,
-        }
-    }
-}
-
 impl Cfg {
     pub fn cfg(self, idx: usize, sea: &Nodes) -> Option<Cfg> {
-        self.0.inputs(sea)[idx].map(|n| n.to_cfg(&sea.ops).unwrap())
+        self.inputs(sea)[idx].map(|n| n.to_cfg(sea).unwrap())
     }
 
     fn idepth(self, sea: &mut Nodes) -> u32 {
-        if sea[self].idepth != 0 {
-            return sea[self].idepth;
+        if sea.cfg[self].idepth != 0 {
+            return sea.cfg[self].idepth;
         }
-        let d = match sea[self.0] {
+        let d = match sea[*self] {
             Op::Start(_) => return 0, // uncached
-            Op::Stop | Op::Region => (0..self.0.inputs(sea).len())
+            Op::Stop | Op::Region => (0..self.inputs(sea).len())
                 .map(|i| self.cfg(i, sea).map(|d| d.idepth(sea)))
                 .flatten()
                 .max()
                 .unwrap(),
             _ => self.idom(sea).unwrap().idepth(sea),
         } + 1;
-        sea[self].idepth = d;
+        sea.cfg[self].idepth = d;
         d
     }
 
     /// Return the immediate dominator of this Node and compute dom tree depth.
     pub fn idom(self, sea: &mut Nodes) -> Option<Cfg> {
-        match sea[self.0] {
+        match sea[*self] {
             Op::Loop => self.cfg(1, sea),
             Op::Region => {
                 let mut lca = None;
                 // Walk the LHS & RHS idom trees in parallel until they match, or either fails.
                 // Because this does not cache, it can be linear in the size of the program.
-                for i in 1..self.0.inputs(sea).len() {
+                for i in 1..self.inputs(sea).len() {
                     lca = Some(self.cfg(i, sea).unwrap().idom_2(lca, sea));
                 }
                 lca
@@ -160,17 +88,17 @@ impl Cfg {
 
     // Loop nesting depth
     pub fn loop_depth(self, sea: &mut Nodes) -> u32 {
-        if sea[self].loop_depth == 0 {
-            sea[self].loop_depth = match self.downcast(&sea.ops) {
+        if sea.cfg[self].loop_depth == 0 {
+            sea.cfg[self].loop_depth = match self.downcast(&sea.ops) {
                 TypedNode::Start(_) | TypedNode::Stop(_) => 1,
                 TypedNode::Loop(l) => {
-                    let d = sea[l.entry(sea)].loop_depth + 1; // Entry depth plus one
+                    let d = sea.cfg[l.entry(sea)].loop_depth + 1; // Entry depth plus one
 
                     // One-time tag loop exits
                     let mut idom = l.back(sea);
                     while idom != self {
                         // Walk idom in loop, setting depth
-                        sea[idom].loop_depth = d;
+                        sea.cfg[idom].loop_depth = d;
                         // Loop exit hits the CProj before the If, instead of jumping from
                         // Region directly to If.
 
@@ -183,9 +111,9 @@ impl Cfg {
                                 let use_ = sea.outputs[i][use_];
                                 if use_ != Node::DUMMY {
                                     if let Some(proj2) = use_.to_cproj(sea) {
-                                        let proj2 = proj2.as_cfg();
+                                        let proj2 = proj2.to_cfg();
                                         if proj2 != idom {
-                                            sea[proj2].loop_depth = d - 1;
+                                            sea.cfg[proj2].loop_depth = d - 1;
                                         }
                                     }
                                 }
@@ -200,7 +128,7 @@ impl Cfg {
                 _ => self.cfg(0, sea).unwrap().loop_depth(sea),
             }
         }
-        sea[self].loop_depth
+        sea.cfg[self].loop_depth
     }
 
     pub fn walk_unreach(
@@ -217,8 +145,8 @@ impl Cfg {
         match self.downcast(&sea.ops) {
             TypedNode::If(_) => {
                 for proj in &sea.outputs[self] {
-                    let proj = proj.to_cproj(sea).unwrap().as_cfg();
-                    if sea[proj].loop_depth == 0 {
+                    let proj = proj.to_cproj(sea).unwrap().to_cfg();
+                    if sea.cfg[proj].loop_depth == 0 {
                         unreach.insert(proj);
                     }
                 }

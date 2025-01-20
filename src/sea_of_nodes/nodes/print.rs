@@ -162,6 +162,7 @@ impl Display for PrintNodes2<'_, '_, '_> {
             }
             Op::Load(l) => write!(f, ".{}", l.name),
             Op::Store(s) => write!(f, ".{}={};", s.name, input(3)),
+            Op::Cfg => unreachable!(),
         }
     }
 }

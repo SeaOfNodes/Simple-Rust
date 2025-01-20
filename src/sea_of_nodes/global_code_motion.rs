@@ -23,13 +23,13 @@ fn fix_loops(stop: Stop, sea: &mut Nodes) {
     let mut visit = IdSet::zeros(sea.len());
     let mut unreach = HashSet::with_capacity(sea.len());
 
-    unreach.insert(sea.start.as_cfg());
+    unreach.insert(sea.start.to_cfg());
     for ret in 0..stop.inputs(sea).len() {
         let ret = stop.inputs(sea)[ret];
         ret.unwrap()
             .to_return(sea)
             .unwrap()
-            .as_cfg()
+            .to_cfg()
             .walk_unreach(&mut visit, &mut unreach, sea);
     }
     if unreach.is_empty() {
@@ -49,7 +49,7 @@ fn fix_loops(stop: Stop, sea: &mut Nodes) {
         ret.unwrap()
             .to_return(sea)
             .unwrap()
-            .as_cfg()
+            .to_cfg()
             .walk_unreach(&mut visit, &mut unreach, sea);
     }
     assert!(unreach.is_empty());
@@ -103,7 +103,7 @@ fn walk_infinite(n: Cfg, visit: &mut IdSet<Node>, stop: Stop, sea: &mut Nodes) {
     for i in 0..sea.outputs[n].len() {
         let use_ = sea.outputs[n][i];
         if use_ != Node::DUMMY {
-            if let Some(use_) = use_.to_cfg(&sea.ops) {
+            if let Some(use_) = use_.to_cfg(sea) {
                 walk_infinite(use_, visit, stop, sea);
             }
         }
@@ -128,7 +128,7 @@ fn sched_early(sea: &mut Nodes) {
         // step.  Since _schedEarly modifies the output arrays, the normal
         // region._outputs ArrayList iterator throws CME.  The extra edges
         // are always *added* after any Phis, so just walk the Phi prefix.
-        if cfg.is_region(sea) || cfg.is_loop(sea) {
+        if cfg.is_region(sea) {
             let len = sea.outputs[cfg].len();
             for i in 0..len {
                 if sea.outputs[cfg][i] != Node::DUMMY {
@@ -143,7 +143,7 @@ fn sched_early(sea: &mut Nodes) {
 
 /// Post-Order of CFG
 fn _rpo_cfg(n: Node, visit: &mut IdSet<Node>, rpo: &mut Vec<Cfg>, sea: &Nodes) {
-    let Some(cfg) = n.to_cfg(&sea.ops) else {
+    let Some(cfg) = n.to_cfg(sea) else {
         return;
     };
     if visit.get(n) {
@@ -191,10 +191,10 @@ fn _sched_early(n: Option<Node>, visit: &mut IdSet<Node>, sea: &mut Nodes) {
     // If not-pinned (e.g. constants, projections, phi) and not-CFG
     if !n.is_pinned(sea) {
         // Schedule at deepest input
-        let mut early = sea.start.as_cfg(); // Maximally early, lowest idepth
+        let mut early = sea.start.to_cfg(); // Maximally early, lowest idepth
         for i in 1..n.inputs(sea).len() {
             let cfg0 = n.inputs(sea)[i].unwrap().cfg0(sea);
-            if sea[cfg0].idepth > sea[early].idepth {
+            if sea.cfg[cfg0].idepth > sea.cfg[early].idepth {
                 early = cfg0; // Latest/deepest input
             }
         }
@@ -235,7 +235,7 @@ fn _sched_late(n: Node, ns: &mut Vec<Option<Node>>, late: &mut Vec<Option<Cfg>>,
     }
 
     // These0 I know the late schedule of, and need to set early for loops
-    if let Some(cfg) = n.to_cfg(&sea.ops) {
+    if let Some(cfg) = n.to_cfg(sea) {
         late[n.index()] = if cfg.block_head(sea) {
             Some(cfg)
         } else {
@@ -329,8 +329,8 @@ fn use_block(n: Node, use_: Node, late: &[Option<Cfg>], sea: &Nodes) -> Cfg {
 
 /// Least loop depth first, then largest idepth
 fn better(lca: Cfg, best: Cfg, sea: &Nodes) -> bool {
-    sea[lca].loop_depth < sea[best].loop_depth
-        || (sea[lca].idepth > sea[best].idepth || best.is_if(sea))
+    sea.cfg[lca].loop_depth < sea.cfg[best].loop_depth
+        || (sea.cfg[lca].idepth > sea.cfg[best].idepth || best.is_if(sea))
 }
 
 /// Skip iteration if a backedge
@@ -349,7 +349,7 @@ fn is_forwards_edge(use_: Option<Node>, def: Option<Node>, sea: &Nodes) -> bool 
 
 impl Node {
     fn cfg0(self, sea: &Nodes) -> Cfg {
-        self.inputs(sea)[0].unwrap().to_cfg(&sea.ops).unwrap()
+        self.inputs(sea)[0].unwrap().to_cfg(sea).unwrap()
     }
 }
 
@@ -366,7 +366,7 @@ fn find_anti_dep(
         let early = Some(early);
         let mut cfg = Some(lca);
         while early.is_some() && cfg != early.unwrap().idom(sea) {
-            sea[cfg.unwrap()].anti = Some(load);
+            sea.cfg[cfg.unwrap()].anti = Some(load);
             cfg = cfg.unwrap().idom(sea);
         }
     }
@@ -428,7 +428,7 @@ fn anti_dep(
     // Walk store blocks "reach" from its scheduled location to its earliest
     while Some(stblk) != defblk.idom(sea) {
         // Store and Load overlap, need anti-dependence
-        if sea[stblk].anti == Some(load) {
+        if sea.cfg[stblk].anti == Some(load) {
             lca = stblk.idom_2(Some(lca), sea); // Raise Loads LCA
             if let Some(st) = st {
                 if lca == stblk && !st.inputs(sea).iter().any(|n| *n == Some(*load)) {
