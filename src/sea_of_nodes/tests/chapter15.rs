@@ -363,13 +363,23 @@ return rez;
     assert_eq!(parser.print(stop), "return [int];");
 
     let result = evaluate(&parser.nodes, stop, Some(20), None);
-    let Object::Obj(obj) = result.object else { panic!()};
-    assert_eq!("[int] {int #; int ![]; }",result.heap.objs[obj].ty.as_ty().to_string());
+    let Object::Obj(obj) = result.object else {
+        panic!()
+    };
+    assert_eq!(
+        "[int] {int #; int ![]; }",
+        result.heap.objs[obj].ty.as_ty().to_string()
+    );
 
-    let Object::Long(nprimes) = result.heap.objs[obj].fields[0] else { panic!() };
-    let primes = [2,3,5,7,11,13,17,19];
+    let Object::Long(nprimes) = result.heap.objs[obj].fields[0] else {
+        panic!()
+    };
+    let primes = [2, 3, 5, 7, 11, 13, 17, 19];
     assert_eq!(nprimes as usize, primes.len());
-    assert_eq!(primes.map(|p| Object::Long(p)), result.heap.objs[obj].fields[1..]);
+    assert_eq!(
+        primes.map(|p| Object::Long(p)),
+        result.heap.objs[obj].fields[1..]
+    );
 }
 
 #[test]

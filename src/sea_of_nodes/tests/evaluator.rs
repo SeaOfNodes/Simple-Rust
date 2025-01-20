@@ -35,7 +35,11 @@ pub struct ResultObject<'t> {
 
 impl<'t> Display for ResultObject<'t> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        PrintableObject { object: self.object, heap: &self.heap }.fmt(f)
+        PrintableObject {
+            object: self.object,
+            heap: &self.heap,
+        }
+        .fmt(f)
     }
 }
 

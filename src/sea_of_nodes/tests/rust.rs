@@ -24,7 +24,10 @@ fn test_eval_negate_overflow() {
     assert_eq!("return (-arg);", parser.print(stop));
 
     let nodes = parser.nodes;
-    assert_eq!(Object::Long(-1), evaluate(&nodes, stop, Some(1), None).object);
+    assert_eq!(
+        Object::Long(-1),
+        evaluate(&nodes, stop, Some(1), None).object
+    );
     assert_eq!(
         Object::Long(i64::MIN),
         evaluate(&nodes, stop, Some(i64::MIN), None).object
