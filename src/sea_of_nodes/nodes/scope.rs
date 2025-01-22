@@ -124,7 +124,7 @@ impl<'t> Scope {
             // that will trigger phi creation on update
             dup.add_def(
                 if lazy_loop_phis {
-                    Some(*self)
+                    Some(**self)
                 } else {
                     self.inputs(sea)[i]
                 },
@@ -148,8 +148,7 @@ impl<'t> Scope {
     pub fn merge(self, that: Scope, sea: &mut Nodes<'t>) -> Node {
         let c1 = self.inputs(sea)[0];
         let c2 = that.inputs(sea)[0];
-        let region = *Region::new(vec![None, c1, c2], sea);
-        region.keep(sea);
+        let region = Region::new(vec![None, c1, c2], sea).keep(sea);
         self.set_def(0, Some(region), sea); // set ctrl
 
         let names = self.reverse_names(sea);
@@ -194,13 +193,13 @@ impl<'t> Scope {
         ctrl.set_def(2, back.inputs(sea)[0], sea);
 
         for i in 1..self.inputs(sea).len() {
-            if back.inputs(sea)[i] != Some(*self) {
+            if back.inputs(sea)[i] != Some(**self) {
                 let phi = self.inputs(sea)[i].unwrap();
                 assert_eq!(phi.inputs(sea)[0], Some(ctrl));
                 assert_eq!(phi.inputs(sea)[2], None);
                 phi.set_def(2, back.inputs(sea)[i], sea);
             }
-            if exit.inputs(sea)[i] == Some(*self) {
+            if exit.inputs(sea)[i] == Some(**self) {
                 // Replace a lazy-phi on the exit path also
                 exit.set_def(i, self.inputs(sea)[i], sea)
             }

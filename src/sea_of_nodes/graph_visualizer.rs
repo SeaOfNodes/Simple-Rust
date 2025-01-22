@@ -63,7 +63,7 @@ pub fn generate_dot_output(
     source: &str,
     separate_control_cluster: bool,
 ) -> Result<String, fmt::Error> {
-    let all = find_all(sea, &[Some(*stop), scope.as_deref().copied()]);
+    let all = find_all(sea, &[Some(*stop), scope.map(|s| s.to_node())]);
 
     let mut sb = String::new();
     writeln!(sb, "digraph \"{}\" {{", source.replace("\"", "\\\""))?;
@@ -104,7 +104,7 @@ fn nodes_by_cluster(
     }
 
     for &n in all.iter() {
-        if matches!(&sea[n], Op::Proj(_) | Op::CProj(_) | Op::Scope(_)) || n == *sea.xctrl {
+        if matches!(&sea[n], Op::Proj(_) | Op::CProj(_) | Op::Scope(_)) || n == **sea.xctrl {
             continue;
         }
         if separate_control_cluster && do_ctrl && !n.is_cfg(sea) {
@@ -258,7 +258,7 @@ fn node_edges(sb: &mut String, sea: &Nodes, all: &HashSet<Node>) -> fmt::Result 
         if matches!(
             &sea[n],
             Op::Constant(_) | Op::Proj(_) | Op::CProj(_) | Op::Scope(_)
-        ) || n == *sea.xctrl
+        ) || n == **sea.xctrl
         {
             continue;
         }

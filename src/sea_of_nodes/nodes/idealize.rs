@@ -319,7 +319,7 @@ impl Phi {
                     if iff.pred(sea).unwrap().add_dep(*self, sea) == val {
                         // Must walk the idom on the null side to make sure we hit False.
                         let mut idom = region.cfg(nullx, sea).unwrap();
-                        while idom.inputs(sea)[0] != Some(*iff) {
+                        while idom.inputs(sea)[0] != Some(**iff) {
                             idom = idom.idom(sea).unwrap();
                         }
                         if idom.to_cproj(sea).is_some_and(|p| sea[p].index == 1) {
@@ -367,8 +367,8 @@ impl CProj {
             }
 
             // Flip a negating if-test, to remove the not
-            if let Some(not) = iff.inputs(sea)[1]?.add_dep(*self, sea).to_not(sea) {
-                return Some(*CProj::new(
+            if let Some(not) = iff.inputs(sea)[1]?.add_dep(**self, sea).to_not(sea) {
+                return Some(**CProj::new(
                     If::new(
                         iff.inputs(sea)[0].unwrap(),
                         Some(not.inputs(sea)[1].unwrap()),
@@ -423,7 +423,7 @@ impl Node {
                 }
 
                 return if self.is_dead(sea) {
-                    Some(*sea.xctrl)
+                    Some(**sea.xctrl)
                 } else {
                     self.del_def(path, sea);
                     Some(self)
@@ -468,11 +468,11 @@ impl If {
         let pred = self.pred(sea).unwrap();
         if !pred.ty(sea)?.is_high_or_constant() {
             let mut prior = *self;
-            let mut dom = self.to_cfg().idom(sea);
-            while let Some(cfg) = dom {
-                let d = cfg.add_dep(*self, sea);
+            let mut dom = self.idom(sea);
+            while let Some(d) = dom {
+                d.add_dep(**self, sea);
                 if let Some(d) = d.to_if(sea) {
-                    if d.pred(sea).unwrap().add_dep(*self, sea) == pred {
+                    if d.pred(sea).unwrap().add_dep(**self, sea) == pred {
                         if let Op::CProj(p) = &sea[prior] {
                             let value = if p.index == 0 {
                                 sea.types.int_one
@@ -481,12 +481,12 @@ impl If {
                             };
                             let new_constant = Constant::new(value, sea).peephole(sea);
                             self.set_def(1, Some(new_constant), sea);
-                            return Some(*self);
+                            return Some(**self);
                         }
                     }
                 }
                 prior = d;
-                dom = cfg.idom(sea);
+                dom = d.idom(sea);
             }
         }
         None

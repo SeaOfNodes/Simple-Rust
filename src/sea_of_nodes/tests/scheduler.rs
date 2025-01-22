@@ -346,7 +346,7 @@ impl Scheduler {
     /// Build the control flow graph.
     /// - `start` The start node.
     fn do_build_ctf(&mut self, start: Start, sea: &Nodes) {
-        let mut queue = vec![*start];
+        let mut queue = vec![start.to_node()];
         let mut phi_queue = vec![];
 
         while let Some(node) = queue.pop() {
@@ -622,8 +622,8 @@ pub fn schedule(start: Start, sea: &Nodes) -> (Vec<Block>, BlockId) {
         data: Default::default(),
         schedule_stack: vec![],
     };
-    scheduler.do_mark_alive(*start, sea);
+    scheduler.do_mark_alive(start.to_node(), sea);
     scheduler.do_build_ctf(start, sea);
     scheduler.do_schedule(sea);
-    scheduler.build(*start, sea)
+    scheduler.build(start.to_node(), sea)
 }

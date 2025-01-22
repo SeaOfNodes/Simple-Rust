@@ -29,7 +29,6 @@ fn fix_loops(stop: Stop, sea: &mut Nodes) {
         ret.unwrap()
             .to_return(sea)
             .unwrap()
-            .to_cfg()
             .walk_unreach(&mut visit, &mut unreach, sea);
     }
     if unreach.is_empty() {
@@ -49,7 +48,6 @@ fn fix_loops(stop: Stop, sea: &mut Nodes) {
         ret.unwrap()
             .to_return(sea)
             .unwrap()
-            .to_cfg()
             .walk_unreach(&mut visit, &mut unreach, sea);
     }
     assert!(unreach.is_empty());
@@ -64,7 +62,7 @@ impl Loop {
         // directly on the If) we found our exit.
 
         let mut x = self.back(sea);
-        while *x != *self {
+        while x != self.to_cfg() {
             if x.is_cproj(sea) {
                 return; // Found an exit, not an infinite loop
             }
@@ -82,10 +80,10 @@ impl Loop {
             }
         }
 
-        let t = CProj::new(iff, 0, "True", sea);
-        let f = CProj::new(iff, 1, "False", sea);
-        self.set_def(2, Some(*f), sea);
-        stop.add_def(Some(*Return::new(*t, *sea.zero, None, sea)), sea);
+        let t = CProj::new(**iff, 0, "True", sea);
+        let f = CProj::new(**iff, 1, "False", sea);
+        self.set_def(2, Some(**f), sea);
+        stop.add_def(Some(**Return::new(**t, *sea.zero, None, sea)), sea);
     }
 }
 
@@ -113,7 +111,7 @@ fn walk_infinite(n: Cfg, visit: &mut IdSet<Node>, stop: Stop, sea: &mut Nodes) {
 fn sched_early(sea: &mut Nodes) {
     let mut rpo = vec![];
     let mut visit = IdSet::zeros(sea.len());
-    _rpo_cfg(*sea.start, &mut visit, &mut rpo, sea);
+    _rpo_cfg(sea.start.to_node(), &mut visit, &mut rpo, sea);
 
     // Reverse Post-Order on CFG
     for cfg in rpo.into_iter().rev() {
@@ -205,7 +203,7 @@ fn _sched_early(n: Option<Node>, visit: &mut IdSet<Node>, sea: &mut Nodes) {
 fn sched_late(start: Start, sea: &mut Nodes) {
     let mut late = vec![None; sea.len()];
     let mut ns = vec![None; sea.len()];
-    _sched_late(*start, &mut ns, &mut late, sea);
+    _sched_late(start.to_node(), &mut ns, &mut late, sea);
     for i in 0..late.len() {
         if let Some(n) = &ns[i] {
             n.set_def(0, late[i].map(|n| *n), sea);

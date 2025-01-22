@@ -50,7 +50,7 @@ impl<'t> Node {
         // Replace constant computations from non-constants with a constant node
         if !self.is_constant(sea) && !self.is_xctrl(sea) && ty.is_high_or_constant() {
             return if ty == sea.types.xctrl {
-                *XCtrl::new(sea)
+                **XCtrl::new(sea)
             } else {
                 *Constant::new(ty, sea)
             }
@@ -220,7 +220,7 @@ impl<'t> Node {
                 // Hunt up the immediate dominator tree.  If we find an identical if
                 // test on either the true or false branch, then this test matches.
 
-                let mut dom = s.to_cfg().idom(sea);
+                let mut dom = s.idom(sea);
                 let mut prior = self;
                 while let Some(d) = dom {
                     if let Some(d) = d.to_if(sea) {

@@ -2,7 +2,6 @@ use std::cell::RefCell;
 use std::fmt;
 use std::fmt::Display;
 
-use crate::datastructures::id::Id;
 use crate::datastructures::id_set::IdSet;
 use crate::sea_of_nodes::nodes::node::IfOp;
 use crate::sea_of_nodes::nodes::{Node, Nodes, Op};

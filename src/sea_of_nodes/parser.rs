@@ -352,7 +352,7 @@ impl<'s, 't> Parser<'s, 't> {
 
     fn jump_to(&mut self, to_scope: Option<Scope>) -> Scope {
         let cur = self.scope.dup(false, &mut self.nodes);
-        self.set_ctrl(*self.nodes.xctrl); // Kill current scope
+        self.set_ctrl(**self.nodes.xctrl); // Kill current scope
 
         // Prune nested lexical scopes that have depth > than the loop head
         // We use _breakScope as a proxy for the loop head scope to obtain the depth
@@ -470,7 +470,7 @@ impl<'s, 't> Parser<'s, 't> {
             Return::new(ctrl, expr, Some(self.scope), &mut self.nodes).peephole(&mut self.nodes);
 
         self.stop.add_def(Some(ret), &mut self.nodes);
-        self.set_ctrl(*self.nodes.xctrl);
+        self.set_ctrl(**self.nodes.xctrl);
         Ok(())
     }
 

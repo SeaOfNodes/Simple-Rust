@@ -23,7 +23,7 @@ fn test_simple_program() {
         unreachable!("expect constant");
     };
 
-    assert_eq!(Some(*parser.nodes.start), parser.nodes.inputs[expr][0]);
+    assert_eq!(Some(parser.nodes.start.to_node()), parser.nodes.inputs[expr][0]);
     assert_eq!(1, constant.unwrap_int());
 }
 

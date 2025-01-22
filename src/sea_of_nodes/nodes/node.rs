@@ -38,16 +38,19 @@ impl Node {
     pub fn ty<'t>(self, sea: &Nodes<'t>) -> Option<Ty<'t>> {
         *self.get(&sea.ty)
     }
+
+    fn from_node_unchecked(node: Node) -> Node {
+        node
+    }
+    /// upcast from subclass via deref
+    pub fn to_node(self) -> Node {
+        self
+    }
 }
 
 impl Id for Node {
     fn index(&self) -> usize {
         self.0.get() as usize
-    }
-}
-impl Id for Cfg {
-    fn index(&self) -> usize {
-        self.0.index()
     }
 }
 
@@ -94,18 +97,18 @@ macro_rules! ite {
 }
 
 macro_rules! define_id {
-    ($Id:ident, $(($op:ty))?, $downcast:ident, $checkcast:ident, $t:lifetime, {$($Child:ident),*}) => {
+    ($Id:ident, $(($op:ty))?, $Super:ident, $cast:ident, $checkcast:ident, $t:lifetime) => {
         #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-        pub struct $Id(Node);
+        pub struct $Id($Super);
 
         // conversions
         impl From<$Id> for Node {
-            fn from(value: $Id) -> Self {
-                value.0
+            fn from(value: $Id) -> Node {
+                value.to_node()
             }
         }
         impl Deref for $Id {
-            type Target = Node;
+            type Target = $Super;
             fn deref(&self) -> &Self::Target {
                 &self.0
             }
@@ -120,53 +123,57 @@ macro_rules! define_id {
                 Display::fmt(&self.0, f)
             }
         }
+        impl Id for $Id {
+            fn index(&self) -> usize {
+                self.0.index()
+            }
+        }
+        impl $Id {
+            fn from_node_unchecked(node: Node) -> $Id {
+                $Id($Super::from_node_unchecked(node))
+            }
+            /// upcasts from subclass via deref
+            pub fn $cast(self) -> $Id {
+                self
+            }
+        }
 
         // downcast
         impl OpVec<'_> {
-            pub fn $downcast<N: Into<Option<Node>>>(&self, node: N) -> Option<$Id> {
+            pub fn $cast<N: Into<Option<Node>>>(&self, node: N) -> Option<$Id> {
                 let node = node.into()?;
-                match node.downcast(self) {
-                    TypedNode::$Id(_) => Some($Id(node)),
-                    $(TypedNode::$Child(_) => Some($Id(node)),)*
-                    _ => None,
-                }
+                let class = Class::of(&self[node]);
+                class.is_subclass(Class::$Id).then_some($Id::from_node_unchecked(node))
             }
         }
 
         // forward downcast
         impl Nodes<'_> {
-            pub fn $downcast<N: Into<Option<Node>>>(&self, node: N) -> Option<$Id> {
-                self.ops.$downcast(node)
+            pub fn $cast<N: Into<Option<Node>>>(&self, node: N) -> Option<$Id> {
+                self.ops.$cast(node)
             }
         }
 
         // downcast
         impl Node {
-            pub fn $downcast(self, sea: &Nodes) -> Option<$Id> {
-                sea.ops.$downcast(self)
+            pub fn $cast(self, sea: &Nodes) -> Option<$Id> {
+                sea.ops.$cast(self)
             }
             pub fn $checkcast(self, sea: &Nodes) -> bool {
-                self.$downcast(sea).is_some()
+                self.$cast(sea).is_some()
             }
         }
-
-        // upcast
-        $(impl $Child {
-            pub fn $downcast(self) -> $Id {
-                $Id(*self)
-            }
-        })*
 
         // generic index
         impl<T> Index<$Id> for IdVec<Node, T> {
             type Output = T;
             fn index(&self, index: $Id) -> &Self::Output {
-                &self[index.0]
+                &self[index.to_node()]
             }
         }
         impl<T> IndexMut<$Id> for IdVec<Node, T> {
             fn index_mut(&mut self, index: $Id) -> &mut Self::Output {
-                &mut self[index.0]
+                &mut self[index.to_node()]
             }
         }
 
@@ -175,7 +182,7 @@ macro_rules! define_id {
             type Output = ite!(($($op)?) ($($op)?) (Op<$t>));
 
             fn index(&self, index: $Id) -> &Self::Output {
-                match &self[index.0] {
+                match &self[index.to_node()] {
                     ite!(($($op)?) (Op::$Id(n)) (n @ Op::$Id)) => n,
                     _ => unreachable!(),
                 }
@@ -183,7 +190,7 @@ macro_rules! define_id {
         }
         impl<$t> IndexMut<$Id> for OpVec<$t> {
             fn index_mut(&mut self, index: $Id) -> &mut Self::Output {
-                match &mut self[index.0] {
+                match &mut self[index.to_node()] {
                     ite!(($($op)?) (Op::$Id(n)) (n @ Op::$Id)) => n,
                     _ => unreachable!(),
                 }
@@ -206,14 +213,42 @@ macro_rules! define_id {
 }
 
 macro_rules! define_ids {
-    (<$t:lifetime> $($Id:ident $(($op:ty))? $downcast:ident $checkcast:ident { $($Child:ident),* };)*) => {
-        $(define_id!($Id, $(($op))?, $downcast, $checkcast, $t, {$($Child),*});)*
+    (<$t:lifetime> $($Id:ident $(($op:ty))? : $Super:ident { $cast:ident $checkcast:ident };)*) => {
+        $(define_id!($Id, $(($op))?, $Super, $cast, $checkcast, $t);)*
 
         /// Node specific operation
         #[derive(Clone, Debug)]
         pub enum Op<$t> {
             $($Id$(($op))?),*
         }
+
+        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+        pub enum Class {
+            Node,
+            $($Id),*
+        }
+
+        impl Class {
+            const fn superclass(self) -> Option<Class> {
+                match self {
+                    Class::Node => None,
+                    $(Class::$Id => Some(Class::$Super)),*
+                }
+            }
+            const fn is_subclass(self, other: Class) -> bool {
+                self as usize == other as usize || if let Some(s) = self.superclass() {
+                    s.is_subclass(other)
+                } else {
+                    false
+                }
+            }
+            fn of(op: &Op) -> Class {
+                match op {
+                    $(ite!(($($op)?) (Op::$Id(_)) (Op::$Id)) => Class::$Id),*
+                }
+            }
+        }
+
 
         #[derive(Copy, Clone, Debug)]
         pub enum TypedNode {
@@ -223,7 +258,7 @@ macro_rules! define_ids {
         impl Node {
             pub fn downcast(self, ops: &OpVec) -> TypedNode {
                 match &ops[self] {
-                    $(ite!(($($op)?) (Op::$Id(_)) (Op::$Id)) => $Id(self).into()),*
+                    $(ite!(($($op)?) (Op::$Id(_)) (Op::$Id)) => $Id::from_node_unchecked(self).into()),*
                 }
             }
         }
@@ -232,46 +267,46 @@ macro_rules! define_ids {
 }
 
 define_ids!(<'t>
-    Add                to_add       is_add        {};
-    AddF               to_addf      is_addf       {};
-    And                to_and       is_and        {};
-    Bool(BoolOp)       to_bool      is_bool       {};
-    CProj(ProjOp<'t>)  to_cproj     is_cproj      {};
-    Cast(Ty<'t>)       to_cast      is_cast       {};
-    Cfg                to_cfg       is_cfg        {CProj,If,Loop,Region,Return,Start,Stop,XCtrl};
-    Constant(Ty<'t>)   to_constant  is_constant   {};
-    Div                to_div       is_div        {};
-    DivF               to_divf      is_divf       {};
-    If(IfOp)           to_if        is_if         {};
-    Load(LoadOp<'t>)   to_load      is_load       {};
-    Loop               to_loop      is_loop       {Start};
-    Minus              to_minus     is_minus      {};
-    MinusF             to_minusf    is_minusf     {};
-    Mul                to_mul       is_mul        {};
-    MulF               to_mulf      is_mulf       {};
-    New(Ty<'t>)        to_new       is_new        {};
-    Not                to_not       is_not        {};
-    Or                 to_or        is_or         {};
-    Phi(PhiOp<'t>)     to_phi       is_phi        {};
-    Proj(ProjOp<'t>)   to_proj      is_proj       {};
-    ReadOnly           to_ronly     is_ronly      {};
-    Region             to_region    is_region     {Loop, Start};
-    Return             to_return    is_return     {};
-    RoundF32           to_roundf32  is_roundf32   {};
-    Sar                to_sar       is_sar        {};
-    Scope(ScopeOp<'t>) to_scope     is_scope      {};
-    ScopeMin           to_scope_min is_scope_min  {Scope};
-    Shl                to_shl       is_shl        {};
-    Shr                to_shr       is_shr        {};
-    Start(StartOp<'t>) to_start     is_start      {};
-    Stop               to_stop      is_stop       {};
-    Store(StoreOp<'t>) to_store     is_store      {};
-    Struct             to_struct    is_struct     {};
-    Sub                to_sub       is_sub        {};
-    SubF               to_subf      is_subf       {};
-    ToFloat            to_tofloat   is_tofloat    {};
-    XCtrl              to_xctrl     is_xctrl      {};
-    Xor                to_xor       is_xor        {};
+    Add                : Node     { to_add       is_add       };
+    AddF               : Node     { to_addf      is_addf      };
+    And                : Node     { to_and       is_and       };
+    Bool(BoolOp)       : Node     { to_bool      is_bool      };
+    CProj(ProjOp<'t>)  : Cfg      { to_cproj     is_cproj     };
+    Cast(Ty<'t>)       : Node     { to_cast      is_cast      };
+    Cfg                : Node     { to_cfg       is_cfg       };
+    Constant(Ty<'t>)   : Node     { to_constant  is_constant  };
+    Div                : Node     { to_div       is_div       };
+    DivF               : Node     { to_divf      is_divf      };
+    If(IfOp)           : Cfg      { to_if        is_if        };
+    Load(LoadOp<'t>)   : Node     { to_load      is_load      };
+    Loop               : Region   { to_loop      is_loop      };
+    Minus              : Node     { to_minus     is_minus     };
+    MinusF             : Node     { to_minusf    is_minusf    };
+    Mul                : Node     { to_mul       is_mul       };
+    MulF               : Node     { to_mulf      is_mulf      };
+    New(Ty<'t>)        : Node     { to_new       is_new       };
+    Not                : Node     { to_not       is_not       };
+    Or                 : Node     { to_or        is_or        };
+    Phi(PhiOp<'t>)     : Node     { to_phi       is_phi       };
+    Proj(ProjOp<'t>)   : Node     { to_proj      is_proj      };
+    ReadOnly           : Node     { to_ronly     is_ronly     };
+    Region             : Cfg      { to_region    is_region    };
+    Return             : Cfg      { to_return    is_return    };
+    RoundF32           : Node     { to_roundf32  is_roundf32  };
+    Sar                : Node     { to_sar       is_sar       };
+    Scope(ScopeOp<'t>) : ScopeMin { to_scope     is_scope     };
+    ScopeMin           : Node     { to_scope_min is_scope_min };
+    Shl                : Node     { to_shl       is_shl       };
+    Shr                : Node     { to_shr       is_shr       };
+    Start(StartOp<'t>) : Loop     { to_start     is_start     };
+    Stop               : Node     { to_stop      is_stop      };
+    Store(StoreOp<'t>) : Node     { to_store     is_store     };
+    Struct             : Node     { to_struct    is_struct    };
+    Sub                : Node     { to_sub       is_sub       };
+    SubF               : Node     { to_subf      is_subf      };
+    ToFloat            : Node     { to_tofloat   is_tofloat   };
+    XCtrl              : Cfg      { to_xctrl     is_xctrl     };
+    Xor                : Node     { to_xor       is_xor       };
 );
 
 impl<'t> Op<'t> {
@@ -429,11 +464,11 @@ pub struct StartOp<'t> {
 }
 
 impl Start {
-    pub const DUMMY: Start = Start(Node::DUMMY);
+    pub const DUMMY: Start = Start(Loop(Region(Cfg(Node::DUMMY))));
 
     pub fn new<'t>(args: &[Ty<'t>], sea: &mut Nodes<'t>) -> Self {
         let args = sea.types.get_tuple_from_slice(args);
-        let this = Start(sea.create((
+        let this = Start::from_node_unchecked(sea.create((
             Op::Start(StartOp {
                 args,
                 alias_starts: HashMap::new(),
@@ -447,7 +482,8 @@ impl Start {
 
 impl Return {
     pub fn new(ctrl: Node, data: Node, scope: Option<Scope>, sea: &mut Nodes) -> Self {
-        let this = Return(sea.create((Op::Return, vec![Some(ctrl), Some(data)])));
+        let this =
+            Return::from_node_unchecked(sea.create((Op::Return, vec![Some(ctrl), Some(data)])));
 
         if let Some(scope) = scope {
             // We lookup memory slices by the naming convention that they start with $
@@ -469,48 +505,48 @@ impl Constant {
 
     pub fn new<'t>(ty: Ty<'t>, sea: &mut Nodes<'t>) -> Self {
         let start = sea.start;
-        Constant(sea.create((Op::Constant(ty), vec![Some(*start)])))
+        Constant(sea.create((Op::Constant(ty), vec![Some(start.to_node())])))
     }
 }
 impl XCtrl {
-    pub const DUMMY: XCtrl = XCtrl(Node::DUMMY);
+    pub const DUMMY: XCtrl = XCtrl(Cfg(Node::DUMMY));
 
     pub fn new(sea: &mut Nodes) -> Self {
         let start = sea.start;
-        XCtrl(sea.create((Op::XCtrl, vec![Some(*start)])))
+        XCtrl::from_node_unchecked(sea.create((Op::XCtrl, vec![Some(start.to_node())])))
     }
 }
 
 impl Add {
     pub fn new(left: Node, right: Node, sea: &mut Nodes) -> Self {
-        Add(sea.create((Op::Add, vec![None, Some(left), Some(right)])))
+        Add::from_node_unchecked(sea.create((Op::Add, vec![None, Some(left), Some(right)])))
     }
 }
 impl Sub {
     pub fn new(left: Node, right: Node, sea: &mut Nodes) -> Self {
-        Sub(sea.create((Op::Sub, vec![None, Some(left), Some(right)])))
+        Sub::from_node_unchecked(sea.create((Op::Sub, vec![None, Some(left), Some(right)])))
     }
 }
 impl Mul {
     pub fn new(left: Node, right: Node, sea: &mut Nodes) -> Self {
-        Mul(sea.create((Op::Mul, vec![None, Some(left), Some(right)])))
+        Mul::from_node_unchecked(sea.create((Op::Mul, vec![None, Some(left), Some(right)])))
     }
 }
 impl Div {
     pub fn new(left: Node, right: Node, sea: &mut Nodes) -> Self {
-        Div(sea.create((Op::Div, vec![None, Some(left), Some(right)])))
+        Div::from_node_unchecked(sea.create((Op::Div, vec![None, Some(left), Some(right)])))
     }
 }
 
 impl Minus {
     pub fn new(expr: Node, sea: &mut Nodes) -> Self {
-        Minus(sea.create((Op::Minus, vec![None, Some(expr)])))
+        Minus::from_node_unchecked(sea.create((Op::Minus, vec![None, Some(expr)])))
     }
 }
 
 impl Scope {
     pub fn new(sea: &mut Nodes) -> Self {
-        Scope(sea.create((Op::Scope(ScopeOp { scopes: vec![] }), vec![])))
+        Scope::from_node_unchecked(sea.create((Op::Scope(ScopeOp { scopes: vec![] }), vec![])))
     }
 }
 
@@ -540,13 +576,13 @@ impl BoolOp {
 
 impl Bool {
     pub fn new(left: Node, right: Node, op: BoolOp, sea: &mut Nodes) -> Self {
-        Bool(sea.create((Op::Bool(op), vec![None, Some(left), Some(right)])))
+        Bool::from_node_unchecked(sea.create((Op::Bool(op), vec![None, Some(left), Some(right)])))
     }
 }
 
 impl Not {
     pub fn new(expr: Node, sea: &mut Nodes) -> Self {
-        Not(sea.create((Op::Not, vec![None, Some(expr)])))
+        Not::from_node_unchecked(sea.create((Op::Not, vec![None, Some(expr)])))
     }
 }
 
@@ -563,7 +599,7 @@ impl Proj {
         label: &'t str,
         sea: &mut Nodes<'t>,
     ) -> Self {
-        Proj(sea.create((Op::Proj(ProjOp { index, label }), vec![Some(ctrl.into())])))
+        Proj::from_node_unchecked(sea.create((Op::Proj(ProjOp { index, label }), vec![Some(ctrl.into())])))
     }
 }
 
@@ -574,7 +610,7 @@ impl CProj {
         label: &'t str,
         sea: &mut Nodes<'t>,
     ) -> Self {
-        CProj(sea.create((Op::CProj(ProjOp { index, label }), vec![Some(ctrl.into())])))
+        CProj::from_node_unchecked(sea.create((Op::CProj(ProjOp { index, label }), vec![Some(ctrl.into())])))
     }
 }
 
@@ -590,8 +626,8 @@ impl If {
             Some(n) => (IfOp::Cond, n),
             None => (IfOp::Never, *sea.zero),
         };
-        let this = If(sea.create((Op::If(op), vec![Some(ctrl), Some(pred)])));
-        sea.iter_peeps.add(*this); // Because idoms are complex, just add it
+        let this = If::from_node_unchecked(sea.create((Op::If(op), vec![Some(ctrl), Some(pred)])));
+        sea.iter_peeps.add(this.to_node()); // Because idoms are complex, just add it
         this
     }
     pub fn pred(self, sea: &Nodes) -> Option<Node> {
@@ -612,7 +648,7 @@ impl Phi {
         inputs: Vec<Option<Node>>,
         sea: &mut Nodes<'t>,
     ) -> Self {
-        Phi(sea.create((Op::Phi(PhiOp { label, ty }), inputs)))
+        Phi::from_node_unchecked(sea.create((Op::Phi(PhiOp { label, ty }), inputs)))
     }
     pub fn region(self, sea: &Nodes) -> Cfg {
         self.inputs(sea)[0].unwrap().to_cfg(sea).unwrap()
@@ -620,17 +656,17 @@ impl Phi {
 }
 impl Region {
     pub fn new(inputs: Vec<Option<Node>>, sea: &mut Nodes) -> Self {
-        Region(sea.create((Op::Region, inputs)))
+        Region::from_node_unchecked(sea.create((Op::Region, inputs)))
     }
 }
 impl Stop {
     pub fn new(sea: &mut Nodes) -> Self {
-        Stop(sea.create((Op::Stop, vec![])))
+        Stop::from_node_unchecked(sea.create((Op::Stop, vec![])))
     }
 }
 impl Loop {
     pub fn new(entry: Node, sea: &mut Nodes) -> Self {
-        Loop(sea.create((Op::Loop, vec![None, Some(entry), None])))
+        Loop::from_node_unchecked(sea.create((Op::Loop, vec![None, Some(entry), None])))
     }
 
     pub fn entry(self, sea: &Nodes) -> Cfg {
@@ -642,7 +678,7 @@ impl Loop {
 }
 impl Cast {
     pub fn new<'t>(ty: Ty<'t>, ctrl: Node, i: Node, sea: &mut Nodes<'t>) -> Self {
-        Cast(sea.create((Op::Cast(ty), vec![Some(ctrl), Some(i)])))
+        Cast::from_node_unchecked(sea.create((Op::Cast(ty), vec![Some(ctrl), Some(i)])))
     }
 }
 
@@ -661,7 +697,7 @@ impl Load {
         [mem_slice, mem_ptr]: [Node; 2],
         sea: &mut Nodes<'t>,
     ) -> Self {
-        Load(sea.create((
+        Load::from_node_unchecked(sea.create((
             Op::Load(LoadOp {
                 name,
                 alias,
@@ -691,7 +727,7 @@ impl Store {
         [ctrl, mem_slice, mem_ptr, value]: [Node; 4],
         sea: &mut Nodes<'t>,
     ) -> Self {
-        Store(sea.create((
+        Store::from_node_unchecked(sea.create((
             Op::Store(StoreOp { name, alias }),
             vec![Some(ctrl), Some(mem_slice), Some(mem_ptr), Some(value)],
         )))
@@ -717,6 +753,6 @@ impl Node {
 
 impl New {
     pub fn new<'t>(ptr: Ty<'t>, ctrl: Node, sea: &mut Nodes<'t>) -> Self {
-        New(sea.create((Op::New(ptr), vec![Some(ctrl)])))
+        New::from_node_unchecked(sea.create((Op::New(ptr), vec![Some(ctrl)])))
     }
 }
