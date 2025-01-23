@@ -54,38 +54,44 @@ impl<'a> Deref for Ty<'a> {
     }
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub struct TyStruct<'t>(Ty<'t>);
+macro_rules! impl_subtype {
+    ($Subtype:ident<$t:lifetime>($Variant:ident) { $cast:ident } ) => {
+        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+        pub struct $Subtype<$t>(Ty<$t>);
 
-impl<'t> TyStruct<'t> {
-    pub fn data(self) -> &'t Struct<'t> {
-        match self.0.inner() {
-            Type::Struct(s) => s,
-            _ => unreachable!(),
+        impl<$t> $Subtype<$t> {
+            pub fn data(self) -> &$t $Variant<$t> {
+                match self.0.inner() {
+                    Type::$Variant(x) => x,
+                    _ => unreachable!(),
+                }
+            }
         }
-    }
-}
 
-impl<'a> TryFrom<Ty<'a>> for TyStruct<'a> {
-    type Error = ();
+        impl<$t> TryFrom<Ty<$t>> for $Subtype<$t> {
+            type Error = ();
 
-    fn try_from(value: Ty<'a>) -> Result<Self, Self::Error> {
-        match &*value {
-            Type::Struct(_) => Ok(Self(value)),
-            _ => Err(()),
+            fn try_from(value: Ty<$t>) -> Result<Self, Self::Error> {
+                match &*value {
+                    Type::$Variant(_) => Ok(Self(value)),
+                    _ => Err(()),
+                }
+            }
         }
-    }
+        impl<'t> Ty<'t> {
+            pub fn $cast(self) -> Option<$Subtype<'t>> {
+                self.try_into().ok()
+            }
+        }
+
+        impl<$t> Deref for $Subtype<$t> {
+            type Target = Ty<$t>;
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+
+    };
 }
 
-impl<'t> Ty<'t> {
-    pub fn to_struct(self) -> Option<TyStruct<'t>> {
-        self.try_into().ok()
-    }
-}
-
-impl<'a> Deref for TyStruct<'a> {
-    type Target = Ty<'a>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
+impl_subtype!(TyStruct<'t>(Struct) { to_struct });
