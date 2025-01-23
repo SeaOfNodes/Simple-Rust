@@ -360,7 +360,7 @@ impl CProj {
     fn idealize_cproj(self, sea: &mut Nodes) -> Option<Node> {
         let index = sea[self].index;
         if let Some(iff) = self.inputs(sea)[0]?.to_if(sea) {
-            if let Some(Type::Tuple { types: ts }) = iff.ty(sea).as_deref() {
+            if let Some(Type::Tuple(ts)) = iff.ty(sea).as_deref() {
                 if ts[1 - index] == sea.types.xctrl {
                     return iff.inputs(sea)[0]; // We become our input control
                 }

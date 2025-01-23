@@ -3,7 +3,7 @@ use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::{fmt, ptr};
 
-use crate::sea_of_nodes::types::{MemPtr, Struct, Type};
+use crate::sea_of_nodes::types::{Int, Mem, MemPtr, Struct, Tuple, Type};
 
 /// A reference to an interned type.
 /// Equality and hashing is based on the value of the pointer.
@@ -55,12 +55,12 @@ impl<'a> Deref for Ty<'a> {
 }
 
 macro_rules! impl_subtype {
-    ($Subtype:ident<$t:lifetime>($Variant:ident) { $cast:ident $checkcast:ident } ) => {
+    ($Subtype:ident($Variant:ident$(<$v:lifetime>)?) { $cast:ident $checkcast:ident } ) => {
         #[derive(Copy, Clone, Eq, PartialEq, Hash)]
-        pub struct $Subtype<$t>(Ty<$t>);
+        pub struct $Subtype<'t>(Ty<'t>);
 
-        impl<$t> $Subtype<$t> {
-            pub fn data(self) -> &$t $Variant<$t> {
+        impl<'t> $Subtype<'t> {
+            pub fn data(self) -> &'t $Variant$(<$v> where $v : 't)? {
                 match self.0.inner() {
                     Type::$Variant(x) => x,
                     _ => unreachable!(),
@@ -68,10 +68,10 @@ macro_rules! impl_subtype {
             }
         }
 
-        impl<$t> TryFrom<Ty<$t>> for $Subtype<$t> {
+        impl<'t> TryFrom<Ty<'t>> for $Subtype<'t> {
             type Error = ();
 
-            fn try_from(value: Ty<$t>) -> Result<Self, Self::Error> {
+            fn try_from(value: Ty<'t>) -> Result<Self, Self::Error> {
                 match &*value {
                     Type::$Variant(_) => Ok(Self(value)),
                     _ => Err(()),
@@ -87,8 +87,8 @@ macro_rules! impl_subtype {
             }
         }
 
-        impl<$t> Deref for $Subtype<$t> {
-            type Target = Ty<$t>;
+        impl<'t> Deref for $Subtype<'t> {
+            type Target = Ty<'t>;
             fn deref(&self) -> &Self::Target {
                 &self.0
             }
@@ -100,7 +100,7 @@ macro_rules! impl_subtype {
                 Debug::fmt(&self.0, f)
             }
         }
-        impl<'t> Display for $Subtype<'t> {
+        impl Display for $Subtype<'_> {
             fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
                 Display::fmt(&self.0, f)
             }
@@ -109,5 +109,8 @@ macro_rules! impl_subtype {
     };
 }
 
-impl_subtype!(TyStruct<'t>(Struct) { to_struct  is_struct  });
-impl_subtype!(TyMemPtr<'t>(MemPtr) { to_mem_ptr is_mem_ptr });
+impl_subtype!(TyInt(Int)           { to_int     is_int     });
+impl_subtype!(TyTuple(Tuple<'t>)   { to_tuple   is_tuple   });
+impl_subtype!(TyStruct(Struct<'t>) { to_struct  is_struct  });
+impl_subtype!(TyMemPtr(MemPtr<'t>) { to_mem_ptr is_mem_ptr });
+impl_subtype!(TyMem(Mem)           { to_mem     is_mem     });

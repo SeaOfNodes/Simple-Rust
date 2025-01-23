@@ -267,7 +267,7 @@ impl<'a, 't> Evaluator<'a, 't> {
         self.heap.objs.push(Obj {
             ty: self.sea.types.struct_bot.try_into().unwrap(), // dummy
             fields: {
-                let Type::Tuple { types } = &*self.sea[self.start].args else {
+                let Type::Tuple(types) = &*self.sea[self.start].args else {
                     unreachable!();
                 };
                 let mut f = vec![Object::Memory; types.len()];

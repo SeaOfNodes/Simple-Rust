@@ -439,7 +439,7 @@ impl Start {
     /// Creates a projection for each of the struct's fields, using the field alias
     /// as the key.
     pub fn add_mem_proj<'t>(self, ts: TyStruct<'t>, scope: Scope, sea: &mut Nodes<'t>) {
-        let Type::Tuple { types } = *sea[self].args else {
+        let Type::Tuple(types) = *sea[self].args else {
             unreachable!()
         };
 

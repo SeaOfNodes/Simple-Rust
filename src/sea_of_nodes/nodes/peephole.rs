@@ -185,7 +185,7 @@ impl<'t> Node {
                     return types.bot;
                 };
                 match &*input {
-                    Type::Tuple { types } => types[n.index],
+                    Type::Tuple(types) => types[n.index],
                     _ => unreachable!("proj node ctrl must always be tuple, if present"),
                 }
             }

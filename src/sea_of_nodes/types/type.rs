@@ -12,7 +12,7 @@ pub enum Type<'a> {
     Ctrl,  // control flow bottom
     XCtrl, //  ctrl flow top (mini-lattice: any-xctrl-ctrl-all)
     Int(Int),
-    Tuple { types: &'a [Ty<'a>] },
+    Tuple(Tuple<'a>),
     Struct(Struct<'a>),
     MemPtr(MemPtr<'a>),
     Mem(Mem),
@@ -24,6 +24,8 @@ pub enum Int {
     Top,
     Constant(i64),
 }
+
+pub type Tuple<'t> = &'t [Ty<'t>];
 
 #[derive(Eq, PartialEq, Copy, Clone, Hash, Debug)]
 pub enum Struct<'t> {
@@ -137,7 +139,7 @@ impl<'t> Display for Type<'t> {
             Type::Int(Int::Bot) => "IntBot",
             Type::Int(Int::Top) => "IntTop",
             Type::Int(Int::Constant(c)) => return write!(f, "{c}"),
-            Type::Tuple { types } => {
+            Type::Tuple(types) => {
                 write!(f, "[")?;
                 for (i, ty) in types.iter().enumerate() {
                     if i > 0 {

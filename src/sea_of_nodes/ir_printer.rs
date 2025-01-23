@@ -128,7 +128,7 @@ fn type_name(ty: Ty) -> Cow<str> {
             Int::Top => Borrowed("IntTop"),
             Int::Constant(_) => Borrowed("Int"),
         },
-        Type::Tuple { types } => {
+        Type::Tuple(types) => {
             let mut sb = "[".to_string();
             for &t in types {
                 sb.push_str(type_name(t).as_ref());

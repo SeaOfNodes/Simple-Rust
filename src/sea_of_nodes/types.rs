@@ -78,18 +78,10 @@ impl<'a> Types<'a> {
             int_two: intern(Type::Int(Int::Constant(2))),
             int_bot: intern(Type::Int(Int::Bot)),
             int_top: intern(Type::Int(Int::Top)),
-            if_both: intern(Type::Tuple {
-                types: arena.alloc([ctrl, ctrl]),
-            }),
-            if_neither: intern(Type::Tuple {
-                types: arena.alloc([xctrl, xctrl]),
-            }),
-            if_true: intern(Type::Tuple {
-                types: arena.alloc([ctrl, xctrl]),
-            }),
-            if_false: intern(Type::Tuple {
-                types: arena.alloc([xctrl, ctrl]),
-            }),
+            if_both: intern(Type::Tuple(arena.alloc([ctrl, ctrl]))),
+            if_neither: intern(Type::Tuple(arena.alloc([xctrl, xctrl]))),
+            if_true: intern(Type::Tuple(arena.alloc([ctrl, xctrl]))),
+            if_false: intern(Type::Tuple(arena.alloc([xctrl, ctrl]))),
             struct_bot,
             struct_top,
             memory_bot: intern(Type::Mem(Mem::Bot)),
@@ -133,12 +125,12 @@ impl<'a> Types<'a> {
 
     pub fn get_tuple_from_slice(&self, types: &[Ty<'a>]) -> Ty<'a> {
         let types: &'a [Ty<'a>] = self.interner.arena.alloc_slice_copy(types);
-        self.interner.intern(Type::Tuple { types })
+        self.interner.intern(Type::Tuple(types))
     }
 
     pub fn get_tuple_from_array<const N: usize>(&self, types: [Ty<'a>; N]) -> Ty<'a> {
         let types: &'a [Ty<'a>] = self.interner.arena.alloc(types);
-        self.interner.intern(Type::Tuple { types })
+        self.interner.intern(Type::Tuple(types))
     }
 
     pub fn get_str(&self, name: &str) -> &'a str {
@@ -185,7 +177,7 @@ impl<'a> Types<'a> {
             },
 
             // Tuple sub-lattice
-            (Type::Tuple { types: t1 }, Type::Tuple { types: t2 }) => {
+            (Type::Tuple(t1), Type::Tuple(t2)) => {
                 assert_eq!(t1.len(), t2.len(), "{a} meet {b} not implemented");
                 self.get_tuple_from_slice(
                     &t1.iter()
@@ -263,7 +255,7 @@ impl<'a> Types<'a> {
                 Int::Top => self.int_bot,
                 Int::Constant(_) => ty, // self dual
             },
-            Type::Tuple { types } => {
+            Type::Tuple(types) => {
                 self.get_tuple_from_slice(&types.iter().map(|t| self.dual(*t)).collect::<Vec<_>>())
             }
             Type::Struct(s) => match s {
@@ -296,7 +288,7 @@ impl<'a> Types<'a> {
             Type::Ctrl => self.xctrl, // why?
             Type::XCtrl => self.bot,  // why?
             Type::Int(_) => self.int_bot,
-            Type::Tuple { types } => {
+            Type::Tuple(types) => {
                 let types = types.iter().map(|&ty| self.glb(ty)).collect::<Vec<_>>();
                 self.get_tuple_from_slice(&types)
             }

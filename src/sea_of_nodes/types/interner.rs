@@ -66,15 +66,15 @@ mod tests {
         assert!(!ptr::eq(ty_42.inner(), ty_2.inner()));
         assert!(ptr::eq(ty_42.inner(), ty_42_too.inner()));
 
-        let t1 = interner.intern(Type::Tuple {
-            types: arena.alloc([ty_bot_1, ty_bot_2, ty_42, ty_2, ty_42_too]),
-        });
-        let t2 = interner.intern(Type::Tuple {
-            types: arena.alloc([ty_bot_2, ty_bot_1, ty_42_too, ty_2, ty_42]),
-        });
-        let t3 = interner.intern(Type::Tuple {
-            types: arena.alloc([ty_bot_1, ty_bot_2, ty_42, ty_2, ty_2]),
-        });
+        let t1 = interner.intern(Type::Tuple(
+            arena.alloc([ty_bot_1, ty_bot_2, ty_42, ty_2, ty_42_too]),
+        ));
+        let t2 = interner.intern(Type::Tuple(
+            arena.alloc([ty_bot_2, ty_bot_1, ty_42_too, ty_2, ty_42]),
+        ));
+        let t3 = interner.intern(Type::Tuple(
+            arena.alloc([ty_bot_1, ty_bot_2, ty_42, ty_2, ty_2]),
+        ));
         assert!(ptr::eq(t1.inner(), t2.inner()));
         assert!(!ptr::eq(t1.inner(), t3.inner()));
     }
