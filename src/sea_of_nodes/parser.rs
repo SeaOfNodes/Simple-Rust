@@ -803,10 +803,7 @@ impl<'s, 't> Parser<'s, 't> {
                 expr_ty.str()
             ));
         };
-        let Type::Struct(s) = *ptr.to else {
-            unreachable!("{ptr:?}")
-        };
-
+        let s = ptr.to.to_struct().unwrap();
         let name = self.types.get_str(self.require_id()?);
 
         let Some(idx) = s.fields().iter().position(|&f| f.0 == name) else {

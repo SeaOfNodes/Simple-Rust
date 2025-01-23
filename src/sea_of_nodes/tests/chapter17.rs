@@ -873,7 +873,7 @@ return rez;
     };
     assert_eq!(
         "[int] {int #; int ![]; }",
-        result.heap.objs[obj].ty.as_ty().to_string()
+        result.heap.objs[obj].ty.to_string()
     );
 
     let Object::Long(nprimes) = result.heap.objs[obj].fields[0] else {

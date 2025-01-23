@@ -58,8 +58,11 @@ impl<'a> Deref for Ty<'a> {
 pub struct TyStruct<'t>(Ty<'t>);
 
 impl<'t> TyStruct<'t> {
-    pub fn as_ty(self) -> Ty<'t> {
-        self.0
+    pub fn data(self) -> &'t Struct<'t> {
+        match self.0.inner() {
+            Type::Struct(s) => s,
+            _ => unreachable!(),
+        }
     }
 }
 
@@ -74,12 +77,15 @@ impl<'a> TryFrom<Ty<'a>> for TyStruct<'a> {
     }
 }
 
+impl<'t> Ty<'t> {
+    pub fn to_struct(self) -> Option<TyStruct<'t>> {
+        self.try_into().ok()
+    }
+}
+
 impl<'a> Deref for TyStruct<'a> {
-    type Target = Struct<'a>;
+    type Target = Ty<'a>;
     fn deref(&self) -> &Self::Target {
-        match &*self.0 {
-            Type::Struct(s) => s,
-            _ => unreachable!(),
-        }
+        &self.0
     }
 }

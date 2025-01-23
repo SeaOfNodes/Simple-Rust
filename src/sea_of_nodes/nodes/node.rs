@@ -599,7 +599,9 @@ impl Proj {
         label: &'t str,
         sea: &mut Nodes<'t>,
     ) -> Self {
-        Proj::from_node_unchecked(sea.create((Op::Proj(ProjOp { index, label }), vec![Some(ctrl.into())])))
+        Proj::from_node_unchecked(
+            sea.create((Op::Proj(ProjOp { index, label }), vec![Some(ctrl.into())])),
+        )
     }
 }
 
@@ -610,7 +612,9 @@ impl CProj {
         label: &'t str,
         sea: &mut Nodes<'t>,
     ) -> Self {
-        CProj::from_node_unchecked(sea.create((Op::CProj(ProjOp { index, label }), vec![Some(ctrl.into())])))
+        CProj::from_node_unchecked(
+            sea.create((Op::CProj(ProjOp { index, label }), vec![Some(ctrl.into())])),
+        )
     }
 }
 
