@@ -9,7 +9,7 @@ use Cow::*;
 use crate::datastructures::id::Id;
 use crate::datastructures::id_vec::IdVec;
 use crate::sea_of_nodes::nodes::{Nodes, OpVec, ScopeOp};
-use crate::sea_of_nodes::types::Ty;
+use crate::sea_of_nodes::types::{Ty, TyMemPtr};
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub struct Node(pub(super) NonZeroU32);
@@ -284,7 +284,7 @@ define_ids!(<'t>
     MinusF             : Node     { to_minusf    is_minusf    };
     Mul                : Node     { to_mul       is_mul       };
     MulF               : Node     { to_mulf      is_mulf      };
-    New(Ty<'t>)        : Node     { to_new       is_new       };
+    New(TyMemPtr<'t>)  : Node     { to_new       is_new       };
     Not                : Node     { to_not       is_not       };
     Or                 : Node     { to_or        is_or        };
     Phi(PhiOp<'t>)     : Node     { to_phi       is_phi       };
@@ -756,7 +756,7 @@ impl Node {
 }
 
 impl New {
-    pub fn new<'t>(ptr: Ty<'t>, ctrl: Node, sea: &mut Nodes<'t>) -> Self {
+    pub fn new<'t>(ptr: TyMemPtr<'t>, ctrl: Node, sea: &mut Nodes<'t>) -> Self {
         New::from_node_unchecked(sea.create((Op::New(ptr), vec![Some(ctrl)])))
     }
 }

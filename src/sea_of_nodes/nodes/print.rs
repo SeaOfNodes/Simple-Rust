@@ -5,7 +5,6 @@ use std::fmt::Display;
 use crate::datastructures::id_set::IdSet;
 use crate::sea_of_nodes::nodes::node::IfOp;
 use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
-use crate::sea_of_nodes::types::Type;
 
 pub struct PrintNodes<'a, 't> {
     node: Option<Node>,
@@ -153,12 +152,7 @@ impl Display for PrintNodes2<'_, '_, '_> {
             n @ Op::Cast(_) => {
                 write!(f, "{}{}", n.label(), input(1))
             }
-            Op::New(t) => {
-                let Type::Pointer(p) = &**t else {
-                    unreachable!()
-                };
-                write!(f, "new {}", p.to.str())
-            }
+            Op::New(t) => write!(f, "new {}", t.data().to.str()),
             Op::Load(l) => write!(f, ".{}", l.name),
             Op::Store(s) => write!(f, ".{}={};", s.name, input(3)),
             Op::Cfg => unreachable!(),

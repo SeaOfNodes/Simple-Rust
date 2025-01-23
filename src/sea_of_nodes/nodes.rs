@@ -6,7 +6,7 @@ use crate::datastructures::id_vec::IdVec;
 use crate::sea_of_nodes::nodes::cfg::CfgData;
 use crate::sea_of_nodes::nodes::gvn::GvnEntry;
 use crate::sea_of_nodes::parser::Parser;
-use crate::sea_of_nodes::types::{MemPtr, Struct, Ty, Type, Types};
+use crate::sea_of_nodes::types::{Ty, TyStruct, Type, Types};
 use iter_peeps::IterPeeps;
 pub use node::{
     BoolOp, Cfg, Constant, LoadOp, Node, Op, Phi, Proj, ProjOp, Scope, Start, StartOp, StoreOp,
@@ -292,7 +292,7 @@ impl Node {
     pub fn err(self, sea: &Nodes) -> Option<String> {
         if let Some(memop) = self.to_mem_name(sea) {
             let ptr = self.inputs(sea)[2]?.ty(sea)?;
-            if ptr == sea.types.bot || matches!(*ptr, Type::Pointer(MemPtr { nil: true, .. })) {
+            if ptr == sea.types.bot || ptr.to_mem_ptr().is_some_and(|t| t.data().nil) {
                 return Some(format!("Might be null accessing '{memop}'"));
             }
         }
@@ -438,22 +438,19 @@ impl<'t> Nodes<'t> {
 impl Start {
     /// Creates a projection for each of the struct's fields, using the field alias
     /// as the key.
-    pub fn add_mem_proj<'t>(self, ts: Ty<'t>, scope: Scope, sea: &mut Nodes<'t>) {
-        let Type::Struct(Struct::Struct { name, fields }) = *ts else {
-            unreachable!()
-        };
+    pub fn add_mem_proj<'t>(self, ts: TyStruct<'t>, scope: Scope, sea: &mut Nodes<'t>) {
         let Type::Tuple { types } = *sea[self].args else {
             unreachable!()
         };
 
         let len = types.len();
-        sea[self].alias_starts.insert(name, len as u32);
+        sea[self].alias_starts.insert(ts.name(), len as u32);
 
         // resize the tuple's type array to include all fields of the struct
         let args = types
             .iter()
             .copied()
-            .chain(fields.iter().enumerate().map(|(i, _)| {
+            .chain(ts.fields().iter().enumerate().map(|(i, _)| {
                 // The new members of the tuple get a mem type with an alias
                 sea.types.get_mem((i + types.len()) as u32)
             }))

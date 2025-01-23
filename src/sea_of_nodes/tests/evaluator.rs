@@ -150,11 +150,7 @@ impl<'a, 't> Evaluator<'a, 't> {
     }
 
     fn alloc(&mut self, alloc: New) -> Object {
-        let Type::Pointer(p) = self.sea[alloc].inner() else {
-            unreachable!()
-        };
-        let ty = p.to.try_into().unwrap();
-
+        let ty = self.sea[alloc].to_mem_ptr().unwrap().data().to;
         let object = Object::Obj(self.heap.objs.len());
         self.heap.objs.push(Obj {
             ty,
@@ -215,7 +211,7 @@ impl<'a, 't> Evaluator<'a, 't> {
     fn cons(&self, cons: Constant) -> Object {
         match self.sea[cons].inner() {
             Type::Int(Int::Constant(i)) => Object::Long(*i),
-            Type::Pointer(_) => Object::Null,
+            Type::MemPtr(_) => Object::Null,
             _ => unreachable!(),
         }
     }

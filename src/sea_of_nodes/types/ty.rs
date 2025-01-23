@@ -3,7 +3,7 @@ use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::{fmt, ptr};
 
-use crate::sea_of_nodes::types::{Struct, Type};
+use crate::sea_of_nodes::types::{MemPtr, Struct, Type};
 
 /// A reference to an interned type.
 /// Equality and hashing is based on the value of the pointer.
@@ -55,8 +55,8 @@ impl<'a> Deref for Ty<'a> {
 }
 
 macro_rules! impl_subtype {
-    ($Subtype:ident<$t:lifetime>($Variant:ident) { $cast:ident } ) => {
-        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+    ($Subtype:ident<$t:lifetime>($Variant:ident) { $cast:ident $checkcast:ident } ) => {
+        #[derive(Copy, Clone, Eq, PartialEq, Hash)]
         pub struct $Subtype<$t>(Ty<$t>);
 
         impl<$t> $Subtype<$t> {
@@ -82,6 +82,9 @@ macro_rules! impl_subtype {
             pub fn $cast(self) -> Option<$Subtype<'t>> {
                 self.try_into().ok()
             }
+            pub fn $checkcast(self) -> bool {
+                self.$cast().is_some()
+            }
         }
 
         impl<$t> Deref for $Subtype<$t> {
@@ -91,7 +94,20 @@ macro_rules! impl_subtype {
             }
         }
 
+
+        impl Debug for $Subtype<'_> {
+            fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+                Debug::fmt(&self.0, f)
+            }
+        }
+        impl<'t> Display for $Subtype<'t> {
+            fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+                Display::fmt(&self.0, f)
+            }
+        }
+
     };
 }
 
-impl_subtype!(TyStruct<'t>(Struct) { to_struct });
+impl_subtype!(TyStruct<'t>(Struct) { to_struct  is_struct  });
+impl_subtype!(TyMemPtr<'t>(MemPtr) { to_mem_ptr is_mem_ptr });

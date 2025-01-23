@@ -4,7 +4,7 @@ use crate::sea_of_nodes::nodes::node::{
     XCtrl,
 };
 use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes, Op};
-use crate::sea_of_nodes::types::{Struct, Ty, Type, Types};
+use crate::sea_of_nodes::types::{Struct, Ty, TyStruct, Types};
 use std::collections::HashMap;
 
 /// Converts a Simple source program to the Sea of Nodes intermediate representation in one pass.
@@ -248,7 +248,7 @@ impl<'s, 't> Parser<'s, 't> {
 
         // Build and install the TypeStruct
         let ts = self.types.get_struct(type_name, &fields);
-        self.name_to_type.insert(type_name, ts); // Insert the struct name in the collection of all struct names
+        self.name_to_type.insert(type_name, *ts); // Insert the struct name in the collection of all struct names
         self.nodes
             .start
             .add_mem_proj(ts, self.scope, &mut self.nodes); // Insert memory edges
@@ -564,7 +564,7 @@ impl<'s, 't> Parser<'s, 't> {
             Some(self.types.int_bot)
         } else if let Some(&obj) = self.name_to_type.get(tname) {
             let nil = self.match_("?");
-            Some(self.types.get_pointer(obj, nil))
+            Some(*self.types.get_mem_ptr(obj.to_struct().unwrap(), nil))
         } else {
             // Not a type; unwind the parse
             self.lexer.remaining = old;
@@ -721,12 +721,12 @@ impl<'s, 't> Parser<'s, 't> {
         } else if self.matchx("false") {
             Ok(*self.nodes.zero)
         } else if self.matchx("null") {
-            Ok(Constant::new(self.types.pointer_null, &mut self.nodes).peephole(&mut self.nodes))
+            Ok(Constant::new(*self.types.pointer_null, &mut self.nodes).peephole(&mut self.nodes))
         } else if self.matchx("new") {
             let ty_name = self.require_id()?;
             let ty = self.name_to_type.get(ty_name);
-            if let Some(ty) = ty {
-                Ok(self.new_struct(*ty))
+            if let Some(ty) = ty.and_then(|t| t.to_struct()) {
+                Ok(self.new_struct(ty))
             } else {
                 Err(format!("Unknown struct type '{ty_name}'"))
             }
@@ -740,13 +740,13 @@ impl<'s, 't> Parser<'s, 't> {
     }
 
     /// Return a NewNode but also generate instructions to initialize it.
-    fn new_struct(&mut self, obj: Ty<'t>) -> Node {
-        let ptr_ty = self.types.get_pointer(obj, false);
+    fn new_struct(&mut self, obj: TyStruct<'t>) -> Node {
+        let ptr_ty = self.types.get_mem_ptr(obj, false);
         let ctrl = self.ctrl();
         let n = New::new(ptr_ty, ctrl, &mut self.nodes).peephole(&mut self.nodes);
         n.keep(&mut self.nodes);
 
-        let Type::Struct(Struct::Struct { name, fields }) = *obj else {
+        let Struct::Struct { name, fields } = *obj.data() else {
             unreachable!()
         };
 
@@ -797,16 +797,15 @@ impl<'s, 't> Parser<'s, 't> {
         }
 
         let expr_ty = self.nodes.ty[expr].unwrap();
-        let Type::Pointer(ptr) = *expr_ty else {
+        let Some(ptr) = expr_ty.to_mem_ptr() else {
             return Err(format!(
                 "Expected struct reference but got {}",
                 expr_ty.str()
             ));
         };
-        let s = ptr.to.to_struct().unwrap();
         let name = self.types.get_str(self.require_id()?);
 
-        let Some(idx) = s.fields().iter().position(|&f| f.0 == name) else {
+        let Some(idx) = ptr.data().to.fields().iter().position(|&f| f.0 == name) else {
             return Err(format!(
                 "Accessing unknown field '{name}' from '{}'",
                 expr_ty.str()
@@ -815,7 +814,7 @@ impl<'s, 't> Parser<'s, 't> {
 
         let alias = self.nodes[self.nodes.start]
             .alias_starts
-            .get(s.name())
+            .get(ptr.data().to.name())
             .unwrap()
             + idx as u32;
 
@@ -840,7 +839,7 @@ impl<'s, 't> Parser<'s, 't> {
             }
         }
 
-        let declared_type = s.fields()[idx].1;
+        let declared_type = ptr.data().to.fields()[idx].1;
         let mem_slice = self.mem_alias_lookup(alias).unwrap();
         let load = Load::new(
             name,

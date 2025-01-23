@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::sea_of_nodes::nodes::node::{Cast, Constant, Not, Phi, Region, Scope};
 use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
-use crate::sea_of_nodes::types::{Ty, Type};
+use crate::sea_of_nodes::types::Ty;
 
 #[derive(Clone, Debug)]
 pub struct ScopeOp<'t> {
@@ -257,16 +257,16 @@ impl<'t> Scope {
         // Direct use of a value as predicate.  This is a zero/null test.
         if self.inputs(sea).iter().any(|x| *x == Some(pred)) {
             let tmp = pred.ty(sea).unwrap();
-            let Type::Pointer(_) = *tmp else {
+            if !tmp.is_mem_ptr() {
                 // Must be an `int`, since int and ptr are the only two value types
                 // being tested. No representation for a generic not-null int, so no upcast.
                 return None;
             };
-            if sea.types.isa(tmp, sea.types.pointer_void) {
+            if sea.types.isa(tmp, *sea.types.pointer_void) {
                 return None; // Already not-null, no reason to upcast
             }
             // Upcast the ptr to not-null ptr, and replace in scope
-            let c = Cast::new(sea.types.pointer_void, ctrl, pred, sea).peephole(sea);
+            let c = Cast::new(*sea.types.pointer_void, ctrl, pred, sea).peephole(sea);
             let t = c.compute(sea);
             c.set_type(t, sea);
             self.replace(pred, Some(c), sea);

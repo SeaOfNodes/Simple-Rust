@@ -14,7 +14,7 @@ pub enum Type<'a> {
     Int(Int),
     Tuple { types: &'a [Ty<'a>] },
     Struct(Struct<'a>),
-    Pointer(MemPtr<'a>),
+    MemPtr(MemPtr<'a>),
     Memory(Mem),
 }
 
@@ -60,8 +60,7 @@ impl<'t> TyStruct<'t> {
 
 #[derive(Eq, PartialEq, Copy, Clone, Hash, Debug)]
 pub struct MemPtr<'t> {
-    /// points to Type::Struct
-    pub to: Ty<'t>,
+    pub to: TyStruct<'t>,
     pub nil: bool,
 }
 
@@ -83,7 +82,7 @@ impl<'t> Type<'t> {
             Type::Int(i) => !matches!(i, Int::Bot),
             Type::Tuple { .. } => false,
             Type::Struct(_) => false,
-            Type::Pointer(_) => false,
+            Type::MemPtr(_) => false,
             Type::Memory(_) => false,
         }
     }
@@ -114,10 +113,10 @@ impl<'t> Type<'t> {
             },
             Type::Tuple { .. } => Owned(self.to_string()),
             Type::Struct(s) => Borrowed(s.name()),
-            Type::Pointer(p) => {
-                if *p.to == Type::Struct(Struct::Top) && p.nil {
+            Type::MemPtr(p) => {
+                if *p.to.data() == Struct::Top && p.nil {
                     Borrowed("null")
-                } else if *p.to == Type::Struct(Struct::Bot) && !p.nil {
+                } else if *p.to.data() == Struct::Bot && !p.nil {
                     Borrowed("*void")
                 } else {
                     Owned(format!("*{}{}", p.to.str(), if p.nil { "?" } else { "" }))
@@ -159,9 +158,9 @@ impl<'t> Display for Type<'t> {
                     return write!(f, "}}");
                 }
             },
-            Type::Pointer(p) => match *p {
-                MemPtr { to, nil: true } if *to == Type::Struct(Struct::Top) => "null",
-                MemPtr { to, nil: false } if *to == Type::Struct(Struct::Bot) => "*void",
+            Type::MemPtr(p) => match *p {
+                MemPtr { to, nil: true } if *to.data() == Struct::Top => "null",
+                MemPtr { to, nil: false } if *to.data() == Struct::Bot => "*void",
                 MemPtr { to, nil } => {
                     return write!(f, "*{to}{}", if nil { "?" } else { "" });
                 }

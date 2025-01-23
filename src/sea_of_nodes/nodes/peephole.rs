@@ -155,13 +155,13 @@ impl<'t> Node {
                         Int::Constant(_) => types.int_zero,
                         _ => t0,
                     },
-                    Type::Pointer(p) => {
+                    Type::MemPtr(p) => {
                         // top->top, bot->bot, null->1, *void->0, not-null ptr->0, ptr/nil->bot
                         // If input in null then true
                         // If input is not null ptr then false
-                        if t0 == types.pointer_top {
+                        if t0 == *types.pointer_top {
                             types.int_top
-                        } else if t0 == types.pointer_null {
+                        } else if t0 == *types.pointer_null {
                             types.int_one
                         } else if !p.nil {
                             types.int_zero
@@ -294,7 +294,7 @@ impl<'t> Node {
             Op::Cast(t) => types.join(self.inputs(sea)[1].unwrap().ty(sea).unwrap(), *t),
             Op::Load(l) => l.declared_type,
             Op::Store(s) => types.get_mem(s.alias),
-            Op::New(t) => *t,
+            Op::New(t) => **t,
             op => todo!("{op:?}"),
         }
     }

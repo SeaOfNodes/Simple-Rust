@@ -1,7 +1,7 @@
 use crate::datastructures::arena::DroplessArena;
 use crate::sea_of_nodes::types::interner::Interner;
 pub use crate::sea_of_nodes::types::r#type::*;
-pub use crate::sea_of_nodes::types::ty::{Ty, TyStruct};
+pub use crate::sea_of_nodes::types::ty::{Ty, TyMemPtr, TyStruct};
 
 mod interner;
 mod ty;
@@ -47,14 +47,14 @@ pub struct Types<'a> {
     pub if_neither: Ty<'a>,
     pub if_true: Ty<'a>,
     pub if_false: Ty<'a>,
-    pub struct_bot: Ty<'a>,
-    pub struct_top: Ty<'a>,
+    pub struct_bot: TyStruct<'a>,
+    pub struct_top: TyStruct<'a>,
     pub memory_bot: Ty<'a>,
     pub memory_top: Ty<'a>,
-    pub pointer_top: Ty<'a>,
-    pub pointer_bot: Ty<'a>,
-    pub pointer_null: Ty<'a>,
-    pub pointer_void: Ty<'a>,
+    pub pointer_top: TyMemPtr<'a>,
+    pub pointer_bot: TyMemPtr<'a>,
+    pub pointer_null: TyMemPtr<'a>,
+    pub pointer_void: TyMemPtr<'a>,
 }
 
 impl<'a> Types<'a> {
@@ -62,54 +62,62 @@ impl<'a> Types<'a> {
         let interner = Interner::new(arena);
         let intern = |x| interner.intern(x);
 
-        let ty_ctrl = intern(Type::Ctrl);
-        let ty_xctrl = intern(Type::XCtrl);
+        let ctrl = intern(Type::Ctrl);
+        let xctrl = intern(Type::XCtrl);
 
-        let ty_struct_bot = intern(Type::Struct(Struct::Bot));
-        let ty_struct_top = intern(Type::Struct(Struct::Top));
+        let struct_bot = intern(Type::Struct(Struct::Bot)).to_struct().unwrap();
+        let struct_top = intern(Type::Struct(Struct::Top)).to_struct().unwrap();
 
         Self {
             bot: intern(Type::Bot),
             top: intern(Type::Top),
-            ctrl: ty_ctrl,
-            xctrl: ty_xctrl,
+            ctrl,
+            xctrl,
             int_zero: intern(Type::Int(Int::Constant(0))),
             int_one: intern(Type::Int(Int::Constant(1))),
             int_two: intern(Type::Int(Int::Constant(2))),
             int_bot: intern(Type::Int(Int::Bot)),
             int_top: intern(Type::Int(Int::Top)),
             if_both: intern(Type::Tuple {
-                types: arena.alloc([ty_ctrl, ty_ctrl]),
+                types: arena.alloc([ctrl, ctrl]),
             }),
             if_neither: intern(Type::Tuple {
-                types: arena.alloc([ty_xctrl, ty_xctrl]),
+                types: arena.alloc([xctrl, xctrl]),
             }),
             if_true: intern(Type::Tuple {
-                types: arena.alloc([ty_ctrl, ty_xctrl]),
+                types: arena.alloc([ctrl, xctrl]),
             }),
             if_false: intern(Type::Tuple {
-                types: arena.alloc([ty_xctrl, ty_ctrl]),
+                types: arena.alloc([xctrl, ctrl]),
             }),
-            struct_bot: ty_struct_bot,
-            struct_top: ty_struct_top,
+            struct_bot,
+            struct_top,
             memory_bot: intern(Type::Memory(Mem::Bot)),
             memory_top: intern(Type::Memory(Mem::Top)),
-            pointer_bot: intern(Type::Pointer(MemPtr {
-                to: ty_struct_bot,
+            pointer_bot: intern(Type::MemPtr(MemPtr {
+                to: struct_bot,
                 nil: true,
-            })),
-            pointer_top: intern(Type::Pointer(MemPtr {
-                to: ty_struct_top,
+            }))
+            .to_mem_ptr()
+            .unwrap(),
+            pointer_top: intern(Type::MemPtr(MemPtr {
+                to: struct_top,
                 nil: false,
-            })),
-            pointer_null: intern(Type::Pointer(MemPtr {
-                to: ty_struct_top,
+            }))
+            .to_mem_ptr()
+            .unwrap(),
+            pointer_null: intern(Type::MemPtr(MemPtr {
+                to: struct_top,
                 nil: true,
-            })),
-            pointer_void: intern(Type::Pointer(MemPtr {
-                to: ty_struct_bot,
+            }))
+            .to_mem_ptr()
+            .unwrap(),
+            pointer_void: intern(Type::MemPtr(MemPtr {
+                to: struct_bot,
                 nil: false,
-            })),
+            }))
+            .to_mem_ptr()
+            .unwrap(),
             interner,
         }
     }
@@ -137,15 +145,19 @@ impl<'a> Types<'a> {
         self.interner.intern_str(name)
     }
 
-    pub fn get_struct(&self, name: &'a str, fields: &[(&'a str, Ty<'a>)]) -> Ty<'a> {
+    pub fn get_struct(&self, name: &'a str, fields: &[(&'a str, Ty<'a>)]) -> TyStruct<'a> {
         let fields = self.interner.arena.alloc_slice_copy(fields);
         self.interner
             .intern(Type::Struct(Struct::Struct { name, fields }))
+            .to_struct()
+            .unwrap()
     }
 
-    pub fn get_pointer(&self, to: Ty<'a>, nil: bool) -> Ty<'a> {
-        debug_assert!(matches!(*to, Type::Struct(_)));
-        self.interner.intern(Type::Pointer(MemPtr { to, nil }))
+    pub fn get_mem_ptr(&self, to: TyStruct<'a>, nil: bool) -> TyMemPtr<'a> {
+        self.interner
+            .intern(Type::MemPtr(MemPtr { to, nil }))
+            .to_mem_ptr()
+            .unwrap()
     }
 
     pub fn get_mem(&self, alias: u32) -> Ty<'a> {
@@ -202,15 +214,16 @@ impl<'a> Types<'a> {
                         debug_assert_eq!(fa.0, fb.0, "{a} meet {b} can't happen because struct name must be uniuqe in a compilation unit");
                         (fa.0, self.meet(fa.1, fb.1))
                     }).collect::<Vec<_>>();
-                    self.get_struct(na, &fields)
+                    *self.get_struct(na, &fields)
                 }
-                _ => self.struct_bot, // It's a struct; that's about all we know
+                _ => *self.struct_bot, // It's a struct; that's about all we know
             },
 
             // Pointer sub-lattice
-            (Type::Pointer(pa), Type::Pointer(pb)) => {
-                self.get_pointer(self.meet(pa.to, pb.to), pa.nil | pb.nil)
-            }
+            (Type::MemPtr(pa), Type::MemPtr(pb)) => *self.get_mem_ptr(
+                self.meet(*pa.to, *pb.to).to_struct().unwrap(),
+                pa.nil | pb.nil,
+            ),
 
             // Memory sub-lattice
             (Type::Memory(ma), Type::Memory(mb)) => match (ma, mb) {
@@ -254,19 +267,19 @@ impl<'a> Types<'a> {
                 self.get_tuple_from_slice(&types.iter().map(|t| self.dual(*t)).collect::<Vec<_>>())
             }
             Type::Struct(s) => match s {
-                Struct::Bot => self.struct_top,
-                Struct::Top => self.struct_bot,
+                Struct::Bot => *self.struct_top,
+                Struct::Top => *self.struct_bot,
                 Struct::Struct { name, fields } => {
                     let fields = fields
                         .iter()
                         .map(|&(name, ty)| (name, self.dual(ty)))
                         .collect::<Vec<_>>();
-                    self.get_struct(name, &fields)
+                    *self.get_struct(name, &fields)
                 }
             },
-            Type::Pointer(p) => {
-                let to = self.dual(p.to);
-                self.get_pointer(to, !p.nil)
+            Type::MemPtr(p) => {
+                let to = self.dual(*p.to).to_struct().unwrap();
+                *self.get_mem_ptr(to, !p.nil)
             }
             Type::Memory(m) => match m {
                 Mem::Bot => self.memory_top,
@@ -295,10 +308,12 @@ impl<'a> Types<'a> {
                         .iter()
                         .map(|&(name, ty)| (name, self.glb(ty)))
                         .collect::<Vec<_>>();
-                    self.get_struct(name, &fields)
+                    *self.get_struct(name, &fields)
                 }
             },
-            Type::Pointer(MemPtr { to, .. }) => self.get_pointer(self.glb(to), true),
+            Type::MemPtr(MemPtr { to, .. }) => {
+                *self.get_mem_ptr(self.glb(*to).to_struct().unwrap(), true)
+            }
             Type::Memory(_) => self.memory_bot,
         }
     }
@@ -306,7 +321,7 @@ impl<'a> Types<'a> {
     pub fn make_init(&self, t: Ty<'a>) -> Option<Ty<'a>> {
         match *t {
             Type::Int(_) => Some(self.int_zero),
-            Type::Pointer(_) => Some(self.pointer_null),
+            Type::MemPtr(_) => Some(*self.pointer_null),
             _ => None,
         }
     }

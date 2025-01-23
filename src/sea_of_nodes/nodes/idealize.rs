@@ -219,7 +219,7 @@ impl Bool {
             }
             // Equals X==0 becomes a !X
             if rhs.ty(sea) == Some(sea.types.int_zero)
-                || rhs.ty(sea) == Some(sea.types.pointer_null)
+                || rhs.ty(sea) == Some(*sea.types.pointer_null)
             {
                 return Some(*Not::new(lhs, sea));
             }
@@ -581,7 +581,7 @@ impl Store {
             // Must check same object
             if ptr == mem.ptr(sea)? {
                 // No bother if weird dead pointers
-                if let Some(Type::Pointer(_)) = ptr.ty(sea).as_deref() {
+                if ptr.ty(sea).is_some_and(|t| t.is_mem_ptr()) {
                     // Must have exactly one use of "this" or you get weird
                     // non-serializable memory effects in the worse case.
                     if mem.check_no_use_beyond(*self, sea) {
