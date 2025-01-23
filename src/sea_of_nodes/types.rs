@@ -92,8 +92,8 @@ impl<'a> Types<'a> {
             }),
             struct_bot,
             struct_top,
-            memory_bot: intern(Type::Memory(Mem::Bot)),
-            memory_top: intern(Type::Memory(Mem::Top)),
+            memory_bot: intern(Type::Mem(Mem::Bot)),
+            memory_top: intern(Type::Mem(Mem::Top)),
             pointer_bot: intern(Type::MemPtr(MemPtr {
                 to: struct_bot,
                 nil: true,
@@ -161,7 +161,7 @@ impl<'a> Types<'a> {
     }
 
     pub fn get_mem(&self, alias: u32) -> Ty<'a> {
-        self.interner.intern(Type::Memory(Mem::Alias(alias)))
+        self.interner.intern(Type::Mem(Mem::Alias(alias)))
     }
 
     pub fn meet(&self, a: Ty<'a>, b: Ty<'a>) -> Ty<'a> {
@@ -226,7 +226,7 @@ impl<'a> Types<'a> {
             ),
 
             // Memory sub-lattice
-            (Type::Memory(ma), Type::Memory(mb)) => match (ma, mb) {
+            (Type::Mem(ma), Type::Mem(mb)) => match (ma, mb) {
                 (Mem::Bot, _) | (_, Mem::Top) => a,
                 (_, Mem::Bot) | (Mem::Top, _) => b,
                 _ => self.memory_bot,
@@ -281,7 +281,7 @@ impl<'a> Types<'a> {
                 let to = self.dual(*p.to).to_struct().unwrap();
                 *self.get_mem_ptr(to, !p.nil)
             }
-            Type::Memory(m) => match m {
+            Type::Mem(m) => match m {
                 Mem::Bot => self.memory_top,
                 Mem::Top => self.memory_bot,
                 Mem::Alias(_) => ty, // self dual
@@ -314,7 +314,7 @@ impl<'a> Types<'a> {
             Type::MemPtr(MemPtr { to, .. }) => {
                 *self.get_mem_ptr(self.glb(*to).to_struct().unwrap(), true)
             }
-            Type::Memory(_) => self.memory_bot,
+            Type::Mem(_) => self.memory_bot,
         }
     }
 

@@ -15,7 +15,7 @@ pub enum Type<'a> {
     Tuple { types: &'a [Ty<'a>] },
     Struct(Struct<'a>),
     MemPtr(MemPtr<'a>),
-    Memory(Mem),
+    Mem(Mem),
 }
 
 #[derive(Eq, PartialEq, Copy, Clone, Hash, Debug)]
@@ -83,7 +83,7 @@ impl<'t> Type<'t> {
             Type::Tuple { .. } => false,
             Type::Struct(_) => false,
             Type::MemPtr(_) => false,
-            Type::Memory(_) => false,
+            Type::Mem(_) => false,
         }
     }
 
@@ -122,7 +122,7 @@ impl<'t> Type<'t> {
                     Owned(format!("*{}{}", p.to.str(), if p.nil { "?" } else { "" }))
                 }
             }
-            Type::Memory(_) => Owned(self.to_string()),
+            Type::Mem(_) => Owned(self.to_string()),
         }
     }
 }
@@ -165,7 +165,7 @@ impl<'t> Display for Type<'t> {
                     return write!(f, "*{to}{}", if nil { "?" } else { "" });
                 }
             },
-            Type::Memory(m) => match m {
+            Type::Mem(m) => match m {
                 Mem::Bot => "MEM#BOT",
                 Mem::Top => "MEMTOP",
                 Mem::Alias(a) => return write!(f, "MEM#{a}"),

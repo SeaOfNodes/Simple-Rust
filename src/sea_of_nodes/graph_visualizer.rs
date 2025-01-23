@@ -244,8 +244,8 @@ fn make_port_name(scope_name: &str, var_name: &str) -> String {
 impl Node {
     fn is_mem(self, sea: &Nodes) -> bool {
         match &sea[self] {
-            Op::Phi(p) => matches!(*p.ty, Type::Memory(_)),
-            Op::Proj(_) => matches!(self.ty(sea).as_deref(), Some(Type::Memory(_))),
+            Op::Phi(p) => matches!(*p.ty, Type::Mem(_)),
+            Op::Proj(_) => matches!(self.ty(sea).as_deref(), Some(Type::Mem(_))),
             Op::Store(_) => true,
             _ => false,
         }
