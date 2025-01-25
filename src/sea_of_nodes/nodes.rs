@@ -5,9 +5,11 @@ use crate::datastructures::id_set::IdSet;
 use crate::datastructures::id_vec::IdVec;
 use crate::sea_of_nodes::nodes::cfg::CfgData;
 use crate::sea_of_nodes::nodes::gvn::GvnEntry;
+use crate::sea_of_nodes::nodes::node::CProj;
 use crate::sea_of_nodes::parser::Parser;
 use crate::sea_of_nodes::types::{Ty, TyStruct, Type, Types};
 use iter_peeps::IterPeeps;
+pub use iter_peeps::WorkList;
 pub use node::{
     BoolOp, Cfg, Constant, LoadOp, Node, Op, Phi, Proj, ProjOp, Scope, Start, StartOp, StoreOp,
     XCtrl,
@@ -350,6 +352,19 @@ impl Node {
             }
         }
         true
+    }
+
+    pub fn cproj(self, index: usize, sea: &mut Nodes) -> Option<CProj> {
+        for &out in &sea.outputs[self] {
+            if out != Self::DUMMY {
+                if let Some(prj) = out.to_cproj(sea) {
+                    if sea[prj].index == index {
+                        return Some(prj);
+                    }
+                }
+            }
+        }
+        None
     }
 }
 

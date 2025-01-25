@@ -179,7 +179,7 @@ impl<'t> Nodes<'t> {
 
 /// Classic WorkList, with a fast add/remove, dup removal, random pull.
 /// The Node's nid is used to check membership in the worklist.
-struct WorkList {
+pub struct WorkList {
     es: Vec<Node>,
     /// Bit set if node is on WorkList
     on: IdSet<Node>,

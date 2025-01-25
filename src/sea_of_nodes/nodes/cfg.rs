@@ -33,7 +33,7 @@ impl Cfg {
         self.inputs(sea)[idx].map(|n| n.to_cfg(sea).unwrap())
     }
 
-    fn idepth(self, sea: &mut Nodes) -> u32 {
+    pub fn idepth(self, sea: &mut Nodes) -> u32 {
         if sea.cfg[self].idepth != 0 {
             return sea.cfg[self].idepth;
         }
@@ -50,8 +50,12 @@ impl Cfg {
         d
     }
 
-    /// Return the immediate dominator of this Node and compute dom tree depth.
     pub fn idom(self, sea: &mut Nodes) -> Option<Cfg> {
+        self.idom_dep(None, sea)
+    }
+
+    /// Return the immediate dominator of this Node and compute dom tree depth.
+    pub fn idom_dep(self, dep: Option<Node>, sea: &mut Nodes) -> Option<Cfg> {
         match sea[*self] {
             Op::Loop => self.cfg(1, sea),
             Op::Region => {
@@ -59,7 +63,7 @@ impl Cfg {
                 // Walk the LHS & RHS idom trees in parallel until they match, or either fails.
                 // Because this does not cache, it can be linear in the size of the program.
                 for i in 1..self.inputs(sea).len() {
-                    lca = Some(self.cfg(i, sea).unwrap().idom_2(lca, sea));
+                    lca = Some(self.cfg(i, sea).unwrap().idom_2(lca, dep, sea));
                 }
                 lca
             }
@@ -69,7 +73,7 @@ impl Cfg {
     }
 
     /// Return the LCA of two idoms
-    pub fn idom_2(self, rhs: Option<Cfg>, sea: &mut Nodes) -> Cfg {
+    pub fn idom_2(self, rhs: Option<Cfg>, dep: Option<Node>, sea: &mut Nodes) -> Cfg {
         let Some(mut rhs) = rhs else {
             return self;
         };
@@ -77,9 +81,15 @@ impl Cfg {
         while lhs != rhs {
             let comp = lhs.idepth(sea) as i64 - rhs.idepth(sea) as i64;
             if comp >= 0 {
+                if let Some(dep) = dep {
+                    lhs.add_dep(dep, sea);
+                }
                 lhs = lhs.idom(sea).unwrap()
             }
             if comp <= 0 {
+                if let Some(dep) = dep {
+                    rhs.add_dep(dep, sea);
+                }
                 rhs = rhs.idom(sea).unwrap()
             }
         }

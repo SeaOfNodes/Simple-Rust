@@ -1,56 +1,15 @@
 use crate::datastructures::id::Id;
 use crate::datastructures::id_set::IdSet;
-use crate::sea_of_nodes::nodes::node::{CProj, If, Load, Loop, Return, Start, Stop, TypedNode};
-use crate::sea_of_nodes::nodes::{Cfg, Node, Nodes};
-use crate::sea_of_nodes::types::Type;
-use std::collections::HashSet;
+use crate::sea_of_nodes::nodes::node::{CProj, If, IfOp, Load, Loop, Return, Stop, TypedNode};
+use crate::sea_of_nodes::nodes::{Cfg, Node, Nodes, WorkList};
 
 /// Arrange that the existing isCFG() Nodes form a valid CFG.  The
 /// Node.use(0) is always a block tail (either IfNode or head of the
 /// following block).  There are no unreachable infinite loops.
 pub fn build_cfg(stop: Stop, sea: &mut Nodes) {
-    fix_loops(stop, sea);
     sched_early(sea);
     sea.scheduled = true;
-    sched_late(sea.start, sea);
-}
-
-/// Backwards walk on the CFG only, looking for unreachable code - which has
-/// to be an infinite loop.  Insert a bogus never-taken exit to Stop, so the
-/// loop becomes reachable.  Also, set loop nesting depth
-fn fix_loops(stop: Stop, sea: &mut Nodes) {
-    // Backwards walk from Stop, looking for unreachable code
-    let mut visit = IdSet::zeros(sea.len());
-    let mut unreach = HashSet::with_capacity(sea.len());
-
-    unreach.insert(sea.start.to_cfg());
-    for ret in 0..stop.inputs(sea).len() {
-        let ret = stop.inputs(sea)[ret];
-        ret.unwrap()
-            .to_return(sea)
-            .unwrap()
-            .walk_unreach(&mut visit, &mut unreach, sea);
-    }
-    if unreach.is_empty() {
-        return;
-    }
-
-    // Forwards walk from unreachable, looking for loops with no exit test.
-    visit.clear();
-    for &cfg in &unreach {
-        walk_infinite(cfg, &mut visit, stop, sea);
-    }
-    // Set loop depth on remaining graph
-    unreach.clear();
-    visit.clear();
-    for ret in 0..stop.inputs(sea).len() {
-        let ret = stop.inputs(sea)[ret];
-        ret.unwrap()
-            .to_return(sea)
-            .unwrap()
-            .walk_unreach(&mut visit, &mut unreach, sea);
-    }
-    assert!(unreach.is_empty());
+    sched_late(stop, sea);
 }
 
 impl Loop {
@@ -60,11 +19,15 @@ impl Loop {
         // Walk the backedge, then immediate dominator tree util we hit this
         // Loop again.  If we ever hit a CProj from an If (as opposed to
         // directly on the If) we found our exit.
-
         let mut x = self.back(sea);
         while x != self.to_cfg() {
-            if x.is_cproj(sea) {
-                return; // Found an exit, not an infinite loop
+            if let Some(exit) = x.to_cproj(sea) {
+                if let Some(iff) = exit.inputs(sea)[0].unwrap().to_if(sea) {
+                    let other = iff.cproj(1 - sea[exit].index, sea).unwrap();
+                    if other.loop_depth(sea) < self.loop_depth(sea) {
+                        return;
+                    }
+                }
             }
             x = x.idom(sea).unwrap()
         }
@@ -87,27 +50,10 @@ impl Loop {
     }
 }
 
-/// Forwards walk over previously unreachable, looking for loops with no
-/// exit test.
-fn walk_infinite(n: Cfg, visit: &mut IdSet<Node>, stop: Stop, sea: &mut Nodes) {
-    let n = *n;
-    if visit.get(n) {
-        return; // Been there, done that
-    }
-    visit.add(n);
-    if let Some(n) = n.to_loop(sea) {
-        n.force_exit(stop, sea);
-    }
-    for i in 0..sea.outputs[n].len() {
-        let use_ = sea.outputs[n][i];
-        if use_ != Node::DUMMY {
-            if let Some(use_) = use_.to_cfg(sea) {
-                walk_infinite(use_, visit, stop, sea);
-            }
-        }
-    }
-}
-
+/// Visit all nodes in CFG Reverse Post-Order, essentially defs before uses
+/// (except at loops).  Since defs are visited first - and hoisted as early
+/// as possible, when we come to a use we place it just after its deepest
+/// input.
 fn sched_early(sea: &mut Nodes) {
     let mut rpo = vec![];
     let mut visit = IdSet::zeros(sea.len());
@@ -120,19 +66,11 @@ fn sched_early(sea: &mut Nodes) {
             let n = cfg.inputs(sea)[i];
             _sched_early(n, &mut visit, sea);
         }
-
-        // Strictly for dead infinite loops, we can have entire code blocks
-        // not reachable from below - so we reach down, from above, one
-        // step.  Since _schedEarly modifies the output arrays, the normal
-        // region._outputs ArrayList iterator throws CME.  The extra edges
-        // are always *added* after any Phis, so just walk the Phi prefix.
         if cfg.is_region(sea) {
-            let len = sea.outputs[cfg].len();
-            for i in 0..len {
-                if sea.outputs[cfg][i] != Node::DUMMY {
-                    if let Some(phi) = sea.outputs[cfg][i].to_phi(sea) {
-                        _sched_early(Some(*phi), &mut visit, sea);
-                    }
+            for i in 0..sea.outputs[cfg].len() {
+                let phi = sea.outputs[cfg][i];
+                if phi != Node::DUMMY && phi.is_phi(sea) {
+                    _sched_early(Some(phi), &mut visit, sea);
                 }
             }
         }
@@ -172,6 +110,7 @@ fn _sched_early(n: Option<Node>, visit: &mut IdSet<Node>, sea: &mut Nodes) {
     if visit.get(n) {
         return; // Been there, done that
     }
+    debug_assert!(!n.is_cfg(sea));
     visit.add(n);
 
     // Schedule not-pinned not-CFG inputs before self.  Since skipping
@@ -180,7 +119,7 @@ fn _sched_early(n: Option<Node>, visit: &mut IdSet<Node>, sea: &mut Nodes) {
     // not-post-visited data op with no scheduled control.
     for i in 0..n.inputs(sea).len() {
         if let Some(def) = n.inputs(sea)[i] {
-            if !def.is_pinned(sea) {
+            if !def.is_phi(sea) {
                 _sched_early(Some(def), visit, sea);
             }
         }
@@ -190,6 +129,9 @@ fn _sched_early(n: Option<Node>, visit: &mut IdSet<Node>, sea: &mut Nodes) {
     if !n.is_pinned(sea) {
         // Schedule at deepest input
         let mut early = sea.start.to_cfg(); // Maximally early, lowest idepth
+        if let Some(cfg) = n.inputs(sea)[0].and_then(|n| n.to_cfg(sea)) {
+            early = cfg;
+        }
         for i in 1..n.inputs(sea).len() {
             let cfg0 = n.inputs(sea)[i].unwrap().cfg0(sea);
             if sea.cfg[cfg0].idepth > sea.cfg[early].idepth {
@@ -200,13 +142,18 @@ fn _sched_early(n: Option<Node>, visit: &mut IdSet<Node>, sea: &mut Nodes) {
     }
 }
 
-fn sched_late(start: Start, sea: &mut Nodes) {
-    let mut late = vec![None; sea.len()];
-    let mut ns = vec![None; sea.len()];
-    _sched_late(start.to_node(), &mut ns, &mut late, sea);
+fn sched_late(stop: Stop, sea: &mut Nodes) {
+    let mut late = vec![None; sea.len() + 1];
+    let mut ns = vec![None; sea.len() + 1];
+    // Breadth-first scheduling
+    breadth(stop, &mut ns, &mut late, sea);
+
+    // Copy the best placement choice into the control slot
     for i in 0..late.len() {
         if let Some(n) = &ns[i] {
-            n.set_def(0, late[i].map(|n| *n), sea);
+            if !n.is_proj(sea) {
+                n.set_def(0, late[i].map(|n| *n), sea);
+            }
         }
     }
 }
@@ -223,63 +170,82 @@ impl Cfg {
     }
 }
 
-/// Forwards post-order pass.  Schedule all outputs first, then draw an
-/// idom-tree line from the LCA of uses to the early schedule.  Schedule is
-/// legal anywhere on this line; pick the most control-dependent (largest
-/// idepth) in the shallowest loop nest.
-fn _sched_late(n: Node, ns: &mut Vec<Option<Node>>, late: &mut Vec<Option<Cfg>>, sea: &mut Nodes) {
-    if late[n.index()].is_some() {
-        return; // Been there, done that
-    }
+fn breadth(stop: Stop, ns: &mut Vec<Option<Node>>, late: &mut Vec<Option<Cfg>>, sea: &mut Nodes) {
+    // Things on the worklist have some (but perhaps not all) uses done.
+    let mut work = WorkList::with_seed(123);
+    work.push(*stop);
 
-    // These0 I know the late schedule of, and need to set early for loops
-    if let Some(cfg) = n.to_cfg(sea) {
-        late[n.index()] = if cfg.block_head(sea) {
-            Some(cfg)
+    'outer: while let Some(n) = work.pop() {
+        debug_assert_eq!(late[n.index()], None, "No double visit");
+        // These I know the late schedule of, and need to set early for loops
+        if let Some(cfg) = n.to_cfg(sea) {
+            late[n.index()] = if cfg.block_head(sea) {
+                Some(cfg)
+            } else {
+                cfg.cfg(0, sea)
+            };
+        } else if let Some(phi) = n.to_phi(sea) {
+            late[n.index()] = Some(phi.region(sea));
+        } else if n.is_proj(sea) && n.inputs(sea)[0].unwrap().is_cfg(sea) {
+            late[n.index()] = n.inputs(sea)[0].unwrap().to_cfg(sea);
         } else {
-            cfg.cfg(0, sea)
-        }
-    }
-    if let Some(phi) = n.to_phi(sea) {
-        late[n.index()] = Some(phi.region(sea));
-    }
+            // All uses done?
+            for &use_ in &sea.outputs[n] {
+                if use_ != Node::DUMMY && late[use_.index()].is_none() {
+                    continue 'outer; // Nope, await all uses done
+                }
+            }
+            // Loads need their memory inputs' uses also done
+            if let Some(ld) = n.to_load(sea) {
+                for &memuse in &sea.outputs[ld.mem(sea).unwrap()] {
+                    if late[memuse.index()].is_none() {
+                        if memuse.ty(sea).unwrap().is_mem() {
+                            continue 'outer; // Load-use directly defines memory
+                        }
+                        if let Some(tt) = memuse.ty(sea).unwrap().to_tuple() {
+                            if tt.data()[sea[ld].alias as usize].is_mem() {
+                                continue 'outer; // Load-use indirectly defines memory
+                            }
+                        }
+                    }
+                }
+            }
 
-    // Walk Stores before Loads, so we can get the anti-deps right
-    for i in 0..sea.outputs[n].len() {
-        let use_ = sea.outputs[n][i];
-        if use_ != Node::DUMMY {
-            if is_forwards_edge(Some(use_), Some(n), sea)
-                && use_.ty(sea).is_some_and(|t| matches!(&*t, Type::Mem(_)))
-            {
-                _sched_late(use_, ns, late, sea);
+            // All uses done, schedule
+            do_sched_late(n, ns, late, sea);
+        }
+
+        // Walk all inputs and put on worklist, as their last-use might now be done
+        for &def in n.inputs(sea).iter().flatten() {
+            if late[def.index()].is_none() {
+                work.push(def);
+                // if the def has a load use, maybe the load can fire
+                for &ld in &sea.outputs[def] {
+                    if ld != Node::DUMMY && ld.is_load(sea) && late[ld.index()].is_none() {
+                        work.push(ld);
+                    }
+                }
             }
         }
     }
+}
 
-    // Walk everybody now
-    for i in 0..sea.outputs[n].len() {
-        let use_ = sea.outputs[n][i];
-        if use_ != Node::DUMMY {
-            if is_forwards_edge(Some(use_), Some(n), sea) {
-                _sched_late(use_, ns, late, sea);
-            }
-        }
-    }
-
-    // Already implicitly scheduled
-    if n.is_pinned(sea) {
-        return;
-    }
-
-    // Need to schedule n
-
+fn do_sched_late(
+    n: Node,
+    ns: &mut Vec<Option<Node>>,
+    late: &mut Vec<Option<Cfg>>,
+    sea: &mut Nodes,
+) {
     // Walk uses, gathering the LCA (Least Common Ancestor) of uses
-    let early = n.cfg0(sea);
+    let early = {
+        let i = n.inputs(sea)[0].unwrap();
+        i.to_cfg(sea).unwrap_or_else(|| i.cfg0(sea))
+    };
     let mut lca = None;
     for i in 0..sea.outputs[n].len() {
         let use_ = sea.outputs[n][i];
         if use_ != Node::DUMMY {
-            lca = Some(use_block(n, use_, late, sea).idom_2(lca, sea));
+            lca = Some(use_block(n, use_, late, sea).idom_2(lca, None, sea));
         }
     }
 
@@ -288,8 +254,8 @@ fn _sched_late(n: Node, ns: &mut Vec<Option<Node>>, late: &mut Vec<Option<Cfg>>,
         lca = Some(find_anti_dep(lca.unwrap(), load, early, late, sea));
     }
 
-    // Walk up from the LCA to the early, looking for best place.  This is the
-    // lowest execution frequency, approximated by least loop depth and
+    // Walk up from the LCA to the early, looking for best place.  This is
+    // the lowest execution frequency, approximated by least loop depth and
     // deepest control flow.
     let mut best = lca.unwrap();
     lca = best.idom(sea); // Already found best for starting LCA
@@ -326,23 +292,10 @@ fn use_block(n: Node, use_: Node, late: &[Option<Cfg>], sea: &Nodes) -> Cfg {
 }
 
 /// Least loop depth first, then largest idepth
-fn better(lca: Cfg, best: Cfg, sea: &Nodes) -> bool {
-    sea.cfg[lca].loop_depth < sea.cfg[best].loop_depth
-        || (sea.cfg[lca].idepth > sea.cfg[best].idepth || best.is_if(sea))
-}
-
-/// Skip iteration if a backedge
-fn is_forwards_edge(use_: Option<Node>, def: Option<Node>, sea: &Nodes) -> bool {
-    let Some(use_) = use_ else { return false };
-    let Some(def) = def else { return false };
-
-    let uin = use_.inputs(sea);
-    !(uin.len() > 2
-        && uin[2] == Some(def)
-        && (use_.is_loop(sea)
-            || (use_
-                .to_phi(sea)
-                .is_some_and(|phi| phi.region(sea).is_loop(sea)))))
+fn better(lca: Cfg, best: Cfg, sea: &mut Nodes) -> bool {
+    lca.loop_depth(sea) < best.loop_depth(sea)
+        || lca.idepth(sea) > best.idepth(sea)
+        || best.is_if(sea)
 }
 
 impl Node {
@@ -386,6 +339,16 @@ fn find_anti_dep(
                     sea,
                 );
             }
+            TypedNode::New(st) => {
+                lca = anti_dep(
+                    load,
+                    late[st.index()].unwrap(),
+                    st.cfg0(sea),
+                    lca,
+                    Some(*st),
+                    sea,
+                );
+            }
             TypedNode::Phi(phi) => {
                 // Repeat anti-dep for matching Phi inputs.
                 // No anti-dep edges but may raise the LCA.
@@ -408,6 +371,10 @@ fn find_anti_dep(
             TypedNode::Return(_) => {
                 // Load must already be ahead of Return
             }
+            TypedNode::ScopeMin(_) => {
+                // Mem uses now on ScopeMin
+            }
+            TypedNode::If(i) if sea[i] == IfOp::Never => {}
             x => todo!("unexpected node type {x:?}"),
         }
     }
@@ -427,7 +394,7 @@ fn anti_dep(
     while Some(stblk) != defblk.idom(sea) {
         // Store and Load overlap, need anti-dependence
         if sea.cfg[stblk].anti == Some(load) {
-            lca = stblk.idom_2(Some(lca), sea); // Raise Loads LCA
+            lca = stblk.idom_2(Some(lca), None, sea); // Raise Loads LCA
             if let Some(st) = st {
                 if lca == stblk && !st.inputs(sea).iter().any(|n| *n == Some(*load)) {
                     // And if something moved,
