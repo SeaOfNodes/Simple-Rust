@@ -49,8 +49,8 @@ pub struct Types<'a> {
     pub if_false: Ty<'a>,
     pub struct_bot: TyStruct<'a>,
     pub struct_top: TyStruct<'a>,
-    pub memory_bot: Ty<'a>,
-    pub memory_top: Ty<'a>,
+    pub mem_bot: Ty<'a>,
+    pub mem_top: Ty<'a>,
     pub pointer_top: TyMemPtr<'a>,
     pub pointer_bot: TyMemPtr<'a>,
     pub pointer_null: TyMemPtr<'a>,
@@ -84,8 +84,8 @@ impl<'a> Types<'a> {
             if_false: intern(Type::Tuple(arena.alloc([xctrl, ctrl]))),
             struct_bot,
             struct_top,
-            memory_bot: intern(Type::Mem(Mem::Bot)),
-            memory_top: intern(Type::Mem(Mem::Top)),
+            mem_bot: intern(Type::Mem(Mem::Bot)),
+            mem_top: intern(Type::Mem(Mem::Top)),
             pointer_bot: intern(Type::MemPtr(MemPtr {
                 to: struct_bot,
                 nil: true,
@@ -221,7 +221,7 @@ impl<'a> Types<'a> {
             (Type::Mem(ma), Type::Mem(mb)) => match (ma, mb) {
                 (Mem::Bot, _) | (_, Mem::Top) => a,
                 (_, Mem::Bot) | (Mem::Top, _) => b,
-                _ => self.memory_bot,
+                _ => self.mem_bot,
             },
 
             // different sub-lattices meet at bottom
@@ -274,8 +274,8 @@ impl<'a> Types<'a> {
                 *self.get_mem_ptr(to, !p.nil)
             }
             Type::Mem(m) => match m {
-                Mem::Bot => self.memory_top,
-                Mem::Top => self.memory_bot,
+                Mem::Bot => self.mem_top,
+                Mem::Top => self.mem_bot,
                 Mem::Alias(_) => ty, // self dual
             },
         }
@@ -306,7 +306,7 @@ impl<'a> Types<'a> {
             Type::MemPtr(MemPtr { to, .. }) => {
                 *self.get_mem_ptr(self.glb(*to).to_struct().unwrap(), true)
             }
-            Type::Mem(_) => self.memory_bot,
+            Type::Mem(_) => self.mem_bot,
         }
     }
 

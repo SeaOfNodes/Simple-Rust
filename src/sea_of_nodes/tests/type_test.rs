@@ -24,13 +24,13 @@ fn test_type_ad_hoc() {
     assert_ne!(m3, m4);
 
     assert_eq!(*types.struct_bot, types.meet(*s1, *s2));
-    assert_eq!(types.memory_bot, types.meet(m1, m2));
-    assert_eq!(types.memory_bot, types.meet(m2, m3));
-    assert_eq!(types.memory_bot, types.meet(m3, m4));
+    assert_eq!(types.mem_bot, types.meet(m1, m2));
+    assert_eq!(types.mem_bot, types.meet(m2, m3));
+    assert_eq!(types.mem_bot, types.meet(m3, m4));
 
-    assert_eq!(types.memory_bot, types.glb(m1));
+    assert_eq!(types.mem_bot, types.glb(m1));
     assert_eq!(m1, types.dual(m1));
-    assert_eq!(types.memory_top, types.dual(types.glb(m1)));
+    assert_eq!(types.mem_top, types.dual(types.glb(m1)));
 
     let ptr1 = types.get_mem_ptr(s1, false);
     assert!(matches!(**ptr1, Type::MemPtr(MemPtr {to, nil: false}) if to == s1));
@@ -161,7 +161,7 @@ impl<'t> Types<'t> {
             self.bot,
             //
             self.get_mem(1),
-            self.memory_bot,
+            self.mem_bot,
             //
             *self.pointer_null,
             *self.pointer_bot,

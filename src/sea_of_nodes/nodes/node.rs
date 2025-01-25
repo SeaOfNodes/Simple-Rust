@@ -544,6 +544,14 @@ impl Minus {
     }
 }
 
+impl ScopeMin {
+    pub fn new(sea: &mut Nodes) -> Self {
+        let this = ScopeMin::from_node_unchecked(sea.create((Op::ScopeMin, vec![])));
+        sea.ty[this] = Some(sea.types.mem_bot);
+        this
+    }
+}
+
 impl Scope {
     pub fn new(sea: &mut Nodes) -> Self {
         Scope::from_node_unchecked(sea.create((Op::Scope(ScopeOp { scopes: vec![] }), vec![])))

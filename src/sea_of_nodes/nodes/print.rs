@@ -110,7 +110,23 @@ impl Display for PrintNodes2<'_, '_, '_> {
                 }
                 write!(f, "]")
             }
-            Op::ScopeMin => todo!(),
+            Op::ScopeMin => {
+                write!(f, "Mem[")?;
+                for j in 2..inputs.len() {
+                    write!(f, " {j}:")?;
+                    let mut n = inputs[j];
+                    while let Some(loop_) = n.and_then(|n| n.to_scope(sea)) {
+                        write!(f, "Lazy_")?;
+                        n = loop_.inputs(sea)[j];
+                    }
+                    if n.is_none() {
+                        write!(f, "___")?;
+                    } else {
+                        write!(f, "{}", print(n))?;
+                    }
+                }
+                write!(f, "]")
+            }
             Op::Struct => todo!(),
             Op::Not => write!(f, "(!{})", input(1)),
             Op::Proj(proj) | Op::CProj(proj) => write!(f, "{}", proj.label),

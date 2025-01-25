@@ -145,7 +145,7 @@ impl<'t> Node {
                     _ => types.meet(types.top, input),
                 }
             }
-            Op::Scope(_) => types.bot,
+            Op::Scope(_) | Op::ScopeMin => types.mem_bot,
             Op::Bool(op) => self.compute_binary_int(|x, y| op.compute(x, y) as i64, sea),
             Op::Not => {
                 let t0 = self.inputs(sea)[1].unwrap().ty(sea).unwrap();

@@ -175,3 +175,19 @@ impl<'t> Display for Type<'t> {
         })
     }
 }
+
+impl<'t> Type<'t> {
+    pub fn is_fref(&self) -> bool {
+        match self {
+            Type::Bot => false,
+            Type::Top => false,
+            Type::Ctrl => false,
+            Type::XCtrl => false,
+            Type::Int(_) => false,
+            Type::Tuple(_) => false,
+            Type::Struct(s) => todo!("is struct {s:?} an fref?"),
+            Type::MemPtr(m) => m.to.is_fref(),
+            Type::Mem(_) => false,
+        }
+    }
+}

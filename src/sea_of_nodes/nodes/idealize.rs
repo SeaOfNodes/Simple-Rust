@@ -31,6 +31,7 @@ impl Node {
             | TypedNode::XCtrl(_)
             | TypedNode::Start(_)
             | TypedNode::Scope(_)
+            | TypedNode::ScopeMin(_)
             | TypedNode::New(_)
             | TypedNode::Not(_) => None,
             n => todo!("{n:?}"),

@@ -1,8 +1,172 @@
-use std::collections::HashMap;
-
-use crate::sea_of_nodes::nodes::node::{Cast, Constant, Not, Phi, Region, Scope};
+use crate::sea_of_nodes::nodes::node::{Cast, Constant, Not, Phi, Region, Scope, ScopeMin};
 use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
-use crate::sea_of_nodes::types::Ty;
+use crate::sea_of_nodes::parser::Parser;
+use crate::sea_of_nodes::types::{Ty, Types};
+use std::collections::HashMap;
+use std::fmt;
+//
+// ScopeMinNode:
+//
+
+struct Var<'t> {
+    /// index in containing scope
+    index: usize,
+    /// Declared name
+    name: &'t str,
+    /// Declared type
+    ty: Ty<'t>,
+    /// Final field
+    final_field: bool,
+}
+
+impl<'t> Var<'t> {
+    fn ty(&mut self, name_to_type: HashMap<&'t str, Ty<'t>>, types: &Types<'t>) -> Ty<'t> {
+        if self.ty.is_fref() {
+            // Update self to no longer use the forward ref type
+            let def = *name_to_type
+                .get(self.ty.to_mem_ptr().unwrap().data().to.name())
+                .unwrap();
+            self.ty = types.meet(self.ty, def);
+        }
+        self.ty
+    }
+
+    fn lazy_glb(&mut self, name_to_type: HashMap<&'t str, Ty<'t>>, types: &Types<'t>) -> Ty<'t> {
+        let t = self.ty(name_to_type, types);
+        t.to_mem_ptr().map(|m| *m).unwrap_or_else(|| types.glb(t))
+    }
+}
+
+impl<'t> fmt::Display for Var<'t> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} ", self.ty)?;
+        if !self.final_field {
+            write!(f, "!")?;
+        }
+        write!(f, "{}", self.name)
+    }
+}
+
+impl ScopeMin {
+    fn alias(self, alias: usize, sea: &Nodes) -> Option<Node> {
+        self.inputs(sea)
+            .get(alias)
+            .cloned()
+            .flatten()
+            .or_else(|| self.inputs(sea)[1])
+    }
+
+    fn alias_st(self, alias: usize, st: Option<Node>, sea: &mut Nodes) -> Option<Node> {
+        while alias >= self.inputs(sea).len() {
+            self.add_def(None, sea);
+        }
+        self.set_def(alias, st, sea);
+        st
+    }
+
+    /// Read or update from memory.
+    /// A shared implementation allows us to create lazy phis both during
+    /// lookups and updates; the lazy phi creation is part of chapter 8.
+    fn _mem(self, alias: usize, st: Option<Node>, sea: &mut Nodes) -> Option<Node> {
+        // Memory projections are made lazily; if one does not exist
+        // then it must be START.proj(1)
+        let mut old = self.alias(alias, sea);
+        if let Some(loop_) = old.and_then(|o| o.to_scope(sea)) {
+            let loopmem = loop_.mem(sea);
+            let memdef = loopmem.alias(alias, sea);
+            // Lazy phi!
+            old = if let Some(phi) = memdef.and_then(|m| {
+                m.to_phi(sea)
+                    .filter(|p| loop_.ctrl(sea) == Some(*p.region(sea)))
+            }) {
+                // Loop already has a real Phi, use it
+                memdef
+            } else {
+                // Set real Phi in the loop head
+                // The phi takes its one input (no backedge yet) from a recursive
+                // lookup, which might have insert a Phi in every loop nest.
+                let name = sea.types.get_str(&Parser::mem_name(alias as u32));
+                let phi = Phi::new(
+                    name,
+                    sea.types.mem_bot,
+                    vec![loop_.ctrl(sea), loopmem._mem(alias, None, sea), None],
+                    sea,
+                )
+                .peephole(sea);
+                loopmem.alias_st(alias, Some(phi), sea)
+            };
+            self.alias_st(alias, old, sea);
+        }
+        // Memory projections are made lazily; expand as needed
+        if st.is_none() {
+            old
+        } else {
+            self.alias_st(alias, st, sea) // Not lazy, so this is the answer
+        }
+    }
+
+    fn _merge(self, that: ScopeMin, r: Region, sea: &mut Nodes) {
+        let len = self.inputs(sea).len().max(that.inputs(sea).len());
+        for i in 2..len {
+            // No need for redundant Phis
+            if self.alias(i, sea) != that.alias(i, sea) {
+                // If we are in lazy phi mode we need to a lookup
+                // by name as it will trigger a phi creation
+                //Var v = _vars.at(i);
+                let lhs = self._mem(i, None, sea);
+                let rhs = that._mem(i, None, sea);
+
+                let name = sea.types.get_str(&Parser::mem_name(i as u32));
+                let phi =
+                    Phi::new(name, sea.types.mem_bot, vec![Some(**r), lhs, rhs], sea).peephole(sea);
+                self.alias_st(i, Some(phi), sea);
+            }
+        }
+    }
+
+    /// Fill in the backedge of any inserted Phis
+    fn _end_loop_mem(self, scope: Scope, back: ScopeMin, exit: ScopeMin, sea: &mut Nodes) {
+        for i in 2..back.inputs(sea).len() {
+            if back.inputs(sea)[i] != Some(scope.to_node()) {
+                let phi = self.inputs(sea)[i].unwrap().to_phi(sea).unwrap();
+                debug_assert!(
+                    Some(phi.region(sea).to_node()) == scope.ctrl(sea)
+                        && phi.inputs(sea)[2].is_none()
+                );
+                phi.set_def(2, back.inputs(sea)[i], sea); // Fill backedge
+            }
+            if exit.alias(i, sea) == Some(scope.to_node()) {
+                // Replace a lazy-phi on the exit path also
+                exit.alias_st(i, self.inputs(sea)[i], sea);
+            }
+        }
+    }
+
+    /// Now one-time do a useless-phi removal
+    fn _useless(self, sea: &mut Nodes) {
+        for i in 2..self.inputs(sea).len() {
+            if let Some(phi) = self.inputs(sea)[i].and_then(|i| i.to_phi(sea)) {
+                // Do an eager useless-phi removal
+                let inp = phi.peephole(sea);
+                for &o in &sea.outputs[phi] {
+                    sea.iter_peeps.add(o);
+                }
+                phi.move_deps_to_worklist(sea);
+                if inp != *phi {
+                    if !phi.is_keep(sea) {
+                        // Keeping phi around for parser elsewhere
+                        phi.subsume(inp, sea);
+                    }
+                    self.set_def(i, Some(inp), sea); // Set the update back into Scope
+                }
+            }
+        }
+    }
+}
+
+//
+// ScopeNode:
+//
 
 #[derive(Clone, Debug)]
 pub struct ScopeOp<'t> {
@@ -12,6 +176,15 @@ pub struct ScopeOp<'t> {
 impl<'t> ScopeOp<'t> {
     pub fn lookup(&self, name: &str) -> Option<&(usize, Ty<'t>)> {
         self.scopes.iter().rev().flat_map(|x| x.get(name)).next()
+    }
+}
+
+impl Scope {
+    fn ctrl(self, sea: &Nodes) -> Option<Node> {
+        self.inputs(sea)[0]
+    }
+    fn mem(self, sea: &Nodes) -> ScopeMin {
+        self.inputs(sea)[1].unwrap().to_scope_min(sea).unwrap()
     }
 }
 
