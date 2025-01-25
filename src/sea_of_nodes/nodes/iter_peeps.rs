@@ -1,4 +1,4 @@
-//! The IterOptim runs after parsing. It iterates the peepholes to a fixed point
+//! The IterPeeps runs after parsing. It iterates the peepholes to a fixed point
 //! so that no more peepholes apply.  This should be linear because peepholes rarely
 //! (never?)  increase code size.  The graph should monotonically reduce in some
 //! dimension, which is usually size.  It might also reduce in e.g. number of
@@ -6,8 +6,9 @@
 //! ones.
 //!
 //! The theoretical overall worklist is mindless just grabbing the next thing and
-//! doing it.  If the graph changes, put the neighbors on the worklist.  Lather,
-//! Rinse, Repeat until the worklist runs dry.
+//! doing it.  If the graph changes, put the neighbors on the worklist.
+//!
+//! Lather, Rinse, Repeat until the worklist runs dry.
 //!
 //! The main issues we have to deal with:
 //!
@@ -18,7 +19,7 @@
 //!   is stable and correct between peepholes.  In our case `Node.subsume` does
 //!   most of the munging, building on our prior stable Node utilities.</li>
 //!
-//! <li>Changing a Node also changes the graph "neighborhood".  The neigbors need to
+//! <li>Changing a Node also changes the graph "neighborhood".  The neighbors need to
 //!   be checked to see if THEY can also peephole, and so on.  After any peephole
 //!   or graph update we put a Nodes uses and defs on the worklist.</li>
 //!
@@ -28,13 +29,13 @@
 //!   check is linear at each peephole step... so quadratic overall.  Its a useful
 //!   assert, but one we can disable once the overall algorithm is stable - and
 //!   then turn it back on again when some new set of peepholes is misbehaving.
-//!   The code for this is turned on in `IterOptim.iterate` as `assert
+//!   The code for this is turned on in `IterPeeps.iterate` as `assert
 //!   progressOnList(stop);`</li>
 //! </ul>
 
+use crate::datastructures::id::Id;
 use crate::datastructures::id_set::IdSet;
 use crate::datastructures::random::Random;
-use crate::sea_of_nodes::global_code_motion::build_cfg;
 use crate::sea_of_nodes::nodes::node::Stop;
 use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
 
@@ -132,8 +133,6 @@ impl<'t> Nodes<'t> {
                 n.kill(self); // just plain dead
             }
         }
-        // NOTE: java prints here, before building the cfg
-        build_cfg(stop, self);
     }
 
     pub fn type_check(&mut self, stop: Stop) -> Result<(), String> {
@@ -159,14 +158,19 @@ impl<'t> Nodes<'t> {
         self.iter_peeps.mid_assert = true;
         let (old_cnt, old_nop) = (self.iter_cnt, self.iter_nop_cnt);
 
-        let changed = self.walk_non_reentrant(stop, |nodes: &mut Self, n| {
-            if !nodes.iter_peeps.work.on(n) {
-                if let Some(m) = n.peephole_opt(nodes) {
-                    println!("BREAK HERE FOR BUG");
-                    return Some(m);
+        let changed = self.walk_non_reentrant(stop, |sea: &mut Self, n| {
+            let mut m = n;
+            // Types must be forwards, even if on worklist
+            if sea.types.isa(n.compute(sea), n.ty(sea).unwrap())
+                && (!n.is_keep(sea) || n.index() <= 5)
+            {
+                if sea.iter_peeps.work.on(n) {
+                    return None;
                 }
+                m = n.peephole_opt(sea)?;
             }
-            None
+            println!("BREAK HERE FOR BUG");
+            Some(m)
         });
 
         self.iter_cnt = old_cnt;
