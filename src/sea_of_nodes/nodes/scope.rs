@@ -192,7 +192,7 @@ impl Scope {
     fn ctrl(self, sea: &Nodes) -> Option<Node> {
         self.inputs(sea)[0]
     }
-    fn mem(self, sea: &Nodes) -> ScopeMin {
+    pub fn mem(self, sea: &Nodes) -> ScopeMin {
         self.inputs(sea)[1].unwrap().to_scope_min(sea).unwrap()
     }
 

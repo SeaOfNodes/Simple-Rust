@@ -1,13 +1,13 @@
+use crate::datastructures::id::Id;
+use crate::sea_of_nodes::nodes::node::{Scope, Stop};
+use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
+use crate::sea_of_nodes::types::Type;
 use fmt::Write;
 use std::collections::HashSet;
 use std::fmt;
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::time::Duration;
-
-use crate::sea_of_nodes::nodes::node::{Scope, Stop};
-use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
-use crate::sea_of_nodes::types::Type;
 
 pub fn run_graphviz_and_chromium(input: String) {
     let child = Command::new(&"bash")
@@ -71,7 +71,7 @@ pub fn generate_dot_output(
     writeln!(sb, "\trankdir=BT;")?;
     // writeln!(sb, "\tordering=\"in\";")?;
     writeln!(sb, "\tconcentrate=\"true\";")?;
-    do_nodes(&mut sb, sea, &all, separate_control_cluster)?;
+    do_nodes(&mut sb, &all, separate_control_cluster, sea)?;
     for &scope in x_scopes {
         if !scope.is_dead(sea) {
             do_scope(&mut sb, sea, scope)?;
@@ -90,9 +90,9 @@ pub fn generate_dot_output(
 fn nodes_by_cluster(
     sb: &mut String,
     do_ctrl: bool,
-    sea: &Nodes,
     all: &HashSet<Node>,
     separate_control_cluster: bool,
+    sea: &Nodes,
 ) -> fmt::Result {
     if !separate_control_cluster && do_ctrl {
         return Ok(());
@@ -104,7 +104,11 @@ fn nodes_by_cluster(
     }
 
     for &n in all.iter() {
-        if matches!(&sea[n], Op::Proj(_) | Op::CProj(_) | Op::Scope(_)) || n == **sea.xctrl {
+        if matches!(
+            &sea[n],
+            Op::Proj(_) | Op::CProj(_) | Op::Scope(_) | Op::ScopeMin
+        ) || n == **sea.xctrl
+        {
             continue;
         }
         if separate_control_cluster && do_ctrl && !n.is_cfg(sea) {
@@ -126,8 +130,20 @@ fn nodes_by_cluster(
             write!(sb, "\t\t\t<TR>")?;
 
             let mut do_proj_table = false;
-            for use_ in &sea.outputs[n] {
-                if let proj @ Op::Proj(p) = &sea[*use_] {
+
+            // differs from java: we cannot mutate the outputs, so we copy
+            let mut os = sea.outputs[n].clone();
+            os.sort_by(|x, y| {
+                if let (Some(xp), Some(yp)) = (x.to_proj(sea), y.to_proj(sea)) {
+                    sea[xp].index.cmp(&sea[yp].index)
+                } else {
+                    x.index().cmp(&y.index())
+                }
+            });
+
+            // n._outputs.sort((x,y) -> x instanceof ProjNode xp && y instanceof ProjNode yp ? (xp._idx - yp._idx) : (x._nid - y._nid));
+            for use_ in os {
+                if let proj @ Op::Proj(p) = &sea[use_] {
                     if !do_proj_table {
                         do_proj_table = true;
                         writeln!(sb, "<TD>")?;
@@ -139,7 +155,7 @@ fn nodes_by_cluster(
                     }
                     write!(sb, "<TD PORT=\"p{}\">{}</TD>", p.index, proj.glabel())?;
                 }
-                if let proj @ Op::CProj(p) = &sea[*use_] {
+                if let proj @ Op::CProj(p) = &sea[use_] {
                     if !do_proj_table {
                         do_proj_table = true;
                         writeln!(sb, "<TD>")?;
@@ -195,30 +211,42 @@ fn nodes_by_cluster(
 
 fn do_nodes(
     sb: &mut String,
-    nodes: &Nodes,
     all: &HashSet<Node>,
     separate_control_cluster: bool,
+    sea: &Nodes,
 ) -> fmt::Result {
-    nodes_by_cluster(sb, true, nodes, all, separate_control_cluster)?;
-    nodes_by_cluster(sb, false, nodes, all, separate_control_cluster)
+    nodes_by_cluster(sb, true, all, separate_control_cluster, sea)?;
+    nodes_by_cluster(sb, false, all, separate_control_cluster, sea)
 }
 
-fn do_scope(sb: &mut String, nodes: &Nodes, scope: Scope) -> fmt::Result {
-    let scopes = &nodes[scope].scopes;
+fn do_scope(sb: &mut String, sea: &Nodes, scope: Scope) -> fmt::Result {
     writeln!(sb, "\tnode [shape=plaintext];")?;
 
-    for (level, s) in scopes.iter().rev().enumerate() {
-        let scope_name = make_scope_name(nodes, scope, level + 1);
+    let last = scope.inputs(sea).len();
+    let max = sea[scope].lex_size.len();
+    for i in 0..max {
+        let level = max - i - 1;
+        let scope_name = make_scope_name(sea, scope, level);
 
         writeln!(sb, "\tsubgraph cluster_{scope_name} {{")?;
+        if level == 0 {
+            let n = scope.mem(sea);
+            writeln!(
+                sb,
+                "\t\t{} [label=\"{}\"];",
+                n.unique_name(sea),
+                sea[n].glabel()
+            )?;
+        }
         writeln!(sb, "\t\t{scope_name} [label=<")?;
         writeln!(
             sb,
             "\t\t\t<TABLE BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\">"
         )?;
-        let scope_level = scopes.len() - level - 1;
-        write!(sb, "\t\t\t<TR><TD BGCOLOR=\"cyan\">{scope_level}</TD>")?;
-        for name in s.keys() {
+        write!(sb, "\t\t\t<TR><TD BGCOLOR=\"cyan\">{level}</TD>")?;
+        let lex_start = sea[scope].lex_size[level];
+        for j in lex_start..last {
+            let name = sea[scope].vars[j].name;
             let port_name = make_port_name(&scope_name, name);
             write!(sb, "<TD PORT=\"{port_name}\">{name}</TD>")?;
         }
@@ -226,7 +254,7 @@ fn do_scope(sb: &mut String, nodes: &Nodes, scope: Scope) -> fmt::Result {
         writeln!(sb, "\t\t\t</TABLE>>];")?;
     }
 
-    for _ in 0..scopes.len() {
+    for _ in 0..max {
         writeln!(sb, "\t}}")?;
     }
 
@@ -305,20 +333,20 @@ fn node_edges(sb: &mut String, sea: &Nodes, all: &HashSet<Node>) -> fmt::Result 
 
 fn scope_edges(sb: &mut String, sea: &Nodes, scope: Scope) -> fmt::Result {
     writeln!(sb, "\tedge [style=dashed color=cornflowerblue];")?;
-    for (level, s) in sea[scope].scopes.iter().rev().enumerate() {
-        let scope_name = make_scope_name(sea, scope, level + 1);
-
-        for (name, (index, _ty)) in s {
-            let mut def = sea.inputs[scope][*index];
-            while def.is_some() && matches!(&sea[def.unwrap()], Op::Scope(_)) {
-                def = sea.inputs[def.unwrap()][*index]; // lazy
-            }
-            if let Some(def) = def {
-                let port_name = make_port_name(&scope_name, name);
-                let def_name = def_name(sea, def);
-                writeln!(sb, "\t{scope_name}:\"{port_name}\" -> {def_name};")?;
-            }
+    let mut level = 0;
+    for v in &sea[scope].vars {
+        let mut def = scope.inputs(sea)[v.index];
+        while let Some(lazy) = def.and_then(|d| d.to_scope(sea)) {
+            def = lazy.inputs(sea)[v.index];
         }
+        let Some(def) = def else { continue };
+        while level < sea[scope].lex_size.len() && v.index >= sea[scope].lex_size[level] {
+            level += 1;
+        }
+        let scope_name = make_scope_name(sea, scope, level - 1);
+        let port_name = make_port_name(&scope_name, v.name);
+        let def_name = def_name(sea, def);
+        writeln!(sb, "\t{scope_name}:\"{port_name}\" -> {def_name};")?;
     }
     Ok(())
 }

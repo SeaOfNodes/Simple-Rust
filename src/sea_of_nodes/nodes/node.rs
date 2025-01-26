@@ -405,7 +405,7 @@ impl<'t> Op<'t> {
 
     // implements the MultiNode interface
     pub fn is_multi_node(&self) -> bool {
-        matches!(self, Op::Start(_) | Op::If(_))
+        matches!(self, Op::Start(_) | Op::If(_) | Op::New(_))
     }
 
     pub fn operation(&self) -> usize {
