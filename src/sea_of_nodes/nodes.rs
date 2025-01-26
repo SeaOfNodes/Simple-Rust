@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::mem;
 use std::num::NonZeroU32;
 
 use crate::datastructures::id_set::IdSet;
@@ -184,11 +185,13 @@ impl Node {
 
     pub fn kill(self, sea: &mut Nodes) {
         if let Some(s) = self.to_scope(sea) {
-            for n in sea[s].guards.drain(..) {
+            for n in 0..sea[s].guards.len() {
+                let n = sea[s].guards[n];
                 if !n.is_cfg(sea) {
                     n.unkill(sea);
                 }
             }
+            sea[s].guards.clear();
         }
         self.unlock(sea);
         debug_assert!(self.is_unused(sea));

@@ -486,17 +486,12 @@ impl Return {
             Return::from_node_unchecked(sea.create((Op::Return, vec![Some(ctrl), Some(data)])));
 
         if let Some(scope) = scope {
-            // We lookup memory slices by the naming convention that they start with $
-            // We could also use implicit knowledge that all memory projects are at offset >= 2
-            let names = scope.reverse_names(sea);
-            for name in names.into_iter().map(Option::unwrap) {
-                if name.starts_with("$") && name != Scope::CTRL {
-                    let v = scope.lookup(name, sea).unwrap();
-                    this.add_def(Some(v), sea);
-                }
+            // Add memory slices to Return, so all memory updates are live-on-exit.
+            let mem = scope.mem(sea);
+            for i in 2..mem.inputs(sea).len() {
+                this.add_def(mem.inputs(sea)[i], sea);
             }
         }
-
         this
     }
 }
@@ -556,7 +551,10 @@ impl Scope {
     pub fn new(sea: &mut Nodes) -> Self {
         Scope::from_node_unchecked(sea.create((
             Op::Scope(ScopeOp {
-                ..Default::default()
+                vars: vec![],
+                lex_size: vec![],
+                in_cons: vec![],
+                guards: vec![],
             }),
             vec![],
         )))
