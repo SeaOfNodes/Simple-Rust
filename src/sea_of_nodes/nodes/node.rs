@@ -554,7 +554,12 @@ impl ScopeMin {
 
 impl Scope {
     pub fn new(sea: &mut Nodes) -> Self {
-        Scope::from_node_unchecked(sea.create((Op::Scope(ScopeOp { scopes: vec![] }), vec![])))
+        Scope::from_node_unchecked(sea.create((
+            Op::Scope(ScopeOp {
+                ..Default::default()
+            }),
+            vec![],
+        )))
     }
 }
 

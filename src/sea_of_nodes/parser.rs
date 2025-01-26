@@ -104,7 +104,7 @@ impl<'s, 't> Parser<'s, 't> {
         self.nodes.inputs[self.scope][0].expect("has ctrl")
     }
     fn set_ctrl(&mut self, node: Node) {
-        self.scope.set_def(0, Some(node), &mut self.nodes);
+        self.scope.set_def(0, node, &mut self.nodes);
     }
 
     pub fn parse(&mut self) -> PResult<Stop> {
@@ -370,8 +370,8 @@ impl<'s, 't> Parser<'s, 't> {
 
         // toScope is either the break scope, or a scope that was created here
         debug_assert!(self.nodes[to_scope].scopes.len() <= break_scopes_len);
-        let region = to_scope.merge(cur, &mut self.nodes);
-        to_scope.set_def(0, Some(region), &mut self.nodes); // set ctrl
+        let region = to_scope.merge_scopes(cur, &mut self.nodes);
+        to_scope.set_def(0, region, &mut self.nodes); // set ctrl
         to_scope
     }
 
@@ -451,7 +451,7 @@ impl<'s, 't> Parser<'s, 't> {
         self.scope = true_scope;
         self.x_scopes.pop();
 
-        let region = true_scope.merge(false_scope, &mut self.nodes);
+        let region = true_scope.merge_scopes(false_scope, &mut self.nodes);
         self.set_ctrl(region);
         Ok(())
     }
@@ -642,7 +642,7 @@ impl<'s, 't> Parser<'s, 't> {
                 },
             ));
             let rhs = self.parse_addition()?;
-            lhs.set_def(idx, Some(rhs), &mut self.nodes);
+            lhs.set_def(idx, rhs, &mut self.nodes);
             lhs = lhs.peephole(&mut self.nodes);
             if negate {
                 lhs = Not::new(lhs, &mut self.nodes).peephole(&mut self.nodes);
@@ -665,7 +665,7 @@ impl<'s, 't> Parser<'s, 't> {
             };
             lhs = self.nodes.create((op, vec![None, Some(lhs), None]));
             let rhs = self.parse_multiplication()?;
-            lhs.set_def(2, Some(rhs), &mut self.nodes);
+            lhs.set_def(2, rhs, &mut self.nodes);
             lhs = lhs.peephole(&mut self.nodes);
         }
     }
@@ -685,7 +685,7 @@ impl<'s, 't> Parser<'s, 't> {
             };
             lhs = self.nodes.create((op, vec![None, Some(lhs), None]));
             let rhs = self.parse_unary()?;
-            lhs.set_def(2, Some(rhs), &mut self.nodes);
+            lhs.set_def(2, rhs, &mut self.nodes);
             lhs = lhs.peephole(&mut self.nodes);
         }
     }

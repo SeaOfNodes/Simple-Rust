@@ -167,9 +167,11 @@ impl Node {
         self.is_unused(sea) && self.inputs(sea).is_empty() && self.ty(sea).is_none()
     }
 
-    pub fn pop_n(self, n: usize, sea: &mut Nodes) {
+    /// Shortcut for "popping" until n nodes.  A "pop" is basically a
+    //  setDef(last,null) followed by lowering the nIns() count.
+    pub fn pop_until(self, n: usize, sea: &mut Nodes) {
         self.unlock(sea);
-        for _ in 0..n {
+        while self.inputs(sea).len() > n {
             let old_def = sea.inputs[self].pop().unwrap();
             if let Some(old_def) = old_def {
                 old_def.del_use(self, sea);
@@ -181,6 +183,13 @@ impl Node {
     }
 
     pub fn kill(self, sea: &mut Nodes) {
+        if let Some(s) = self.to_scope(sea) {
+            for n in sea[s].guards.drain(..) {
+                if !n.is_cfg(sea) {
+                    n.unkill(sea);
+                }
+            }
+        }
         self.unlock(sea);
         debug_assert!(self.is_unused(sea));
         for _ in 0..self.inputs(sea).len() {
@@ -211,7 +220,8 @@ impl Node {
         self.kill(sea);
     }
 
-    pub fn set_def(self, index: usize, new_def: Option<Node>, sea: &mut Nodes) {
+    pub fn set_def<N: Into<Option<Node>>>(self, index: usize, new_def: N, sea: &mut Nodes) {
+        let new_def = new_def.into();
         self.unlock(sea);
 
         let old_def = self.inputs(sea)[index];
@@ -289,6 +299,13 @@ impl Node {
 
     pub fn is_keep(self, sea: &Nodes) -> bool {
         sea.outputs[self].contains(&Node::DUMMY)
+    }
+
+    fn unkill(self, sea: &mut Nodes) {
+        self.unkeep(sea);
+        if self.is_unused(sea) {
+            self.kill(sea);
+        }
     }
 
     pub fn err(self, sea: &Nodes) -> Option<String> {

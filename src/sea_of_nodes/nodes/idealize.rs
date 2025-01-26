@@ -481,7 +481,7 @@ impl If {
                                 sea.types.int_zero
                             };
                             let new_constant = Constant::new(value, sea).peephole(sea);
-                            self.set_def(1, Some(new_constant), sea);
+                            self.set_def(1, new_constant, sea);
                             return Some(**self);
                         }
                     }

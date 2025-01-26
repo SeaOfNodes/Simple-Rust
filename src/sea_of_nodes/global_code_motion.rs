@@ -45,7 +45,7 @@ impl Loop {
 
         let t = CProj::new(**iff, 0, "True", sea);
         let f = CProj::new(**iff, 1, "False", sea);
-        self.set_def(2, Some(**f), sea);
+        self.set_def(2, f.to_node(), sea);
         stop.add_def(Some(**Return::new(**t, *sea.zero, None, sea)), sea);
     }
 }
@@ -138,7 +138,7 @@ fn _sched_early(n: Option<Node>, visit: &mut IdSet<Node>, sea: &mut Nodes) {
                 early = cfg0; // Latest/deepest input
             }
         }
-        n.set_def(0, Some(*early), sea); // First place this can go
+        n.set_def(0, *early, sea); // First place this can go
     }
 }
 

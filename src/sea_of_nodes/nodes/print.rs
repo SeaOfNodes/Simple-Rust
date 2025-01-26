@@ -93,21 +93,42 @@ impl Display for PrintNodes2<'_, '_, '_> {
             Op::ToFloat => write!(f, "((flt){})", input(1)),
             Op::ReadOnly => write!(f, "((const){})", input(1)),
             Op::Scope(_) => {
+                //         sb.append("Scope[ ");
+                //         int j=1;
+                //         for( int i=0; i<nIns(); i++ ) {
+                //             if( j < _lexSize._len && i == _lexSize.at(j) ) { sb.append("| "); j++; }
+                //             Var v = _vars.get(i);
+                //         }
                 write!(f, "Scope[ ")?;
-                let names = sea.to_scope(node).unwrap().reverse_names(sea);
-
-                for (i, &n) in names.iter().enumerate() {
+                let op = &sea[node.to_scope(sea).unwrap()];
+                let mut j = 1;
+                for i in 0..inputs.len() {
                     if i > 0 {
-                        write!(f, " ")?;
+                        write!(f, ", ")?;
                     }
-                    write!(f, "{}:", n.unwrap())?;
-                    let mut node = inputs[i];
-                    while node.is_some_and(|n| matches!(&sea[n], Op::Scope(_))) {
+                    if Some(&i) == op.lex_size.get(j) {
+                        write!(f, "| ")?;
+                        j += 1;
+                    }
+                    let v = &op.vars[i];
+                    // differs from java. We can't resolve the type here
+                    write!(f, "{} ", v.ty)?;
+                    if v.final_field {
+                        write!(f, "!")?;
+                    }
+                    write!(f, "{}=", v.name)?;
+                    let mut n = inputs[i];
+                    while let Some(loop_) = n.and_then(|n| n.to_scope(sea)) {
                         write!(f, "Lazy_")?;
-                        node = sea.inputs[node.unwrap()][i];
+                        n = loop_.inputs(sea)[i];
                     }
-                    write!(f, "{}", print(node))?;
+                    if n.is_none() {
+                        write!(f, "___")?;
+                    } else {
+                        write!(f, "{}", print(n))?;
+                    }
                 }
+                //         sb.setLength(sb.length()-2);
                 write!(f, "]")
             }
             Op::ScopeMin => {
