@@ -38,7 +38,7 @@ impl Loop {
             let use_ = sea.outputs[self][i];
             if use_ != Node::DUMMY {
                 if let Some(phi) = use_.to_phi(sea) {
-                    iff.add_def(Some(*phi), sea);
+                    iff.add_def(*phi, sea);
                 }
             }
         }
@@ -46,7 +46,7 @@ impl Loop {
         let t = CProj::new(**iff, 0, "True", sea);
         let f = CProj::new(**iff, 1, "False", sea);
         self.set_def(2, f.to_node(), sea);
-        stop.add_def(Some(**Return::new(**t, *sea.zero, None, sea)), sea);
+        stop.add_def(**Return::new(**t, *sea.zero, None, sea), sea);
     }
 }
 
@@ -398,7 +398,7 @@ fn anti_dep(
             if let Some(st) = st {
                 if lca == stblk && !st.inputs(sea).iter().any(|n| *n == Some(*load)) {
                     // And if something moved,
-                    st.add_def(Some(*load), sea); // Add anti-dep as well
+                    st.add_def(*load, sea); // Add anti-dep as well
                 }
             }
             return lca; // Cap this stores' anti-dep to here

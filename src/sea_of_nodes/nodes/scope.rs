@@ -257,7 +257,7 @@ impl Scope {
             ty: declared_ty,
             final_field,
         });
-        self.add_def(Some(init), sea);
+        self.add_def(init, sea);
         Ok(())
     }
 
@@ -371,7 +371,7 @@ impl Scope {
                 sea,
             );
         }
-        dup.add_def(Some(memdup.to_node()), sea);
+        dup.add_def(memdup.to_node(), sea);
 
         // Copy of other inputs
         for i in 2..self.inputs(sea).len() {
@@ -464,7 +464,7 @@ impl Scope {
 
     /// Up-casting: using the results of an If to improve a value.
     /// E.g. "if( ptr ) ptr.field;" is legal because ptr is known not-null.
-    fn add_guards(self, ctrl: Node, pred: Option<Node>, invert: bool, sea: &mut Nodes) {
+    pub fn add_guards(self, ctrl: Node, pred: Option<Node>, invert: bool, sea: &mut Nodes) {
         debug_assert!(ctrl.is_cfg(sea));
         sea[self].guards.push(ctrl); // Marker to distinguish 0,1,2 guards
 
@@ -515,7 +515,7 @@ impl Scope {
     }
 
     /// Remove matching pred/cast pairs from this guarded region.
-    fn remove_guards(self, ctrl: Node, sea: &mut Nodes) {
+    pub fn remove_guards(self, ctrl: Node, sea: &mut Nodes) {
         debug_assert!(ctrl.is_cfg(sea));
         // 0,1 or 2 guards
         loop {
@@ -532,7 +532,7 @@ impl Scope {
     }
 
     /// If we find a guarded instance of pred, replace with the upcasted version
-    fn upcast_guard(self, pred: Node, sea: &mut Nodes) -> Node {
+    pub fn upcast_guard(self, pred: Node, sea: &mut Nodes) -> Node {
         // If finding an instanceof pred, replace with cast.
         // Otherwise, just pred itself.
         let mut i = sea[self].guards.len();

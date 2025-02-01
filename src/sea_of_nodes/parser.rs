@@ -1,10 +1,10 @@
-use crate::sea_of_nodes::graph_visualizer;
 use crate::sea_of_nodes::nodes::node::{
-    CProj, Constant, If, Load, Loop, Minus, New, Not, Proj, Return, Scope, Start, Stop, Store,
-    XCtrl,
+    CProj, Constant, If, Load, Loop, Minus, New, Not, Proj, Return, Scope, ScopeMin, Start, Stop,
+    Store, Struct, XCtrl,
 };
 use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes, Op};
-use crate::sea_of_nodes::types::{Struct, Ty, TyStruct, Types};
+use crate::sea_of_nodes::types::{Ty, TyStruct, Types};
+use crate::sea_of_nodes::{graph_visualizer, types};
 use std::collections::HashMap;
 
 /// Converts a Simple source program to the Sea of Nodes intermediate representation in one pass.
@@ -19,6 +19,9 @@ pub struct Parser<'s, 't> {
     /// Keeps track of the current start for constant node creation.
     pub nodes: Nodes<'t>,
 
+    /// Next available memory alias number
+    alias: usize,
+
     /// returned after parsing
     pub(crate) stop: Stop,
 
@@ -29,9 +32,17 @@ pub struct Parser<'s, 't> {
     pub(crate) x_scopes: Vec<Scope>,
 
     continue_scope: Option<Scope>,
+
+    /// Merge all the while-breaks here
     break_scope: Option<Scope>,
 
+    /// Mapping from a type name to a Type.  The string name matches
+    /// `type.str()` call.  No TypeMemPtrs are in here, because Simple does not
+    /// have C-style '*ptr' references.
     name_to_type: HashMap<&'t str, Ty<'t>>,
+
+    /// Mapping from a type name to the constructor for a Type.
+    inits: HashMap<&'t str, Struct>,
 
     pub disable_show_graph_println: bool,
 }
@@ -42,10 +53,19 @@ type PResult<T> = Result<T, ParseErr>;
 pub fn is_keyword(s: &str) -> bool {
     matches!(
         s,
-        "break"
+        "bool"
+            | "break"
+            | "byte"
             | "continue"
             | "else"
+            | "f32"
+            | "f64"
             | "false"
+            | "flt"
+            | "i16"
+            | "i32"
+            | "i64"
+            | "i8"
             | "if"
             | "int"
             | "new"
@@ -53,6 +73,10 @@ pub fn is_keyword(s: &str) -> bool {
             | "return"
             | "struct"
             | "true"
+            | "u1"
+            | "u16"
+            | "u32"
+            | "u8"
             | "while"
     )
 }
@@ -95,9 +119,32 @@ impl<'s, 't> Parser<'s, 't> {
             x_scopes: vec![],
             continue_scope: None,
             break_scope: None,
-            name_to_type: HashMap::new(),
+            alias: 2, // alias 0 for the control, 1 for memory
+            name_to_type: Self::default_types(types),
+            inits: HashMap::new(),
             disable_show_graph_println: false,
         }
+    }
+
+    fn default_types(types: &'t Types<'t>) -> HashMap<&'t str, Ty<'t>> {
+        HashMap::from([
+            ("bool", types.u1),
+            ("byte", types.u8),
+            ("f32", types.f32),
+            ("f64", types.flt_bot),
+            ("flt", types.flt_bot),
+            ("i16", types.i16),
+            ("i32", types.i32),
+            ("i64", types.int_bot),
+            ("i8", types.i8),
+            ("int", types.int_bot),
+            ("u1", types.u1),
+            ("u16", types.u16),
+            ("u32", types.u32),
+            ("u8", types.u8),
+            ("val", types.top), // Marker type, indicates type inference
+            ("var", types.bot), // Marker type, indicates type inference
+        ])
     }
 
     fn ctrl(&mut self) -> Node {
@@ -111,31 +158,63 @@ impl<'s, 't> Parser<'s, 't> {
         self.x_scopes.push(self.scope);
 
         // Enter a new scope for the initial control and arguments
-        self.scope.push(&mut self.nodes);
+        self.scope.push(false, &mut self.nodes);
+        let mem = ScopeMin::new(&mut self.nodes);
+        mem.add_def(None, &mut self.nodes);
 
         // project ctrl and arg0 from start
         let start = self.nodes.start;
-        let ctrl = CProj::new(start, 0, Scope::CTRL, &mut self.nodes).peephole(&mut self.nodes);
         self.scope
-            .define(Scope::CTRL, self.types.ctrl, ctrl, &mut self.nodes)
+            .define(
+                Scope::CTRL,
+                self.types.ctrl,
+                false,
+                CProj::new(start, 0, Scope::CTRL, &mut self.nodes).peephole(&mut self.nodes),
+                &mut self.nodes,
+            )
             .expect("not in scope");
-        let arg0 = Proj::new(start, 1, Scope::ARG0, &mut self.nodes).peephole(&mut self.nodes);
+        let mem0 = Proj::new(start, 1, Scope::MEM0, &mut self.nodes).peephole(&mut self.nodes);
+        mem.add_def(mem0, &mut self.nodes);
         self.scope
-            .define(Scope::ARG0, self.types.int_bot, arg0, &mut self.nodes)
+            .define(
+                Scope::MEM0,
+                self.types.mem_top,
+                false,
+                mem0.peephole(&mut self.nodes),
+                &mut self.nodes,
+            )
+            .expect("not in scope");
+        self.scope
+            .define(
+                Scope::ARG0,
+                self.types.int_bot,
+                false,
+                Proj::new(start, 2, Scope::ARG0, &mut self.nodes).peephole(&mut self.nodes),
+                &mut self.nodes,
+            )
             .expect("not in scope");
 
-        self.parse_block()?;
+        // Parse whole program
+        self.parse_block(false)?;
+
         if self.ctrl().ty(&self.nodes) == Some(self.types.ctrl) {
-            let ctrl = self.ctrl();
-            let expr =
-                Constant::new(self.types.int_zero, &mut self.nodes).peephole(&mut self.nodes);
-            let ret = Return::new(ctrl, expr, Some(self.scope), &mut self.nodes)
-                .peephole(&mut self.nodes);
-            self.stop.add_def(Some(ret), &mut self.nodes);
+            let ret = Return::new(
+                self.ctrl(),
+                *self.nodes.zero,
+                Some(self.scope),
+                &mut self.nodes,
+            )
+            .peephole(&mut self.nodes);
+            self.stop.add_def(ret, &mut self.nodes);
         }
 
-        self.scope.pop(&mut self.nodes);
+        self.scope.kill(&mut self.nodes);
         self.x_scopes.pop();
+
+        for init in self.inits.values() {
+            init.unkeep(&mut self.nodes).kill(&mut self.nodes);
+        }
+        self.inits.clear();
 
         if !self.lexer.is_eof() {
             Err(format!(
@@ -162,8 +241,8 @@ impl<'s, 't> Parser<'s, 't> {
     /// </pre>
     ///
     /// Does not parse the opening or closing `{}`
-    fn parse_block(&mut self) -> PResult<()> {
-        self.scope.push(&mut self.nodes);
+    fn parse_block(&mut self, inCon: bool) -> PResult<()> {
+        self.scope.push(inCon, &mut self.nodes);
         while !self.peek('}') && !self.lexer.is_eof() {
             self.parse_statement()?;
         }
@@ -177,15 +256,15 @@ impl<'s, 't> Parser<'s, 't> {
     fn parse_statement(&mut self) -> PResult<()> {
         if self.matchx("return") {
             self.parse_return()
-        } else if self.matchx("int") {
-            self.parse_decl(self.types.int_bot)
         } else if self.match_("{") {
-            self.parse_block()?;
+            self.parse_block(false)?;
             self.require("}")
         } else if self.matchx("if") {
             self.parse_if()
         } else if self.matchx("while") {
             self.parse_while()
+        } else if self.matchx("for") {
+            self.parse_for()
         } else if self.matchx("break") {
             self.parse_break()
         } else if self.matchx("continue") {
@@ -198,71 +277,43 @@ impl<'s, 't> Parser<'s, 't> {
         } else if self.matchx(";") {
             Ok(()) // Empty statement
         } else {
-            // declarations of vars with struct type are handled in parseExpressionStatement due
-            // to ambiguity
-            self.parse_expression_statement()
+            self.parse_declaration_statement() // Declaration or normal assignment/expression
         }
-    }
-
-    /// Parse a struct field.
-    /// <pre>
-    ///     int IDENTIFIER ;
-    /// </pre>
-    fn parse_field(&mut self) -> PResult<(&'t str, Ty<'t>)> {
-        if self.matchx("int") {
-            let name = self.types.get_str(self.require_id()?);
-            self.require(";")?;
-            return Ok((name, self.types.int_bot));
-        }
-        Err("A field type is expected, only type 'int' is supported at present".to_string())
-    }
-
-    /// Parse a struct declaration, and return the following statement.
-    /// Only allowed in top level scope.
-    /// Structs cannot be redefined.
-    ///
-    /// @return The statement following the struct
-
-    fn parse_struct(&mut self) -> PResult<()> {
-        if self.x_scopes.len() > 1 {
-            return Err("struct declarations can only appear in top level scope".to_string());
-        }
-        let type_name = self.types.get_str(self.require_id()?);
-        if self.name_to_type.contains_key(type_name) {
-            return Err(format!("struct '{type_name}' cannot be redefined"));
-        }
-
-        let mut fields: Vec<(&str, Ty)> = vec![];
-        self.require("{")?;
-        while !self.peek('}') && !self.lexer.is_eof() {
-            let field = self.parse_field()?;
-            if fields.iter().any(|&f| f.0 == field.0) {
-                return Err(format!(
-                    "Field '{}:{}' already defined in struct '{type_name}'",
-                    field.0, field.1
-                ));
-            }
-            fields.push(field);
-        }
-        self.require("}")?;
-
-        // Build and install the TypeStruct
-        let ts = self.types.get_struct(type_name, &fields);
-        self.name_to_type.insert(type_name, *ts); // Insert the struct name in the collection of all struct names
-        self.nodes
-            .start
-            .add_mem_proj(ts, self.scope, &mut self.nodes); // Insert memory edges
-        self.parse_statement()
     }
 
     /// <pre>
     ///     while ( expression ) statement
     /// </pre>
     fn parse_while(&mut self) -> PResult<()> {
+        self.require("(")?;
+        self.parse_looping(false)
+    }
+
+    /// <pre>
+    ///     for( var x=init; test; incr ) body
+    /// </pre>
+    fn parse_for(&mut self) -> PResult<()> {
+        // {   var x=init,y=init,...;
+        //     while( pred ) {
+        //         body;
+        //         next;
+        //     }
+        // }
+        self.require("(")?;
+        self.scope.push(false, &mut self.nodes); // Scope for the index variables
+        if !self.match_(";") {
+            // Can be empty init "for(;test;next) body"
+            self.parse_declaration_statement(); // Non-empty init
+        }
+        let rez = self.parse_looping(true);
+        self.scope.pop(&mut self.nodes); // Exit index variable scope
+        rez
+    }
+
+    /// Shared by `for` and `while`
+    fn parse_looping(&mut self, do_for: bool) -> PResult<()> {
         let saved_continue_scope = self.continue_scope;
         let saved_break_scope = self.break_scope;
-
-        self.require("(")?;
 
         // Loop region has two control inputs, the first is the entry
         // point, and second is back edge that is set after loop is parsed
@@ -287,18 +338,34 @@ impl<'s, 't> Parser<'s, 't> {
         self.x_scopes.push(self.scope);
 
         // Parse predicate
-        let pred = self.parse_expression()?;
-        self.require(")")?;
+        let pred = if self.peek(';') {
+            self.int_con(1)
+        } else {
+            self.parse_asgn()
+        };
+        self.require(if do_for { ";" } else { ")" })?;
 
         // IfNode takes current control and predicate
-        let if_node = If::new(ctrl, Some(pred), &mut self.nodes).peephole(&mut self.nodes);
+        let if_node = If::new(ctrl, Some(pred.keep(&mut self.nodes)), &mut self.nodes)
+            .peephole(&mut self.nodes);
 
         // Setup projection nodes
-        if_node.keep(&mut self.nodes);
-        let if_true = CProj::new(if_node, 0, "True", &mut self.nodes).peephole(&mut self.nodes);
-        if_node.unkeep(&mut self.nodes);
-        if_true.keep(&mut self.nodes);
-        let if_false = CProj::new(if_node, 1, "False", &mut self.nodes).peephole(&mut self.nodes);
+        let if_true = CProj::new(if_node.keep(&mut self.nodes), 0, "True", &mut self.nodes)
+            .peephole(&mut self.nodes)
+            .keep(&mut self.nodes);
+        let if_false = CProj::new(if_node.unkeep(&mut self.nodes), 1, "False", &mut self.nodes)
+            .peephole(&mut self.nodes);
+
+        // for( ;;next ) body
+        let mut next_pos = "dummy_pos";
+        let mut next_end = "dummy_pos";
+        if do_for {
+            // Skip the next expression and parse it later
+            next_pos = self.pos();
+            self.skip_asgn()?;
+            next_end = self.pos();
+            self.require(")")?;
+        }
 
         // Clone the body Scope to create the break/exit Scope which accounts for any
         // side effects in the predicate.  The break/exit Scope will be the final
@@ -308,21 +375,41 @@ impl<'s, 't> Parser<'s, 't> {
         let break_scope = self.scope.dup(false, &mut self.nodes);
         self.break_scope = Some(break_scope);
         self.x_scopes.push(break_scope);
+        break_scope.add_guards(if_false, pred, true, &mut self.nodes); // Up-cast predicate
 
         // No continues yet
         self.continue_scope = None;
 
         // Parse the true side, which corresponds to loop body
         // Our current scope is the body Scope
-        if_true.unkeep(&mut self.nodes);
-        self.set_ctrl(if_true);
+        self.set_ctrl(if_true.unkeep(&mut self.nodes));
+        self.scope.add_guards(
+            if_true,
+            pred.unkeep(&mut self.nodes),
+            false,
+            &mut self.nodes,
+        ); // Up-cast predicate
         self.parse_statement()?; // Parse loop body
+        self.scope.remove_guards(if_true, &mut self.nodes);
 
         // Merge the loop bottom into other continue statements
         if self.continue_scope.is_some() {
             self.continue_scope = Some(self.jump_to(self.continue_scope));
             self.scope.kill(&mut self.nodes);
             self.scope = self.continue_scope.unwrap();
+        }
+
+        // Now append the next code onto the body code
+        if do_for {
+            let old = self.pos();
+            self.set_pos(next_pos);
+            if !self.peek(')') {
+                self.parse_asgn()?;
+            }
+            if self.pos() != next_end {
+                return Err(self.error_syntax("Unexpected code after expression"));
+            }
+            self.set_pos(old);
         }
 
         // The true branch loops back, so whatever is current _scope.ctrl gets
@@ -344,9 +431,8 @@ impl<'s, 't> Parser<'s, 't> {
 
         // At exit the false control is the current control, and
         // the scope is the exit scope after the exit test.
+        *self.x_scopes.last_mut().unwrap() = exit;
         self.scope = exit;
-        *self.x_scopes.last_mut().unwrap() = exit; // differs from java
-
         Ok(())
     }
 
@@ -410,12 +496,12 @@ impl<'s, 't> Parser<'s, 't> {
         let if_node = If::new(self.ctrl(), Some(pred), &mut self.nodes).peephole(&mut self.nodes);
 
         // Setup projection nodes
-        if_node.keep(&mut self.nodes);
-        let if_true = CProj::new(if_node, 0, "True", &mut self.nodes).peephole(&mut self.nodes);
-        if_node.unkeep(&mut self.nodes);
-        if_true.keep(&mut self.nodes);
-        let if_false = CProj::new(if_node, 1, "False", &mut self.nodes).peephole(&mut self.nodes);
-        if_false.keep(&mut self.nodes);
+        let if_true = CProj::new(if_node.keep(&mut self.nodes), 0, "True", &mut self.nodes)
+            .peephole(&mut self.nodes)
+            .keep(&mut self.nodes);
+        let if_false = CProj::new(if_node.unkeep(&mut self.nodes), 1, "False", &mut self.nodes)
+            .peephole(&mut self.nodes)
+            .keep(&mut self.nodes);
 
         // In if true branch, the ifT proj node becomes the ctrl
         // But first clone the scope and set it as current
@@ -432,8 +518,7 @@ impl<'s, 't> Parser<'s, 't> {
 
         // Parse the false side
         self.scope = false_scope;
-        if_false.unkeep(&mut self.nodes);
-        self.set_ctrl(if_false);
+        self.set_ctrl(if_false.unkeep(&mut self.nodes));
         if self.matchx("else") {
             self.scope.upcast(if_false, pred, true, &mut self.nodes); // Up-cast predicate
             self.parse_statement()?;
@@ -469,7 +554,7 @@ impl<'s, 't> Parser<'s, 't> {
         let ret =
             Return::new(ctrl, expr, Some(self.scope), &mut self.nodes).peephole(&mut self.nodes);
 
-        self.stop.add_def(Some(ret), &mut self.nodes);
+        self.stop.add_def(ret, &mut self.nodes);
         self.set_ctrl(**self.nodes.xctrl);
         Ok(())
     }
@@ -746,7 +831,7 @@ impl<'s, 't> Parser<'s, 't> {
         let n = New::new(ptr_ty, ctrl, &mut self.nodes).peephole(&mut self.nodes);
         n.keep(&mut self.nodes);
 
-        let Struct::Struct { name, fields } = *obj.data() else {
+        let types::Struct::Struct { name, fields } = *obj.data() else {
             unreachable!()
         };
 
@@ -763,8 +848,7 @@ impl<'s, 't> Parser<'s, 't> {
             self.mem_alias_update(alias, store).unwrap();
             alias += 1;
         }
-        n.unkeep(&mut self.nodes);
-        n
+        n.unkeep(&mut self.nodes)
     }
 
     /// We set up memory aliases by inserting special vars in the scope these
@@ -854,11 +938,28 @@ impl<'s, 't> Parser<'s, 't> {
 
     /// <pre>
     ///     integerLiteral: [1-9][0-9]* | [0]
+    ///     floatLiteral: [digits].[digits]?[e [digits]]?
     /// </pre>
-    fn parse_integer_literal(&mut self) -> PResult<Node> {
-        self.lexer
-            .parse_number(self.types)
-            .map(|ty| Constant::new(ty, &mut self.nodes).peephole(&mut self.nodes))
+    fn parse_literal(&mut self) -> PResult<Constant> {
+        self.lexer.parse_number(self.types).map(|ty| self.con(ty))
+    }
+
+    fn int_con(&mut self, con: i64) -> Constant {
+        let ty = self.types.get_int(con);
+        self.con(ty)
+    }
+
+    fn con(&mut self, t: Ty<'t>) -> Constant {
+        Constant::new(t, &mut self.nodes)
+            .peephole(&mut self.nodes)
+            .to_constant(&self.nodes)
+            .unwrap()
+    }
+
+    fn peep(&mut self, n: Node) -> Node {
+        // Peephole, then improve with lexically scoped guards
+        self.scope
+            .upcast_guard(n.peephole(&mut self.nodes), &mut self.nodes)
     }
 
     //
@@ -876,9 +977,20 @@ impl<'s, 't> Parser<'s, 't> {
         self.lexer.matchx(prefix)
     }
 
+    fn match_opx(&mut self, c: [u8; 2]) -> bool {
+        self.lexer.match_opx(c)
+    }
+
     /// Return true and do NOT skip if `c` is next
     fn peek(&mut self, c: char) -> bool {
         self.lexer.peek_char(c)
+    }
+
+    fn pos(&mut self) -> &'s str {
+        self.lexer.remaining
+    }
+    fn set_pos(&mut self, pos: &'s str) {
+        self.lexer.remaining = pos;
     }
 
     /// Require and return an identifier
@@ -935,6 +1047,15 @@ impl<'a> Lexer<'a> {
         self.remaining.chars().next()
     }
 
+    // Just crash if misused
+    fn peek_offset(&self, offset: isize) -> u8 {
+        debug_assert_eq!(
+            self.source[self.remaining.len()..].as_ptr(),
+            self.remaining.as_ptr()
+        );
+        self.source.as_bytes()[self.remaining.len().checked_add_signed(offset).unwrap()]
+    }
+
     fn next_char(&mut self) -> Option<char> {
         self.peek()
             .inspect(|c| self.remaining = &self.remaining[c.len_utf8()..])
@@ -958,6 +1079,12 @@ impl<'a> Lexer<'a> {
                 break;
             }
         }
+    }
+
+    /// Next non-white-space character, or EOF
+    fn next_x_char(&mut self) -> Option<char> {
+        self.skip_whitespace();
+        self.next_char()
     }
 
     /// skips a prefix if present
@@ -986,6 +1113,16 @@ impl<'a> Lexer<'a> {
         }
         self.remaining = backup;
         false
+    }
+
+    fn match_opx(&mut self, c: [u8; 2]) -> bool {
+        self.skip_whitespace();
+        if self.remaining.as_bytes().starts_with(&c) {
+            self.remaining = &self.remaining[2..];
+            true
+        } else {
+            false
+        }
     }
 
     fn peek_char(&mut self, c: char) -> bool {

@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::mem;
 use std::num::NonZeroU32;
 
 use crate::datastructures::id_set::IdSet;
@@ -248,7 +247,8 @@ impl Node {
         self.move_deps_to_worklist(sea);
     }
 
-    pub fn add_def(self, new_def: Option<Node>, sea: &mut Nodes) {
+    pub fn add_def(self, new_def: impl Into<Option<Node>>, sea: &mut Nodes) {
+        let new_def = new_def.into();
         self.unlock(sea);
         sea.inputs[self].push(new_def);
         if let Some(new_def) = new_def {
@@ -296,8 +296,9 @@ impl Node {
         self
     }
 
-    pub fn unkeep(self, sea: &mut Nodes) {
+    pub fn unkeep(self, sea: &mut Nodes) -> Node {
         self.del_use(Node::DUMMY, sea);
+        self
     }
 
     pub fn is_keep(self, sea: &Nodes) -> bool {
