@@ -1,9 +1,9 @@
 use crate::sea_of_nodes::nodes::node::{
-    CProj, Constant, If, Load, Loop, Minus, New, Not, Proj, Return, Scope, ScopeMin, Start, Stop,
-    Store, Struct, XCtrl,
+    And, CProj, Constant, If, Load, Loop, Minus, New, Not, Or, Proj, ReadOnly, Return, Scope,
+    ScopeMin, Start, Stop, Store, Struct, ToFloat, XCtrl, Xor,
 };
-use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes, Op};
-use crate::sea_of_nodes::types::{Ty, TyStruct, Types};
+use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes, Op, Phi};
+use crate::sea_of_nodes::types::{Field, Ty, TyMemPtr, TyStruct, Types};
 use crate::sea_of_nodes::{graph_visualizer, types};
 use std::collections::HashMap;
 
@@ -442,8 +442,8 @@ impl<'s, 't> Parser<'s, 't> {
 
         // Prune nested lexical scopes that have depth > than the loop head
         // We use _breakScope as a proxy for the loop head scope to obtain the depth
-        let break_scopes_len = self.nodes[self.break_scope.unwrap()].scopes.len();
-        while self.nodes[cur].scopes.len() > break_scopes_len {
+        let break_scopes_len = self.nodes[self.break_scope.unwrap()].lex_size.len();
+        while self.nodes[cur].lex_size.len() > break_scopes_len {
             cur.pop(&mut self.nodes);
         }
 
@@ -455,8 +455,10 @@ impl<'s, 't> Parser<'s, 't> {
         };
 
         // toScope is either the break scope, or a scope that was created here
-        debug_assert!(self.nodes[to_scope].scopes.len() <= break_scopes_len);
-        let region = to_scope.merge_scopes(cur, &mut self.nodes);
+        debug_assert!(self.nodes[to_scope].lex_size.len() <= break_scopes_len);
+        let region = to_scope
+            .merge_scopes(cur, &mut self.nodes)
+            .peephole(&mut self.nodes);
         to_scope.set_def(0, region, &mut self.nodes); // set ctrl
         to_scope
     }
@@ -469,27 +471,65 @@ impl<'s, 't> Parser<'s, 't> {
         }
     }
 
-    fn parse_break(&mut self) -> PResult<()> {
-        self.check_loop_active()?;
-        self.break_scope = Some(self.jump_to(self.break_scope));
-        self.require(";")
-    }
-
     fn parse_continue(&mut self) -> PResult<()> {
         self.check_loop_active()?;
         self.continue_scope = Some(self.jump_to(self.continue_scope));
         self.require(";")
     }
 
+    fn parse_break(&mut self) -> PResult<()> {
+        self.check_loop_active()?;
+        // At the time of the break, and loop-exit conditions are only valid if
+        // they are ALSO valid at the break.  It is the intersection of
+        // conditions here, not the union.
+        let break_scope = self.break_scope.unwrap();
+        break_scope.remove_guards(break_scope.ctrl(&mut self.nodes).unwrap(), &mut self.nodes);
+        self.break_scope = Some(self.jump_to(self.break_scope));
+        self.require(";")?;
+        self.break_scope.unwrap().add_guards(
+            self.break_scope.unwrap().ctrl(&mut self.nodes).unwrap(),
+            None,
+            false,
+            &mut self.nodes,
+        );
+        Ok(())
+    }
+
+    /// Look for an unbalanced `)`, skipping balanced
+    fn skip_asgn(&mut self) -> PResult<()> {
+        let mut paren = 0;
+        loop {
+            // Next X char handles skipping complex comments
+            let pos = self.lexer.remaining;
+            match self.lexer.next_x_char() {
+                None => return Err("TODO: not yet implemented".to_string()),
+                Some(')') => {
+                    paren -= 1;
+                    if paren < 0 {
+                        self.set_pos(pos); // Leave the `)` behind
+                        return Ok(());
+                    }
+                }
+                Some('(') => paren += 1,
+                _ => {}
+            }
+        }
+    }
+
     /// <pre>
     ///     if ( expression ) statement [else statement]
     /// </pre>
     fn parse_if(&mut self) -> PResult<()> {
-        self.require("(")?;
-
         // Parse predicate
-        let pred = self.parse_expression()?;
+        self.require("(")?;
+        let pred = self.parse_asgn()?;
         self.require(")")?;
+        self.parse_trinary(pred, true, "else")?;
+        Ok(())
+    }
+
+    /// Parse a conditional expression, merging results.
+    fn parse_trinary(&mut self, pred: Node, stmt: bool, fside: &str) -> PResult<Node> {
         pred.keep(&mut self.nodes);
 
         // IfNode takes current control and predicate
@@ -510,35 +550,73 @@ impl<'s, 't> Parser<'s, 't> {
         self.x_scopes.push(false_scope);
 
         // Parse the true side
-        if_true.unkeep(&mut self.nodes);
-        self.set_ctrl(if_true);
-        self.scope.upcast(if_true, pred, false, &mut self.nodes); // Up-cast predicate
-        self.parse_statement()?;
+        self.set_ctrl(if_true.unkeep(&mut self.nodes));
+        self.scope
+            .add_guards(if_true, Some(pred), false, &mut self.nodes); // Up-cast predicate
+        let mut lhs = if stmt {
+            self.parse_statement()?;
+        } else {
+            self.parse_asgn().keep();
+        };
+        self.scope.remove_guards(if_true, &mut self.nodes);
+
         let true_scope = self.scope;
 
         // Parse the false side
-        self.scope = false_scope;
-        self.set_ctrl(if_false.unkeep(&mut self.nodes));
-        if self.matchx("else") {
-            self.scope.upcast(if_false, pred, true, &mut self.nodes); // Up-cast predicate
-            self.parse_statement()?;
+        self.scope = false_scope; // Restore scope, then parse else block if any
+        self.set_ctrl(if_false.unkeep(&mut self.nodes)); // Ctrl token is now set to ifFalse projection
+
+        // Up-cast predicate, even if not else clause, because predicate can
+        // remain true if the true clause exits: `if( !ptr ) return 0; return ptr.fld;`
+        self.scope.add_guards(if_false, pred, true, &mut self.nodes);
+        let do_rhs = self.match_(fside);
+        let mut rhs = match (do_rhs, stmt) {
+            (true, true) => self.parse_statement()?,
+            (true, false) => self.parse_asgn()?,
+            (false, true) => None,
+            (false, false) => self.con(lhs.ty(&self.nodes).make_zero(&self.types)),
+        };
+        self.scope.remove_guards(if_false, &mut self.nodes);
+        if do_rhs {
             false_scope = self.scope;
         }
-        pred.unkeep(&mut self.nodes);
 
+        // Check for `if(pred) int x=17;`
         if self.nodes.inputs[true_scope].len() != n_defs
             || self.nodes.inputs[false_scope].len() != n_defs
         {
             return Err("Cannot define a new name on one arm of an if".to_string());
         }
 
+        // Check the trinary widening int/flt
+        if !stmt {
+            rhs = self
+                .widen_int(rhs, lhs.ty(&self.nodes))
+                .keep(&mut self.nodes);
+            lhs = self
+                .widen_int(lhs.unkeep(&mut self.nodes), rhs.ty(&self.nodes))
+                .keep(&mut self.nodes);
+            rhs.unkeep(&mut self.nodes);
+        }
+
         // Merge results
         self.scope = true_scope;
         self.x_scopes.pop();
 
-        let region = true_scope.merge_scopes(false_scope, &mut self.nodes);
-        self.set_ctrl(region);
-        Ok(())
+        let r = true_scope.merge_scopes(false_scope, &mut self.nodes);
+        self.set_ctrl(**r);
+        let ret = if stmt {
+            r
+        } else {
+            self.peep(Phi::new(
+                "",
+                self.types.meet(lhs.ty(&self.nodes), rhs.ty(&self.nodes)),
+                vec![Some(**r), Some(lhs.unkeep(&mut self.nodes)), Some(rhs)],
+                &mut self.nodes,
+            ));
+        };
+        r.peephole(&mut self.nodes);
+        Ok(ret.to_node())
     }
 
     /// <pre>
@@ -548,7 +626,7 @@ impl<'s, 't> Parser<'s, 't> {
     /// Parses a return statement; "return" already parsed.
     /// The $ctrl edge is killed.
     fn parse_return(&mut self) -> PResult<()> {
-        let expr = self.parse_expression()?;
+        let expr = self.parse_asgn()?;
         self.require(";")?;
         let ctrl = self.ctrl();
         let ret =
@@ -581,117 +659,334 @@ impl<'s, 't> Parser<'s, 't> {
         node.into().print(&self.nodes).to_string()
     }
 
-    /// Parses an expression statement or a declaration statement where type is a struct
-    ///
     /// <pre>
-    ///      name;         // Error
-    /// type name;         // Define name with default initial value
-    /// type name = expr;  // Define name with given   initial value
-    ///      name = expr;  // Reassign existing
-    ///             expr   // Something else
+    ///  [name '='] expr
     /// </pre>
-    ////
-    fn parse_expression_statement(&mut self) -> PResult<()> {
-        let old = self.lexer.remaining;
-        let t = self.parse_type();
-        let name = self.require_id()?;
+    fn parse_asgn(&mut self) -> PResult<Node> {
+        let old = self.pos();
+        let name = self.lexer.match_id();
+        // Just a plain expression, no assignment.
+        // Distinguish `var==expr` from `var=expr`
 
-        let expr: Node;
-        if self.match_(";") {
-            // Assign a default value
-            if let Some(t) = t {
-                let init = self.types.make_init(t).unwrap();
-                expr = Constant::new(init, &mut self.nodes).peephole(&mut self.nodes)
-            } else {
-                // No type and no expr is an error
-                return Err("expression".to_string());
-            }
-        } else if self.match_("=") {
-            // Assign "= expr;"
-            expr = self.parse_expression()?;
-            self.require(";")?;
-        } else {
-            // Neither, so just a normal expression parse
-            self.lexer.remaining = old;
-            self.parse_expression()?;
-            return self.require(";");
+        let Some(name) = name else {
+            self.set_pos(old);
+            return self.parse_expression();
         };
+        if is_keyword(name) || !self.match_opx(*b"==") {
+            self.set_pos(old);
+            return self.parse_expression();
+        }
 
-        // Defining a new variable vs updating an old one
-        let name = self.types.get_str(name);
-        let t = if let Some(t) = t {
-            if self.scope.define(name, t, expr, &mut self.nodes).is_err() {
-                return Err(format!("Redefining name '{name}'"));
-            }
-            t
-        } else if let Some((_, t)) = self.nodes[self.scope].lookup(name).copied() {
-            self.scope.update(name, expr, &mut self.nodes).unwrap();
-            t
-        } else {
+        // Parse assignment expression
+        let expr = self.parse_asgn()?;
+
+        // Final variable to update
+        let Ok(def) = self.scope.lookup(name, &mut self.nodes) else {
             return Err(format!("Undefined name '{name}'"));
         };
 
-        let expr_ty = self.nodes.ty[expr].unwrap();
-        if !self.types.isa(expr_ty, t) {
+        // TOP fields are for late-initialized fields; these have never
+        // been written to, and this must be the final write.  Other writes
+        // outside the constructor need to check the final bit.
+        if self.scope.inputs(&self.nodes)[def].unwrap().ty(&self.nodes) != Some(self.types.top)
+            && self.nodes[self.scope].vars[def].final_field
+            && !self.scope.in_con(&self.nodes)
+        {
+            return Err(format!("Cannot reassign final '{name}'"));
+        }
+
+        // Lift expression, based on type
+        let lift = self.lift_expr(
+            expr,
+            self.nodes[self.scope].vars[def].ty(),
+            self.nodes[self.scope].vars[def].final_field,
+        )?;
+        // Update
+        self.scope.update(name, lift, &mut self.nodes);
+        // Return un-lifted expr
+        Ok(expr)
+    }
+
+    /// Make finals deep; widen ints to floats; narrow wide int types.
+    /// Early error if types do not match variable.
+    fn lift_expr(&mut self, mut expr: Node, t: Ty<'t>, xfinal: bool) -> PResult<Node> {
+        assert!(!expr
+            .ty(&self.nodes)
+            .is_some_and(|t| t.to_mem_ptr().is_none_or(|t| !t.is_fref())));
+        // Final is deep on ptrs
+        if xfinal {
+            if let Some(tmp) = t.to_mem_ptr() {
+                t = tmp.make_ro();
+                expr = self.peep(ReadOnly::new(expr, &mut self.nodes));
+            }
+        }
+        // Auto-widen int to float
+        expr = self.widen_int(expr, t);
+
+        // Auto-narrow wide ints to narrow ints
+        expr = self.zs_mask(expr, t);
+
+        // Type is sane
+        if !expr.ty(&self.nodes).isa(t) {
             return Err(format!(
                 "Type {} is not of declared type {}",
-                expr_ty.str(),
+                expr.ty(&self.nodes).unwrap().str(),
                 t.str()
             ));
         }
-        Ok(())
+
+        Ok(expr)
     }
 
-    fn parse_type(&mut self) -> Option<Ty<'t>> {
-        let old = self.lexer.remaining;
-        let tname = self.lexer.match_id()?;
-        if tname == "int" {
-            Some(self.types.int_bot)
-        } else if let Some(&obj) = self.name_to_type.get(tname) {
-            let nil = self.match_("?");
-            Some(*self.types.get_mem_ptr(obj.to_struct().unwrap(), nil))
+    fn widen_int(&mut self, expr: Node, t: Ty<'t>) -> Node {
+        if t.is_float() && expr.ty(&self.nodes).is_some_and(|i| i.is_int()) {
+            self.peep(ToFloat::new(expr, &mut self.nodes))
         } else {
-            // Not a type; unwind the parse
-            self.lexer.remaining = old;
-            None
+            expr
         }
     }
+
     /// <pre>
-    ///     type name = expression ';'
+    ///     declStmt = type var['=' exprAsgn][, var['=' exprAsgn]]* ';' | exprAsgn ';'
+    ///     exprAsgn = var '=' exprAsgn | expr
     /// </pre>
-    fn parse_decl(&mut self, t: Ty<'t>) -> PResult<()> {
-        let name = self.require_id()?;
-        let expr = if self.peek(';') {
-            // Assign a null value
-            let v = self.types.make_init(t).unwrap();
-            Constant::new(v, &mut self.nodes).peephole(&mut self.nodes)
-        } else {
-            // Assign "= expr;"
-            self.require("=")?;
-            self.parse_expression()?
+    fn parse_declaration_statement(&mut self) -> PResult<()> {
+        let Some(t) = self.type_()? else {
+            let e = self.parse_asgn()?;
+            self.require(";")?;
+            return Ok(e);
         };
-        self.require(";")?;
 
-        let expr_ty = self.nodes.ty[expr].unwrap();
-        if !self.types.isa(expr_ty, t) {
-            return Err(format!(
-                "Type {} is not of declared type {}",
-                expr_ty.str(),
-                t.str()
-            ));
+        // now parse var['=' asgnexpr] in a loop
+        self.parse_declaration(t)?;
+        while self.match_(";") {
+            self.parse_declaration(t)?;
+        }
+        self.require(";")
+    }
+
+    /// <pre>
+    ///     [!]var['=' asgn]
+    /// </pre>
+    fn parse_declaration(&mut self, mut t: Ty<'t>) -> PResult<()> {
+        // Has var/val instead of a user-declared type
+        let infer_type = t == self.types.top || t == self.types.bot;
+        let has_bang = self.match_("!");
+        let name = self.require_id()?;
+
+        // Optional initializing expression follows
+        let mut xfinal = false;
+        let expr;
+        if self.match_("=") {
+            expr = self.parse_asgn()?;
+            // `val` is always final
+            xfinal = t == self.types.top ||
+                        // var is always not-final, final if no Bang AND TMP since primitives are not-final by default
+                (t != self.types.bot && !has_bang && t.is_mem_ptr());
+            // var/val, then type comes from expression
+            if infer_type {
+                t = expr.ty(&self.nodes).glb();
+            }
+        } else {
+            if infer_type && !self.scope.in_con(&self.nodes) {
+                return Err(self.error_syntax("=expression"));
+            }
+            expr = self.con(t.make_init());
         }
 
-        let name = self.types.get_str(name);
+        // Lift expression, based on type
+        let lift = self.lift_expr(expr, t, xfinal)?;
+        if xfinal {
+            if let Some(tmp) = t.to_mem_ptr() {
+                t = tmp.make_ro();
+            }
+        }
+
+        // Define a new name,
         self.scope
-            .define(name, t, expr, &mut self.nodes)
+            .define(name, t, xfinal, lift, &mut self.nodes)
             .map_err(|()| format!("Redefining name '{name}'"))
     }
 
+    /// Parse a struct declaration, and return the following statement.
+    /// Only allowed in top level scope.
+    /// Structs cannot be redefined.
+    fn parse_struct(&mut self) -> PResult<()> {
+        if self.x_scopes.len() > 1 {
+            return Err(self.error_syntax("struct declarations can only appear in top level scope"));
+        }
+        let type_name = self.require_id()?;
+        let t = self.name_to_type.get(type_name);
+        if t.is_some_and(|t| !t.to_mem_ptr().is_some_and(|tmp| tmp.is_fref())) {
+            return Err(self.error_syntax(&format!("struct '{type_name}' cannot be redefined")));
+        }
+
+        // A Block scope parse, and inspect the scope afterward for fields.
+        self.scope.push(true, &mut self.nodes);
+        self.x_scopes.push(self.scope);
+        self.require("{")?;
+        while !self.peek('}') && !self.lexer.is_eof() {
+            self.parse_statement()?;
+        }
+
+        // Grab the declarations and build fields and a Struct
+        let lexlen = *self.nodes[self.scope].lex_size.last().unwrap();
+        let varlen = self.nodes[self.scope].vars.len();
+        let s = Struct::new(&mut self.nodes);
+        let mut fs = Vec::with_capacity(varlen - lexlen);
+        for i in lexlen..varlen {
+            s.add_def(self.scope.inputs(&self.nodes)[i], &mut self.nodes);
+            let v = &mut self.nodes[self.scope].vars[i];
+            fs.push(Field {
+                fname: v.name,
+                ty: v.ty(&self.name_to_type, self.types),
+                alias: self.alias,
+                final_field: v.final_field,
+            });
+            self.alias += 1;
+        }
+        let ts = self.types.get_struct(type_name, fs);
+        self.name_to_type
+            .insert(type_name, *self.types.get_mem_ptr(ts, false));
+        self.inits.insert(
+            type_name,
+            s.peephole(&mut self.nodes)
+                .keep(&mut self.nodes)
+                .to_struct(&mut self.nodes)
+                .unwrap(),
+        );
+
+        // Done with struct/block scope
+        self.require("}")?;
+        self.require(";")?;
+        self.x_scopes.pop();
+        self.scope.pop(&mut self.nodes);
+        Ok(())
+    }
+
+    /// Parse and return a type or null.  Valid types always are followed by an
+    /// 'id' which the caller must parse.  This lets us distinguish forward ref
+    /// types (which ARE valid here) from local vars in an (optional) forward
+    /// ref type position.
     /// <pre>
-    ///     expr : compareExpr
+    ///     t = int|i8|i16|i32|i64|u8|u16|u32|u64|byte|bool | flt|f32|f64 | val | var | struct[?]
+    /// </pre>
+    fn type_(&mut self) -> PResult<Option<Ty<'t>>> {
+        let old1 = self.pos();
+        let Some(tname) = self.lexer.match_id() else {
+            return Ok(None);
+        };
+        // Convert the type name to a type.
+        let t0 = self.name_to_type.get(tname).copied();
+        // No new types as keywords
+        if t0.is_none() && is_keyword(tname) {
+            self.set_pos(old1);
+            return Ok(None);
+        }
+        let t1 = t0.unwrap_or_else(|| {
+            // Null: assume a forward ref type
+            *self
+                .types
+                .get_mem_ptr(self.types.make_struct_fref(tname), false)
+        });
+        // Nest arrays and '?' as needed
+        let mut t2 = t1;
+        loop {
+            debug_assert!(!t2.is_struct());
+            if self.match_("?") {
+                if let Some(tmp) = t2.to_mem_ptr() {
+                    if tmp.data().nil {
+                        return Err(format!("Type {t2} already allows null"));
+                    }
+                    t2 = *self.types.get_mem_ptr(tmp.data().to, true);
+                } else {
+                    return Err(format!("Type {} cannot be null", t0.unwrap()));
+                }
+            } else if self.match_("[]") {
+                t2 = *self.type_ary(t2)?;
+            } else {
+                break;
+            }
+        }
+
+        // Check no forward ref
+        if t0.is_some() {
+            return Ok(Some(t2));
+        }
+
+        // Check valid forward ref, after parsing all the type extra bits.
+        // Cannot check earlier, because cannot find required 'id' until after "[]?" syntax
+        let old2 = self.pos();
+        let id = self.lexer.match_id();
+        self.set_pos(old2); // Reset lexer to reparse
+        if id.is_none() || self.scope.lookup(id.unwrap(), &mut self.nodes).is_ok() {
+            self.set_pos(old1); // Reset lexer to reparse
+            return Ok(None);
+        }
+        // Yes a forward ref, so declare it
+        self.name_to_type.insert(tname, t1);
+        Ok(Some(t2))
+    }
+
+    /// Make an array type of t
+    fn type_ary(&mut self, t: Ty<'t>) -> PResult<TyMemPtr<'t>> {
+        if t.to_mem_ptr().is_some_and(|t| !t.data().nil) {
+            return Err("Arrays of reference types must always be nullable".to_string());
+        };
+        let tname = self.types.get_str(&format!("[{}]", t.str()));
+        if let Some(ta) = self.name_to_type.get(tname) {
+            return Ok(ta.to_mem_ptr().unwrap());
+        }
+        // Need make an array type.
+        let ts = self
+            .types
+            .make_ary(self.types.int_bot, self.alias, t, self.alias + 1);
+        self.alias += 2;
+        debug_assert_eq!(ts.str(), tname);
+        let tary = self.types.get_mem_ptr(ts, false);
+        self.name_to_type.insert(tname, *tary);
+        Ok(tary)
+    }
+
+    /// Fixup forward refs lazily.  Basically a Union-Find flavored read
+    /// barrier.
+    fn lazy_f_ref(&mut self, t: Ty<'t>) -> PResult<Ty<'t>> {
+        //if( !t.isFRef() ) return t;
+        //Type def = Parser.TYPES.get(((TypeMemPtr)t)._obj._name);
+        Err("Not yet implemented".to_string())
+    }
+
+    /// <pre>
+    ///     expr : bitwise [? expr [: expr]]
     /// </pre>
     fn parse_expression(&mut self) -> PResult<Node> {
-        self.parse_comparison()
+        let expr = self.parse_bitwise()?;
+        if self.match_("?") {
+            self.parse_trinary(expr, false, ":")
+        } else {
+            Ok(expr)
+        }
+    }
+
+    /// <pre>
+    ///     bitwise : compareExpr (('&' | '|' | '^') compareExpr)*
+    /// </pre>
+    fn parse_bitwise(&mut self) -> PResult<Node> {
+        let mut lhs = self.parse_comparison()?;
+        loop {
+            lhs = if self.match_("&") {
+                And::new(lhs, None, &mut self.nodes).to_node()
+            } else if self.match_("|") {
+                Or::new(lhs, None, &mut self.nodes).to_node()
+            } else if self.match_("^") {
+                Xor::new(lhs, None, &mut self.nodes).to_node()
+            } else {
+                return Ok(lhs);
+            };
+            let rhs = self.parse_comparison()?;
+            lhs.set_def(2, rhs, &mut self.nodes);
+            lhs = self.peep(lhs);
+        }
     }
 
     /// <pre>
@@ -956,10 +1251,10 @@ impl<'s, 't> Parser<'s, 't> {
             .unwrap()
     }
 
-    fn peep(&mut self, n: Node) -> Node {
+    fn peep(&mut self, n: impl Into<Node>) -> Node {
         // Peephole, then improve with lexically scoped guards
         self.scope
-            .upcast_guard(n.peephole(&mut self.nodes), &mut self.nodes)
+            .upcast_guard(n.into().peephole(&mut self.nodes), &mut self.nodes)
     }
 
     //

@@ -9,7 +9,7 @@ use Cow::*;
 use crate::datastructures::id::Id;
 use crate::datastructures::id_vec::IdVec;
 use crate::sea_of_nodes::nodes::{Nodes, OpVec, ScopeOp};
-use crate::sea_of_nodes::types::{Ty, TyMemPtr};
+use crate::sea_of_nodes::types::{Ty, TyMemPtr, TyStruct};
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub struct Node(pub(super) NonZeroU32);
@@ -96,6 +96,12 @@ macro_rules! ite {
     (($($x:tt)+) ($($t:tt)*) ($($e:tt)*) ) => { $($t)* };
 }
 
+macro_rules! first {
+    ($t:ident, $ignored:ty) => {
+        $t
+    };
+}
+
 macro_rules! define_id {
     ($Id:ident, $(($op:ty))?, $Super:ident, $cast:ident, $checkcast:ident, $t:lifetime) => {
         #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
@@ -135,6 +141,11 @@ macro_rules! define_id {
             /// upcasts from subclass via deref
             pub fn $cast(self) -> $Id {
                 self
+            }
+
+            fn create<$t>($(op: $op,)? inputs: Vec<Option<Node>>, sea: &mut Nodes<$t>) -> Self {
+                let op = Op::$Id$((first!(op, $op)))?;
+                Self::from_node_unchecked(sea.create((op, inputs)))
             }
         }
 
@@ -267,46 +278,46 @@ macro_rules! define_ids {
 }
 
 define_ids!(<'t>
-    Add                : Node     { to_add       is_add       };
-    AddF               : Node     { to_addf      is_addf      };
-    And                : Node     { to_and       is_and       };
-    Bool(BoolOp)       : Node     { to_bool      is_bool      };
-    CProj(ProjOp<'t>)  : Cfg      { to_cproj     is_cproj     };
-    Cast(Ty<'t>)       : Node     { to_cast      is_cast      };
-    Cfg                : Node     { to_cfg       is_cfg       };
-    Constant(Ty<'t>)   : Node     { to_constant  is_constant  };
-    Div                : Node     { to_div       is_div       };
-    DivF               : Node     { to_divf      is_divf      };
-    If(IfOp)           : Cfg      { to_if        is_if        };
-    Load(LoadOp<'t>)   : Node     { to_load      is_load      };
-    Loop               : Region   { to_loop      is_loop      };
-    Minus              : Node     { to_minus     is_minus     };
-    MinusF             : Node     { to_minusf    is_minusf    };
-    Mul                : Node     { to_mul       is_mul       };
-    MulF               : Node     { to_mulf      is_mulf      };
-    New(TyMemPtr<'t>)  : Node     { to_new       is_new       };
-    Not                : Node     { to_not       is_not       };
-    Or                 : Node     { to_or        is_or        };
-    Phi(PhiOp<'t>)     : Node     { to_phi       is_phi       };
-    Proj(ProjOp<'t>)   : Node     { to_proj      is_proj      };
-    ReadOnly           : Node     { to_ronly     is_ronly     };
-    Region             : Cfg      { to_region    is_region    };
-    Return             : Cfg      { to_return    is_return    };
-    RoundF32           : Node     { to_roundf32  is_roundf32  };
-    Sar                : Node     { to_sar       is_sar       };
-    Scope(ScopeOp<'t>) : ScopeMin { to_scope     is_scope     };
-    ScopeMin           : Node     { to_scope_min is_scope_min };
-    Shl                : Node     { to_shl       is_shl       };
-    Shr                : Node     { to_shr       is_shr       };
-    Start(StartOp<'t>) : Loop     { to_start     is_start     };
-    Stop               : Node     { to_stop      is_stop      };
-    Store(StoreOp<'t>) : Node     { to_store     is_store     };
-    Struct             : Node     { to_struct    is_struct    };
-    Sub                : Node     { to_sub       is_sub       };
-    SubF               : Node     { to_subf      is_subf      };
-    ToFloat            : Node     { to_tofloat   is_tofloat   };
-    XCtrl              : Cfg      { to_xctrl     is_xctrl     };
-    Xor                : Node     { to_xor       is_xor       };
+    Add                  : Node     { to_add       is_add       };
+    AddF                 : Node     { to_addf      is_addf      };
+    And                  : Node     { to_and       is_and       };
+    Bool(BoolOp)         : Node     { to_bool      is_bool      };
+    CProj(ProjOp<'t>)    : Cfg      { to_cproj     is_cproj     };
+    Cast(Ty<'t>)         : Node     { to_cast      is_cast      };
+    Cfg                  : Node     { to_cfg       is_cfg       };
+    Constant(Ty<'t>)     : Node     { to_constant  is_constant  };
+    Div                  : Node     { to_div       is_div       };
+    DivF                 : Node     { to_divf      is_divf      };
+    If(IfOp)             : Cfg      { to_if        is_if        };
+    Load(LoadOp<'t>)     : Node     { to_load      is_load      };
+    Loop                 : Region   { to_loop      is_loop      };
+    Minus                : Node     { to_minus     is_minus     };
+    MinusF               : Node     { to_minusf    is_minusf    };
+    Mul                  : Node     { to_mul       is_mul       };
+    MulF                 : Node     { to_mulf      is_mulf      };
+    New(TyMemPtr<'t>)    : Node     { to_new       is_new       };
+    Not                  : Node     { to_not       is_not       };
+    Or                   : Node     { to_or        is_or        };
+    Phi(PhiOp<'t>)       : Node     { to_phi       is_phi       };
+    Proj(ProjOp<'t>)     : Node     { to_proj      is_proj      };
+    ReadOnly             : Node     { to_ronly     is_ronly     };
+    Region               : Cfg      { to_region    is_region    };
+    Return               : Cfg      { to_return    is_return    };
+    RoundF32             : Node     { to_roundf32  is_roundf32  };
+    Sar                  : Node     { to_sar       is_sar       };
+    Scope(ScopeOp<'t>)   : ScopeMin { to_scope     is_scope     };
+    ScopeMin             : Node     { to_scope_min is_scope_min };
+    Shl                  : Node     { to_shl       is_shl       };
+    Shr                  : Node     { to_shr       is_shr       };
+    Start(StartOp<'t>)   : Loop     { to_start     is_start     };
+    Stop                 : Node     { to_stop      is_stop      };
+    Store(StoreOp<'t>)   : Node     { to_store     is_store     };
+    Struct(TyStruct<'t>) : Node     { to_struct    is_struct    };
+    Sub                  : Node     { to_sub       is_sub       };
+    SubF                 : Node     { to_subf      is_subf      };
+    ToFloat              : Node     { to_tofloat   is_tofloat   };
+    XCtrl                : Cfg      { to_xctrl     is_xctrl     };
+    Xor                  : Node     { to_xor       is_xor       };
 );
 
 impl<'t> Op<'t> {
@@ -352,7 +363,7 @@ impl<'t> Op<'t> {
             Op::Start { .. } => "Start",
             Op::Stop => "Stop",
             Op::Store(_) => "Store",
-            Op::Struct => todo!(),
+            Op::Struct(s) => return s.str(),
             Op::Sub => "Sub",
             Op::SubF => "SubF",
             Op::ToFloat => "ToFloat",
@@ -397,7 +408,7 @@ impl<'t> Op<'t> {
             | Op::ScopeMin
             | Op::Start { .. }
             | Op::Stop
-            | Op::Struct
+            | Op::Struct(_)
             | Op::XCtrl => self.label(),
             Op::Cfg => unreachable!(),
         }
@@ -450,7 +461,7 @@ impl<'t> Op<'t> {
             Op::Sar => 37,
             Op::Shl => 38,
             Op::Shr => 39,
-            Op::Struct => 40,
+            Op::Struct(_) => 40,
             Op::ToFloat => 41,
             Op::Cfg => unreachable!(),
         }
@@ -468,13 +479,14 @@ impl Start {
 
     pub fn new<'t>(args: &[Ty<'t>], sea: &mut Nodes<'t>) -> Self {
         let args = sea.types.get_tuple_from_slice(args);
-        let this = Start::from_node_unchecked(sea.create((
-            Op::Start(StartOp {
+        let this = Self::create(
+            StartOp {
                 args,
                 alias_starts: HashMap::new(),
-            }),
+            },
             vec![],
-        )));
+            sea,
+        );
         sea.ty[this] = Some(args);
         this
     }
@@ -482,9 +494,7 @@ impl Start {
 
 impl Return {
     pub fn new(ctrl: Node, data: Node, scope: Option<Scope>, sea: &mut Nodes) -> Self {
-        let this =
-            Return::from_node_unchecked(sea.create((Op::Return, vec![Some(ctrl), Some(data)])));
-
+        let this = Self::create(vec![Some(ctrl), Some(data)], sea);
         if let Some(scope) = scope {
             // Add memory slices to Return, so all memory updates are live-on-exit.
             let mem = scope.mem(sea);
@@ -499,49 +509,64 @@ impl Constant {
     pub const DUMMY: Constant = Constant(Node::DUMMY);
 
     pub fn new<'t>(ty: Ty<'t>, sea: &mut Nodes<'t>) -> Self {
-        let start = sea.start;
-        Constant(sea.create((Op::Constant(ty), vec![Some(start.to_node())])))
+        Self::create(ty, vec![Some(sea.start.to_node())], sea)
     }
 }
 impl XCtrl {
     pub const DUMMY: XCtrl = XCtrl(Cfg(Node::DUMMY));
 
     pub fn new(sea: &mut Nodes) -> Self {
-        let start = sea.start;
-        XCtrl::from_node_unchecked(sea.create((Op::XCtrl, vec![Some(start.to_node())])))
+        Self::create(vec![Some(sea.start.to_node())], sea)
     }
 }
 
 impl Add {
     pub fn new(left: Node, right: Node, sea: &mut Nodes) -> Self {
-        Add::from_node_unchecked(sea.create((Op::Add, vec![None, Some(left), Some(right)])))
+        Self::create(vec![None, Some(left), Some(right)], sea)
     }
 }
+
+impl And {
+    pub fn new(left: Node, right: Option<Node>, sea: &mut Nodes) -> Self {
+        Self::create(vec![None, Some(left), right], sea)
+    }
+}
+impl Or {
+    pub fn new(left: Node, right: Option<Node>, sea: &mut Nodes) -> Self {
+        Self::create(vec![None, Some(left), right], sea)
+    }
+}
+impl Xor {
+    pub fn new(left: Node, right: Option<Node>, sea: &mut Nodes) -> Self {
+        Self::create(vec![None, Some(left), right], sea)
+    }
+}
+
 impl Sub {
     pub fn new(left: Node, right: Node, sea: &mut Nodes) -> Self {
-        Sub::from_node_unchecked(sea.create((Op::Sub, vec![None, Some(left), Some(right)])))
+        Self::create(vec![None, Some(left), Some(right)], sea)
     }
 }
 impl Mul {
     pub fn new(left: Node, right: Node, sea: &mut Nodes) -> Self {
-        Mul::from_node_unchecked(sea.create((Op::Mul, vec![None, Some(left), Some(right)])))
+        Self::create(vec![None, Some(left), Some(right)], sea)
     }
 }
 impl Div {
     pub fn new(left: Node, right: Node, sea: &mut Nodes) -> Self {
-        Div::from_node_unchecked(sea.create((Op::Div, vec![None, Some(left), Some(right)])))
+        Self::create(vec![None, Some(left), Some(right)], sea)
     }
 }
 
 impl Minus {
     pub fn new(expr: Node, sea: &mut Nodes) -> Self {
-        Minus::from_node_unchecked(sea.create((Op::Minus, vec![None, Some(expr)])))
+        Self::create(vec![None, Some(expr)], sea)
     }
 }
 
 impl ScopeMin {
     pub fn new(sea: &mut Nodes) -> Self {
-        let this = ScopeMin::from_node_unchecked(sea.create((Op::ScopeMin, vec![])));
+        let this = Self::create(vec![], sea);
         sea.ty[this] = Some(sea.types.mem_bot);
         this
     }
@@ -549,15 +574,16 @@ impl ScopeMin {
 
 impl Scope {
     pub fn new(sea: &mut Nodes) -> Self {
-        Scope::from_node_unchecked(sea.create((
-            Op::Scope(ScopeOp {
+        Self::create(
+            ScopeOp {
                 vars: vec![],
                 lex_size: vec![],
                 in_cons: vec![],
                 guards: vec![],
-            }),
+            },
             vec![],
-        )))
+            sea,
+        )
     }
 }
 
@@ -587,13 +613,13 @@ impl BoolOp {
 
 impl Bool {
     pub fn new(left: Node, right: Node, op: BoolOp, sea: &mut Nodes) -> Self {
-        Bool::from_node_unchecked(sea.create((Op::Bool(op), vec![None, Some(left), Some(right)])))
+        Self::create(op, vec![None, Some(left), Some(right)], sea)
     }
 }
 
 impl Not {
     pub fn new(expr: Node, sea: &mut Nodes) -> Self {
-        Not::from_node_unchecked(sea.create((Op::Not, vec![None, Some(expr)])))
+        Self::create(vec![None, Some(expr)], sea)
     }
 }
 
@@ -610,9 +636,7 @@ impl Proj {
         label: &'t str,
         sea: &mut Nodes<'t>,
     ) -> Self {
-        Proj::from_node_unchecked(
-            sea.create((Op::Proj(ProjOp { index, label }), vec![Some(ctrl.into())])),
-        )
+        Self::create(ProjOp { index, label }, vec![Some(ctrl.into())], sea)
     }
 }
 
@@ -623,9 +647,7 @@ impl CProj {
         label: &'t str,
         sea: &mut Nodes<'t>,
     ) -> Self {
-        CProj::from_node_unchecked(
-            sea.create((Op::CProj(ProjOp { index, label }), vec![Some(ctrl.into())])),
-        )
+        Self::create(ProjOp { index, label }, vec![Some(ctrl.into())], sea)
     }
 }
 
@@ -641,7 +663,7 @@ impl If {
             Some(n) => (IfOp::Cond, n),
             None => (IfOp::Never, *sea.zero),
         };
-        let this = If::from_node_unchecked(sea.create((Op::If(op), vec![Some(ctrl), Some(pred)])));
+        let this = Self::create(op, vec![Some(ctrl), Some(pred)], sea);
         sea.iter_peeps.add(this.to_node()); // Because idoms are complex, just add it
         this
     }
@@ -663,7 +685,7 @@ impl Phi {
         inputs: Vec<Option<Node>>,
         sea: &mut Nodes<'t>,
     ) -> Self {
-        Phi::from_node_unchecked(sea.create((Op::Phi(PhiOp { label, ty }), inputs)))
+        Self::create(PhiOp { label, ty }, inputs, sea)
     }
     pub fn region(self, sea: &Nodes) -> Cfg {
         self.inputs(sea)[0].unwrap().to_cfg(sea).unwrap()
@@ -671,17 +693,17 @@ impl Phi {
 }
 impl Region {
     pub fn new(inputs: Vec<Option<Node>>, sea: &mut Nodes) -> Self {
-        Region::from_node_unchecked(sea.create((Op::Region, inputs)))
+        Self::create(inputs, sea)
     }
 }
 impl Stop {
     pub fn new(sea: &mut Nodes) -> Self {
-        Stop::from_node_unchecked(sea.create((Op::Stop, vec![])))
+        Self::create(vec![], sea)
     }
 }
 impl Loop {
     pub fn new(entry: Node, sea: &mut Nodes) -> Self {
-        Loop::from_node_unchecked(sea.create((Op::Loop, vec![None, Some(entry), None])))
+        Self::create(vec![None, Some(entry), None], sea)
     }
 
     pub fn entry(self, sea: &Nodes) -> Cfg {
@@ -693,7 +715,7 @@ impl Loop {
 }
 impl Cast {
     pub fn new<'t>(ty: Ty<'t>, ctrl: Node, i: Node, sea: &mut Nodes<'t>) -> Self {
-        Cast::from_node_unchecked(sea.create((Op::Cast(ty), vec![Some(ctrl), Some(i)])))
+        Self::create(ty, vec![Some(ctrl), Some(i)], sea)
     }
 }
 
@@ -712,14 +734,15 @@ impl Load {
         [mem_slice, mem_ptr]: [Node; 2],
         sea: &mut Nodes<'t>,
     ) -> Self {
-        Load::from_node_unchecked(sea.create((
-            Op::Load(LoadOp {
+        Self::create(
+            LoadOp {
                 name,
                 alias,
                 declared_type,
-            }),
+            },
             vec![None, Some(mem_slice), Some(mem_ptr)],
-        )))
+            sea,
+        )
     }
     pub fn mem(self, sea: &Nodes) -> Option<Node> {
         self.inputs(sea)[1]
@@ -742,10 +765,11 @@ impl Store {
         [ctrl, mem_slice, mem_ptr, value]: [Node; 4],
         sea: &mut Nodes<'t>,
     ) -> Self {
-        Store::from_node_unchecked(sea.create((
-            Op::Store(StoreOp { name, alias }),
+        Self::create(
+            StoreOp { name, alias },
             vec![Some(ctrl), Some(mem_slice), Some(mem_ptr), Some(value)],
-        )))
+            sea,
+        )
     }
     pub fn mem(self, sea: &Nodes) -> Option<Node> {
         self.inputs(sea)[1]
@@ -768,6 +792,25 @@ impl Node {
 
 impl New {
     pub fn new<'t>(ptr: TyMemPtr<'t>, ctrl: Node, sea: &mut Nodes<'t>) -> Self {
-        New::from_node_unchecked(sea.create((Op::New(ptr), vec![Some(ctrl)])))
+        Self::create(ptr, vec![Some(ctrl)], sea)
+    }
+}
+
+impl ReadOnly {
+    pub fn new(expr: Node, sea: &mut Nodes) -> Self {
+        Self::create(vec![None, Some(expr)], sea)
+    }
+}
+
+impl ToFloat {
+    pub fn new(expr: Node, sea: &mut Nodes) -> Self {
+        Self::create(vec![None, Some(expr)], sea)
+    }
+}
+
+impl Struct {
+    pub fn new(sea: &mut Nodes) -> Self {
+        // differs from java. We use temporarily use top instead of null
+        Self::create(sea.types.struct_top, vec![], sea)
     }
 }

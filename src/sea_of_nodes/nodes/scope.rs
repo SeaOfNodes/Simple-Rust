@@ -21,7 +21,11 @@ struct Var<'t> {
 }
 
 impl<'t> Var<'t> {
-    fn ty(&mut self, name_to_type: HashMap<&'t str, Ty<'t>>, types: &Types<'t>) -> Ty<'t> {
+    pub(crate) fn ty(
+        &mut self,
+        name_to_type: &HashMap<&'t str, Ty<'t>>,
+        types: &Types<'t>,
+    ) -> Ty<'t> {
         if self.ty.is_fref() {
             // Update self to no longer use the forward ref type
             let def = *name_to_type
@@ -32,7 +36,7 @@ impl<'t> Var<'t> {
         self.ty
     }
 
-    fn lazy_glb(&mut self, name_to_type: HashMap<&'t str, Ty<'t>>, types: &Types<'t>) -> Ty<'t> {
+    fn lazy_glb(&mut self, name_to_type: &HashMap<&'t str, Ty<'t>>, types: &Types<'t>) -> Ty<'t> {
         let t = self.ty(name_to_type, types);
         t.to_mem_ptr().map(|m| *m).unwrap_or_else(|| types.glb(t))
     }
@@ -189,7 +193,7 @@ impl Scope {
     pub const ARG0: &'static str = "arg";
     pub const MEM0: &'static str = "$mem";
 
-    fn ctrl(self, sea: &Nodes) -> Option<Node> {
+    pub fn ctrl(self, sea: &Nodes) -> Option<Node> {
         self.inputs(sea)[0]
     }
     pub fn mem(self, sea: &Nodes) -> ScopeMin {

@@ -148,7 +148,7 @@ impl Display for PrintNodes2<'_, '_, '_> {
                 }
                 write!(f, "]")
             }
-            Op::Struct => todo!(),
+            Op::Struct(_) => todo!(),
             Op::Not => write!(f, "(!{})", input(1)),
             Op::Proj(proj) | Op::CProj(proj) => write!(f, "{}", proj.label),
             Op::If(op) => match op {

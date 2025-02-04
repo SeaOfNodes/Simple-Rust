@@ -1,8 +1,10 @@
 use crate::datastructures::arena::DroplessArena;
+pub use crate::sea_of_nodes::types::field::Field;
 use crate::sea_of_nodes::types::interner::Interner;
 pub use crate::sea_of_nodes::types::r#type::*;
 pub use crate::sea_of_nodes::types::ty::{Ty, TyMemPtr, TyStruct};
 
+mod field;
 mod interner;
 mod ty;
 mod r#type;
