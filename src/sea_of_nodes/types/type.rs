@@ -3,7 +3,7 @@ use std::fmt;
 use std::fmt::Display;
 use std::hash::Hash;
 
-use crate::sea_of_nodes::types::{Ty, TyStruct};
+use crate::sea_of_nodes::types::{Field, Ty, TyStruct};
 
 #[derive(Eq, PartialEq, Copy, Clone, Hash, Debug)]
 pub enum Type<'a> {
@@ -52,7 +52,7 @@ impl<'t> TyStruct<'t> {
         self.data().name()
     }
 
-    pub fn fields(self) -> &'t [(&'t str, Ty<'t>)] {
+    pub fn fields(self) -> &'t [Field<'t>] {
         match self.data() {
             Struct::Bot | Struct::Top => &[],
             Struct::Struct { fields, .. } => fields,

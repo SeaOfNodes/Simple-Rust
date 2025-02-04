@@ -5,7 +5,7 @@ use crate::datastructures::id_set::IdSet;
 use crate::datastructures::id_vec::IdVec;
 use crate::sea_of_nodes::nodes::cfg::CfgData;
 use crate::sea_of_nodes::nodes::gvn::GvnEntry;
-use crate::sea_of_nodes::nodes::node::CProj;
+use crate::sea_of_nodes::nodes::node::{CProj, ToFloat};
 use crate::sea_of_nodes::parser::Parser;
 use crate::sea_of_nodes::types::{Ty, TyStruct, Type, Types};
 use iter_peeps::IterPeeps;
@@ -386,6 +386,53 @@ impl Node {
             }
         }
         None
+    }
+    /// Semantic change to the graph (so NOT a peephole), used by the Parser.
+    /// If any input is a float, flip to a float-flavored opcode and widen any
+    /// non-float input.
+    fn widen(self, sea: &mut Nodes) -> Node {
+        if !self.has_float_input(sea) {
+            return self;
+        }
+        if let Some(flt) = self.copy_f(sea) {
+            for i in 1..self.inputs(sea).len() {
+                let in_i = self.inputs(sea)[i].unwrap();
+                flt.set_def(
+                    i,
+                    if in_i.ty(sea).is_some_and(|t| t.is_float()) {
+                        in_i
+                    } else {
+                        ToFloat::new(in_i, sea).peephole(sea)
+                    },
+                    sea,
+                );
+            }
+            self.kill(sea);
+            flt
+        } else {
+            self
+        }
+    }
+
+    fn has_float_input(self, sea: &Nodes) -> bool {
+        self.inputs(sea)
+            .iter()
+            .skip(1)
+            .flatten()
+            .any(|i| i.ty(sea).is_some_and(|t| t.is_float()))
+    }
+
+    fn copy_f(self, sea: &mut Nodes) -> Option<Node> {
+        let op = match &sea[self] {
+            Op::Add => Op::AddF,
+            Op::Bool(b) => todo!(),
+            Op::Div => Op::DivF,
+            Op::Minus => return Some(sea.create((Op::MinusF, vec![None, None]))),
+            Op::Mul => Op::MulF,
+            Op::Sub => Op::SubF,
+            _ => return None,
+        };
+        Some(sea.create((op, vec![None, None, None])))
     }
 }
 

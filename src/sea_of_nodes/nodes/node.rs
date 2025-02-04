@@ -541,6 +541,21 @@ impl Xor {
         Self::create(vec![None, Some(left), right], sea)
     }
 }
+impl Shl {
+    pub fn new(left: Node, right: Option<Node>, sea: &mut Nodes) -> Self {
+        Self::create(vec![None, Some(left), right], sea)
+    }
+}
+impl Shr {
+    pub fn new(left: Node, right: Option<Node>, sea: &mut Nodes) -> Self {
+        Self::create(vec![None, Some(left), right], sea)
+    }
+}
+impl Sar {
+    pub fn new(left: Node, right: Option<Node>, sea: &mut Nodes) -> Self {
+        Self::create(vec![None, Some(left), right], sea)
+    }
+}
 
 impl Sub {
     pub fn new(left: Node, right: Node, sea: &mut Nodes) -> Self {
@@ -791,8 +806,8 @@ impl Node {
 }
 
 impl New {
-    pub fn new<'t>(ptr: TyMemPtr<'t>, ctrl: Node, sea: &mut Nodes<'t>) -> Self {
-        Self::create(ptr, vec![Some(ctrl)], sea)
+    pub fn new<'t>(ptr: TyMemPtr<'t>, inputs: Vec<Option<Node>>, sea: &mut Nodes<'t>) -> Self {
+        Self::create(ptr, inputs, sea)
     }
 }
 

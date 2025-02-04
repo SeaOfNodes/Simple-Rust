@@ -1,10 +1,10 @@
+use crate::sea_of_nodes::graph_visualizer;
 use crate::sea_of_nodes::nodes::node::{
-    And, CProj, Constant, If, Load, Loop, Minus, New, Not, Or, Proj, ReadOnly, Return, Scope,
-    ScopeMin, Start, Stop, Store, Struct, ToFloat, XCtrl, Xor,
+    Add, And, CProj, Constant, If, Load, Loop, Minus, New, Not, Or, Proj, ReadOnly, Return, Sar,
+    Scope, ScopeMin, Shl, Shr, Start, Stop, Store, Struct, ToFloat, XCtrl, Xor,
 };
 use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes, Op, Phi};
 use crate::sea_of_nodes::types::{Field, Ty, TyMemPtr, TyStruct, Types};
-use crate::sea_of_nodes::{graph_visualizer, types};
 use std::collections::HashMap;
 
 /// Converts a Simple source program to the Sea of Nodes intermediate representation in one pass.
@@ -45,6 +45,8 @@ pub struct Parser<'s, 't> {
     inits: HashMap<&'t str, Struct>,
 
     pub disable_show_graph_println: bool,
+
+    altmp: Vec<Option<Node>>,
 }
 
 type ParseErr = String;
@@ -781,7 +783,7 @@ impl<'s, 't> Parser<'s, 't> {
             expr = self.parse_asgn()?;
             // `val` is always final
             xfinal = t == self.types.top ||
-                        // var is always not-final, final if no Bang AND TMP since primitives are not-final by default
+                // var is always not-final, final if no Bang AND TMP since primitives are not-final by default
                 (t != self.types.bot && !has_bang && t.is_mem_ptr());
             // var/val, then type comes from expression
             if infer_type {
@@ -993,7 +995,7 @@ impl<'s, 't> Parser<'s, 't> {
     ///     expr : additiveExpr op additiveExpr
     /// </pre>
     fn parse_comparison(&mut self) -> PResult<Node> {
-        let mut lhs = self.parse_addition()?;
+        let mut lhs = self.parse_shift()?;
         loop {
             let mut negate = false;
             let (op, idx) = if self.match_("==") {
@@ -1021,12 +1023,31 @@ impl<'s, 't> Parser<'s, 't> {
                     vec![None, None, Some(lhs)]
                 },
             ));
-            let rhs = self.parse_addition()?;
-            lhs.set_def(idx, rhs, &mut self.nodes);
-            lhs = lhs.peephole(&mut self.nodes);
+            lhs.set_def(idx, self.parse_shift()?, &mut self.nodes);
+            lhs = self.peep(lhs.widen(&mut self.nodes));
             if negate {
-                lhs = Not::new(lhs, &mut self.nodes).peephole(&mut self.nodes);
+                lhs = self.peep(Not::new(lhs, &mut self.nodes));
             }
+        }
+    }
+
+    /// <pre>
+    ///     shiftExpr : additiveExpr (('<<' | '>>' | '>>>') additiveExpr)*
+    /// </pre>
+    fn parse_shift(&mut self) -> PResult<Node> {
+        let mut lhs = self.parse_addition()?;
+        loop {
+            if self.match_("<<") {
+                lhs = Shl::new(lhs, None, &mut self.nodes).to_node();
+            } else if self.match_(">>>") {
+                lhs = Shr::new(lhs, None, &mut self.nodes).to_node();
+            } else if self.match_(">>") {
+                lhs = Sar::new(lhs, None, &mut self.nodes).to_node();
+            } else {
+                return Ok(lhs);
+            }
+            lhs.set_def(2, self.parse_addition()?, &mut self.nodes);
+            lhs = self.peep(lhs.widen(&mut self.nodes));
         }
     }
 
@@ -1046,7 +1067,7 @@ impl<'s, 't> Parser<'s, 't> {
             lhs = self.nodes.create((op, vec![None, Some(lhs), None]));
             let rhs = self.parse_multiplication()?;
             lhs.set_def(2, rhs, &mut self.nodes);
-            lhs = lhs.peephole(&mut self.nodes);
+            lhs = self.peep(lhs.widen(&mut self.nodes));
         }
     }
 
@@ -1066,20 +1087,45 @@ impl<'s, 't> Parser<'s, 't> {
             lhs = self.nodes.create((op, vec![None, Some(lhs), None]));
             let rhs = self.parse_unary()?;
             lhs.set_def(2, rhs, &mut self.nodes);
-            lhs = lhs.peephole(&mut self.nodes);
+            lhs = self.peep(lhs.widen(&mut self.nodes));
         }
     }
 
     /// <pre>
-    ///     unaryExpr : ('-') | '!') unaryExpr | postfixExpr | primaryExpr
+    ///     unaryExpr : ('-') unaryExpr | '!') unaryExpr | postfixExpr | primaryExpr | '--' Id | '++' Id
     /// </pre>
     fn parse_unary(&mut self) -> PResult<Node> {
+        // Pre-dec/pre-inc
+        let old = self.pos();
+        let dec = self.match_("--");
+        if dec || self.match_("++") {
+            let delta = if dec { -1 } else { 1 }; // Pre vs post
+            if let Some(name) = self.lexer.match_id() {
+                if let Ok(n) = self.scope.lookup(name, &mut self.nodes) {
+                    let v = &mut self.nodes[self.scope].vars[n];
+                    if v.final_field {
+                        return Err(format!("Cannot reassign final '{}'", v.name));
+                    }
+                    let t = v.ty(&self.name_to_type, self.types);
+                    let add = Add::new(
+                        self.scope.inputs(&self.nodes)[n].unwrap(),
+                        self.int_con(delta).to_node(),
+                        &mut self.nodes,
+                    );
+                    let expr = self.xz_mask(self.peep(add), t);
+                    self.scope.update_var_index(n, expr, &mut self.nodes);
+                    return Ok(expr);
+                }
+            }
+            // Reset, try again
+            self.set_pos(old);
+        }
         if self.match_("-") {
             self.parse_unary()
-                .map(|expr| Minus::new(expr, &mut self.nodes).peephole(&mut self.nodes))
+                .map(|expr| self.peep(Minus::new(expr, &mut self.nodes).widen(&mut self.nodes)))
         } else if self.match_("!") {
             self.parse_unary()
-                .map(|expr| Not::new(expr, &mut self.nodes).peephole(&mut self.nodes))
+                .map(|expr| self.peep(Not::new(expr, &mut self.nodes)))
         } else {
             let primary = self.parse_primary()?;
             self.parse_postfix(primary)
@@ -1087,77 +1133,218 @@ impl<'s, 't> Parser<'s, 't> {
     }
 
     /// <pre>
-    ///     primaryExpr : integerLiteral | Identifier | true | false | null | new Identifier | '(' expression ')'
+    ///     primaryExpr : integerLiteral | true | false | null | new Type | '(' expression ')' | Id['++','--']
     /// </pre>
     fn parse_primary(&mut self) -> PResult<Node> {
-        if self.lexer.peek_number() {
-            self.parse_integer_literal()
-        } else if self.match_("(") {
-            let e = self.parse_expression()?;
-            self.require(")")?;
-            Ok(e)
+        if self.lexer.peek().is_some_and(is_number) {
+            self.parse_literal().map(|n| *n)
         } else if self.matchx("true") {
-            Ok(Constant::new(self.types.int_one, &mut self.nodes).peephole(&mut self.nodes))
+            Ok(*self.int_con(1))
         } else if self.matchx("false") {
             Ok(*self.nodes.zero)
         } else if self.matchx("null") {
-            Ok(Constant::new(*self.types.pointer_null, &mut self.nodes).peephole(&mut self.nodes))
+            Ok(*self.con(*self.types.pointer_null))
+        } else if self.match_("(") {
+            let e = self.parse_asgn()?;
+            self.require(")")?;
+            Ok(e)
         } else if self.matchx("new") {
-            let ty_name = self.require_id()?;
-            let ty = self.name_to_type.get(ty_name);
-            if let Some(ty) = ty.and_then(|t| t.to_struct()) {
-                Ok(self.new_struct(ty))
-            } else {
-                Err(format!("Unknown struct type '{ty_name}'"))
-            }
-        } else if let Some(name) = self.lexer.match_id() {
-            self.scope
-                .lookup(name, &mut self.nodes)
-                .map_err(|()| format!("Undefined name '{name}'"))
+            self.alloc()
         } else {
-            Err(self.error_syntax("an identifier or expression"))
+            // Expect an identifier now
+            let n = self.require_lookup_id("an identifier or expression")?;
+            let n_name = self.nodes[self.scope].vars[n].name;
+
+            let rvalue = self.scope.inputs(&self.nodes)[n].unwrap();
+            if rvalue.ty(&self.nodes) == Some(self.types.bot) {
+                return Err(format!("Cannot read uninitialized field '{n_name}'"));
+            }
+            // Check for assign-update, x += e0;
+            let Some(ch) = self.lexer.match_oper_assign() else {
+                return Ok(rvalue);
+            };
+            if self.nodes[self.scope].vars[n].final_field {
+                return Err(format!("Cannot reassign final '{n_name}'"));
+            }
+            let op = match ch {
+                '+' => self.nodes.create((Op::Add, vec![None, Some(rvalue), None])),
+                '-' => self.nodes.create((Op::Sub, vec![None, Some(rvalue), None])),
+                '*' => self.nodes.create((Op::Mul, vec![None, Some(rvalue), None])),
+                '/' => self.nodes.create((Op::Div, vec![None, Some(rvalue), None])),
+                '\u{1}' => self
+                    .nodes
+                    .create((Op::Add, vec![None, Some(rvalue), Some(*self.int_con(1))])),
+                '\u{FFFF}' => self
+                    .nodes
+                    .create((Op::Add, vec![None, Some(rvalue), Some(*self.int_con(-1))])),
+                _ => return Err("Not yet implemented".to_string()),
+            };
+            // Return pre-value (x+=1) or post-value (x++)
+            let pre = "+-*/".contains(ch);
+            // Parse RHS argument as needed
+            if pre {
+                op.keep(&mut self.nodes)
+                    .set_def(2, self.parse_asgn()?, &mut self.nodes);
+                op.unkeep(&mut self.nodes);
+            } else {
+                rvalue.keep(&mut self.nodes); // Keep post-value across peeps
+            }
+            let n_ty = self.nodes[self.scope].vars[n].ty(&self.name_to_type, self.types);
+            let op = self.zs_mask(self.peep(op), n_ty)?;
+            self.scope.update(n, op, &mut self.nodes);
+            Ok(if pre {
+                op
+            } else {
+                rvalue.unkeep(&mut self.nodes)
+            })
         }
     }
 
-    /// Return a NewNode but also generate instructions to initialize it.
-    fn new_struct(&mut self, obj: TyStruct<'t>) -> Node {
-        let ptr_ty = self.types.get_mem_ptr(obj, false);
-        let ctrl = self.ctrl();
-        let n = New::new(ptr_ty, ctrl, &mut self.nodes).peephole(&mut self.nodes);
-        n.keep(&mut self.nodes);
+    fn require_lookup_id(&mut self, msg: &str) -> PResult<usize> {
+        let Some(id) = self.lexer.match_id().filter(|s| !is_keyword(s)) else {
+            return Err(self.error_syntax(msg));
+        };
+        self.scope
+            .lookup(id, &mut self.nodes)
+            .map_err(|()| format!("Undefined name '{id}'"))
+    }
 
-        let types::Struct::Struct { name, fields } = *obj.data() else {
-            unreachable!()
+    fn alloc(&mut self) -> PResult<Node> {
+        let Some(t) = self.type_()? else {
+            return Err("Expected a type".to_string());
+        };
+        // Parse ary[ length_expr ]
+        if self.match_("[") {
+            let len = self.parse_asgn()?;
+            if !len.ty(&self.nodes).is_some_and(|t| t.is_int()) {
+                return Err(format!(
+                    "Cannot allocate an array with length {}",
+                    len.ty(&self.nodes).unwrap()
+                ));
+            }
+            self.require("]")?;
+            let tmp = self.type_ary(t)?;
+            return Ok(self.new_array(tmp.data().to, len));
+        }
+
+        let Some(tmp) = t.to_mem_ptr() else {
+            return Err(format!("Cannot allocate a {}", t.str()));
         };
 
-        let mut alias = *self.nodes[self.nodes.start].alias_starts.get(name).unwrap();
-        for &(fname, _) in fields {
-            let mem_slice = self.mem_alias_lookup(alias).unwrap();
-            let store = Store::new(
-                fname,
-                alias,
-                [self.ctrl(), mem_slice, n, *self.nodes.zero],
-                &mut self.nodes,
-            )
-            .peephole(&mut self.nodes);
-            self.mem_alias_update(alias, store).unwrap();
-            alias += 1;
+        // Parse new struct { default_initialization }
+        let Some(&s) = self.inits.get(tmp.data().to.name()) else {
+            return Err(format!("Unknown struct type '{}'", tmp.data().to.name()));
+        };
+
+        let fs = self.nodes[s].fields();
+        // if the object is fully initialized, we can skip a block here.
+        // Check for constructor block:
+        let has_constructor = self.match_("{");
+
+        let mut init = s.to_node();
+        let mut idx = 0;
+        if has_constructor {
+            idx = self.scope.inputs(&self.nodes).len();
+            // Push a scope, and pre-assign all struct fields.
+            self.scope.push(false, &mut self.nodes);
+            for (i, f) in fs.iter().enumerate() {
+                let s_in_i = s.inputs(&self.nodes)[i].unwrap();
+                let t = if s_in_i.ty(&self.nodes) == Some(self.types.top) {
+                    *self.con(self.types.bot)
+                } else {
+                    s_in_i
+                };
+                self.scope
+                    .define(f.fname, f.ty, f.final_field, t, &mut self.nodes)
+                    .expect("scope was empty");
+            }
+
+            // Parse the constructor body
+            self.parse_block(true)?;
+            self.require("}")?;
+            init = self.scope.to_node();
         }
-        n.unkeep(&mut self.nodes)
+
+        // Check that all fields are initialized
+        for i in idx..init.inputs(&self.nodes).len() {
+            if (/*init.at(i)._type == Type.TOP ||*/init.inputs(&self.nodes)[i].unwrap().ty(&self.nodes) == Some(self.types.bot))
+            {
+                let fname = fs[i - idx].fname;
+                return Err(format!("'{}' is not fully initialized, field '{fname}' needs to be set in a constructor", tmp.data().to.name()));
+            }
+        }
+        let size = self.int_con(tmp.data().to.offset(fs.len()));
+        self.altmp.clear();
+        self.altmp.copy_from_slice(&init.inputs(&self.nodes)[idx..]);
+        let ptr = self.new_struct(tmp.data().to, *size);
+        if has_constructor {
+            self.scope.pop(&mut self.nodes);
+        }
+        Ok(ptr)
+    }
+
+    /// Return a NewNode initialized memory.
+    ///
+    /// differs from java: idx, init are passed in self.altmp
+    fn new_struct(&mut self, obj: TyStruct<'t>, size: Node) -> Node {
+        let fs = obj.fields();
+        //         if( fs==null )
+        //             throw error("Unknown struct type '" + obj._name + "'");
+
+        let mut ns = Vec::with_capacity(2 + 2 * fs.len());
+        ns.push(Some(self.ctrl())); // Control in slot 0
+                                    // Total allocated length in bytes
+        ns.push(Some(size));
+        // Memory aliases for every field
+        for f in fs {
+            ns.push(Some(self.mem_alias_lookup(f.alias)));
+        }
+        // Initial values for every field
+        for i in 0..fs.len() {
+            ns.push(self.altmp[i]);
+        }
+        let nnn = New::new(self.types.get_mem_ptr(obj, false), ns, &mut self.nodes)
+            .peephole(&mut self.nodes);
+        for (i, f) in fs.iter().enumerate() {
+            let name = self.types.get_str(&Parser::mem_name(f.alias));
+            let proj = Proj::new(nnn, i + 2, name, &mut self.nodes).peephole(&mut self.nodes);
+            self.mem_alias_update(f.alias, proj);
+        }
+        Proj::new(nnn, 1, obj.name(), &mut self.nodes).peephole(&mut self.nodes)
+    }
+
+    fn new_array(&mut self, ary: TyStruct<'t>, len: Node) -> Node {
+        let base = ary.ary_base();
+        let scale = ary.ary_scale();
+
+        let con_base = self.int_con(base);
+        let con_scale = self.int_con(scale);
+
+        let shl = self.peep(Shl::new(
+            len.keep(&mut self.nodes),
+            Some(*con_scale),
+            &mut self.nodes,
+        ));
+        let size = self.peep(Add::new(*con_base, shl, &mut self.nodes));
+        self.altmp.clear();
+        self.altmp.push(Some(len.unkeep(&mut self.nodes)));
+        self.altmp
+            .push(Some(*self.con(ary.fields()[1].ty.make_init())));
+        self.new_struct(ary, size)
     }
 
     /// We set up memory aliases by inserting special vars in the scope these
     /// variables are prefixed by $ so they cannot be referenced in Simple code.
     /// Using vars has the benefit that all the existing machinery of scoping
     /// and phis work as expected
-    fn mem_alias_lookup(&mut self, alias: u32) -> Result<Node, ()> {
-        let name = self.types.get_str(&Self::mem_name(alias));
-        self.scope.lookup(name, &mut self.nodes)
+    fn mem_alias_lookup(&mut self, alias: u32) -> Node {
+        self.scope
+            .mem_read(alias as usize, &mut self.nodes)
+            .unwrap()
     }
 
-    fn mem_alias_update(&mut self, alias: u32, st: Node) -> Result<Node, ()> {
-        let name = self.types.get_str(&Self::mem_name(alias));
-        self.scope.update(name, st, &mut self.nodes)
+    fn mem_alias_update(&mut self, alias: u32, st: Node) {
+        self.scope.mem_write(alias as usize, st, &mut self.nodes)
     }
 
     pub(crate) fn mem_name(alias: u32) -> String {
@@ -1229,6 +1416,12 @@ impl<'s, 't> Parser<'s, 't> {
         )
         .peephole(&mut self.nodes);
         self.parse_postfix(load)
+    }
+
+    /// zero/sign extend.  "i" is limited to either classic unsigned (min==0) or
+    /// classic signed (min=minus-power-of-2); max=power-of-2-minus-1.
+    fn zs_mask(&mut self, val: Node, t: Ty<'t>) -> PResult<Node> {
+        todo!()
     }
 
     /// <pre>
@@ -1330,7 +1523,7 @@ fn is_id_letter(c: char) -> bool {
 }
 
 fn is_punctuation(c: char) -> bool {
-    "=;[]<>()+-/*".contains(c)
+    "=;[]<>()+-/*&|^".contains(c)
 }
 
 impl<'a> Lexer<'a> {
@@ -1445,26 +1638,47 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn peek_number(&self) -> bool {
-        self.peek().is_some_and(is_number)
-    }
-
+    /// Return a constant Type, either TypeInteger or TypeFloat
     fn parse_number<'t>(&mut self, types: &Types<'t>) -> PResult<Ty<'t>> {
-        let snum = self.parse_number_string();
-
-        if snum.len() > 1 && snum.starts_with("0") {
-            Err("Syntax error: integer values cannot start with '0'".to_string())
+        let (flt, snum) = self.is_long_or_double();
+        if !flt {
+            if snum.chars().next() == Some('0') {
+                Err("Syntax error: integer values cannot start with '0'".to_string())
+            } else {
+                snum.parse().map(|i| types.get_int(i)).map_err(|_| {
+                    format!("{snum} could not be parsed to a positive signed 64 bit integer")
+                })
+            }
         } else {
-            snum.parse().map(|i| types.get_int(i)).map_err(|_| {
-                format!("{snum} could not be parsed to a positive signed 64 bit integer")
-            })
+            snum.parse()
+                .map(|f| types.get_float(f))
+                .map_err(|_| format!("{snum} could not be parsed to a floating point value"))
         }
     }
 
     fn parse_number_string(&mut self) -> &'a str {
+        self.is_long_or_double().1
+    }
+
+    /// Return +len that ends a long
+    /// Return -len that ends a double
+    fn is_long_or_double(&mut self) -> (bool, &'a str) {
         let old = self.remaining;
-        self.remaining = self.remaining.trim_start_matches(is_number);
-        &old[..old.len() - self.remaining.len()]
+        while self.peek().is_some_and(|c| c.is_ascii_digit()) {
+            self.next_char();
+        }
+        let c = self.peek();
+        if self.remaining == old || !(c == Some('e') || c == Some('.')) {
+            return (false, &old[..old.len() - self.remaining.len()]);
+        }
+        self.next_char();
+        while self
+            .peek()
+            .is_some_and(|c| c == 'e' || c == '.' || c.is_ascii_digit())
+        {
+            self.next_char();
+        }
+        (true, &old[..old.len() - self.remaining.len()])
     }
 
     fn parse_id(&mut self) -> &'a str {
@@ -1477,5 +1691,34 @@ impl<'a> Lexer<'a> {
         let (p, i) = self.remaining.split_at(1);
         self.remaining = i;
         p
+    }
+
+    /// Next oper= character, or 0.
+    /// As a convenience, mark "++" as a char 1 and "--" as char -1 (65535)
+    /// Disallow e.g. "arg--1" which should parse as "arg - -1"
+    fn match_oper_assign(&mut self) -> Option<char> {
+        self.skip_whitespace();
+        let mut r = self.remaining.chars();
+        let ch0 = r.next()?;
+        let ch1 = r.next()?;
+        let ch2 = r.next()?;
+
+        if !"+-/*&|^".contains(ch0) {
+            return None;
+        }
+        if ch1 == '=' {
+            self.remaining = &self.remaining[2..];
+            Some(ch0)
+        } else if is_id_letter(ch2) {
+            None
+        } else if ch0 == '+' && ch1 == '+' {
+            self.remaining = &self.remaining[2..];
+            Some('\u{1}')
+        } else if ch0 == '-' && ch1 == '-' {
+            self.remaining = &self.remaining[2..];
+            Some('\u{FFFF}')
+        } else {
+            None
+        }
     }
 }

@@ -8,7 +8,7 @@ pub struct Field<'t> {
     /// Type of the field
     pub ty: Ty<'t>,
     /// Unique memory alias, not sensibly part of a "type" but very convenient here.
-    pub alias: usize,
+    pub alias: u32,
     /// Field must be written to exactly once, no more, no less
     pub final_field: bool,
 }

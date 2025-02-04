@@ -266,12 +266,12 @@ impl Scope {
     }
 
     /// Read from memory
-    fn mem_read(self, alias: usize, sea: &mut Nodes) -> Option<Node> {
+    pub fn mem_read(self, alias: usize, sea: &mut Nodes) -> Option<Node> {
         self.mem(sea)._mem(alias, None, sea)
     }
 
     /// Write to memory
-    fn mem_write(self, alias: usize, st: Node, sea: &mut Nodes) {
+    pub fn mem_write(self, alias: usize, st: Node, sea: &mut Nodes) {
         self.mem(sea)._mem(alias, Some(st), sea);
     }
 
@@ -288,7 +288,7 @@ impl Scope {
         self.update_var_index(index, Some(value), sea);
     }
 
-    fn update_var_index(self, var_index: usize, st: Option<Node>, sea: &mut Nodes) {
+    pub fn update_var_index(self, var_index: usize, st: Option<Node>, sea: &mut Nodes) {
         let mut old = self.inputs(sea)[var_index];
         if let Some(loop_) = old.and_then(|o| o.to_scope(sea)) {
             // Lazy Phi!
