@@ -305,7 +305,7 @@ impl Node {
         sea.outputs[self].contains(&Node::DUMMY)
     }
 
-    fn unkill(self, sea: &mut Nodes) {
+    pub fn unkill(self, sea: &mut Nodes) {
         self.unkeep(sea);
         if self.is_unused(sea) {
             self.kill(sea);
@@ -390,7 +390,7 @@ impl Node {
     /// Semantic change to the graph (so NOT a peephole), used by the Parser.
     /// If any input is a float, flip to a float-flavored opcode and widen any
     /// non-float input.
-    fn widen(self, sea: &mut Nodes) -> Node {
+    pub fn widen(self, sea: &mut Nodes) -> Node {
         if !self.has_float_input(sea) {
             return self;
         }

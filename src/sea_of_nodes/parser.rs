@@ -1,7 +1,7 @@
 use crate::sea_of_nodes::graph_visualizer;
 use crate::sea_of_nodes::nodes::node::{
-    Add, And, CProj, Constant, If, Load, Loop, Minus, New, Not, Or, Proj, ReadOnly, Return, Sar,
-    Scope, ScopeMin, Shl, Shr, Start, Stop, Store, Struct, ToFloat, XCtrl, Xor,
+    Add, And, CProj, Constant, If, Load, Loop, Minus, New, Not, Or, Proj, ReadOnly, Return,
+    RoundF32, Sar, Scope, ScopeMin, Shl, Shr, Start, Stop, Store, Struct, ToFloat, XCtrl, Xor,
 };
 use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes, Op, Phi};
 use crate::sea_of_nodes::types::{Field, Ty, TyMemPtr, TyStruct, Types};
@@ -124,6 +124,7 @@ impl<'s, 't> Parser<'s, 't> {
             alias: 2, // alias 0 for the control, 1 for memory
             name_to_type: Self::default_types(types),
             inits: HashMap::new(),
+            altmp: vec![],
             disable_show_graph_println: false,
         }
     }
@@ -341,9 +342,9 @@ impl<'s, 't> Parser<'s, 't> {
 
         // Parse predicate
         let pred = if self.peek(';') {
-            self.int_con(1)
+            *self.int_con(1)
         } else {
-            self.parse_asgn()
+            self.parse_asgn()?
         };
         self.require(if do_for { ";" } else { ")" })?;
 
@@ -377,17 +378,18 @@ impl<'s, 't> Parser<'s, 't> {
         let break_scope = self.scope.dup(false, &mut self.nodes);
         self.break_scope = Some(break_scope);
         self.x_scopes.push(break_scope);
-        break_scope.add_guards(if_false, pred, true, &mut self.nodes); // Up-cast predicate
+        break_scope.add_guards(if_false, Some(pred), true, &mut self.nodes); // Up-cast predicate
 
         // No continues yet
         self.continue_scope = None;
 
         // Parse the true side, which corresponds to loop body
         // Our current scope is the body Scope
-        self.set_ctrl(if_true.unkeep(&mut self.nodes));
+        if_true.unkeep(&mut self.nodes);
+        self.set_ctrl(if_true);
         self.scope.add_guards(
             if_true,
-            pred.unkeep(&mut self.nodes),
+            Some(pred.unkeep(&mut self.nodes)),
             false,
             &mut self.nodes,
         ); // Up-cast predicate
@@ -557,8 +559,9 @@ impl<'s, 't> Parser<'s, 't> {
             .add_guards(if_true, Some(pred), false, &mut self.nodes); // Up-cast predicate
         let mut lhs = if stmt {
             self.parse_statement()?;
+            None
         } else {
-            self.parse_asgn().keep();
+            Some(self.parse_asgn()?.keep(&mut self.nodes))
         };
         self.scope.remove_guards(if_true, &mut self.nodes);
 
@@ -573,10 +576,13 @@ impl<'s, 't> Parser<'s, 't> {
         self.scope.add_guards(if_false, pred, true, &mut self.nodes);
         let do_rhs = self.match_(fside);
         let mut rhs = match (do_rhs, stmt) {
-            (true, true) => self.parse_statement()?,
-            (true, false) => self.parse_asgn()?,
+            (true, true) => {
+                self.parse_statement()?;
+                None
+            }
+            (true, false) => Some(self.parse_asgn()?),
             (false, true) => None,
-            (false, false) => self.con(lhs.ty(&self.nodes).make_zero(&self.types)),
+            (false, false) => Some(self.con(lhs.unwrap().ty(&self.nodes).make_zero(&self.types))),
         };
         self.scope.remove_guards(if_false, &mut self.nodes);
         if do_rhs {
@@ -592,13 +598,18 @@ impl<'s, 't> Parser<'s, 't> {
 
         // Check the trinary widening int/flt
         if !stmt {
-            rhs = self
-                .widen_int(rhs, lhs.ty(&self.nodes))
-                .keep(&mut self.nodes);
-            lhs = self
-                .widen_int(lhs.unkeep(&mut self.nodes), rhs.ty(&self.nodes))
-                .keep(&mut self.nodes);
-            rhs.unkeep(&mut self.nodes);
+            rhs = Some(
+                self.widen_int(rhs, lhs.unwrap().ty(&self.nodes))
+                    .keep(&mut self.nodes),
+            );
+            lhs = Some(
+                self.widen_int(
+                    lhs.unwrap().unkeep(&mut self.nodes),
+                    rhs.unwrap().ty(&self.nodes),
+                )
+                .keep(&mut self.nodes),
+            );
+            rhs.unwrap().unkeep(&mut self.nodes);
         }
 
         // Merge results
@@ -608,17 +619,20 @@ impl<'s, 't> Parser<'s, 't> {
         let r = true_scope.merge_scopes(false_scope, &mut self.nodes);
         self.set_ctrl(**r);
         let ret = if stmt {
-            r
+            r.to_node()
         } else {
             self.peep(Phi::new(
                 "",
-                self.types.meet(lhs.ty(&self.nodes), rhs.ty(&self.nodes)),
-                vec![Some(**r), Some(lhs.unkeep(&mut self.nodes)), Some(rhs)],
+                self.types.meet(
+                    lhs.unwrap().ty(&self.nodes).unwrap(),
+                    rhs.unwrap().ty(&self.nodes).unwrap(),
+                ),
+                vec![Some(**r), Some(lhs.unwrap().unkeep(&mut self.nodes)), rhs],
                 &mut self.nodes,
-            ));
+            ))
         };
         r.peephole(&mut self.nodes);
-        Ok(ret.to_node())
+        Ok(ret)
     }
 
     /// <pre>
@@ -1024,9 +1038,11 @@ impl<'s, 't> Parser<'s, 't> {
                 },
             ));
             lhs.set_def(idx, self.parse_shift()?, &mut self.nodes);
-            lhs = self.peep(lhs.widen(&mut self.nodes));
+            lhs = lhs.widen(&mut self.nodes);
+            lhs = self.peep(lhs);
             if negate {
-                lhs = self.peep(Not::new(lhs, &mut self.nodes));
+                lhs = *Not::new(lhs, &mut self.nodes);
+                lhs = self.peep(lhs);
             }
         }
     }
@@ -1047,7 +1063,8 @@ impl<'s, 't> Parser<'s, 't> {
                 return Ok(lhs);
             }
             lhs.set_def(2, self.parse_addition()?, &mut self.nodes);
-            lhs = self.peep(lhs.widen(&mut self.nodes));
+            lhs = lhs.widen(&mut self.nodes);
+            lhs = self.peep(lhs);
         }
     }
 
@@ -1067,7 +1084,8 @@ impl<'s, 't> Parser<'s, 't> {
             lhs = self.nodes.create((op, vec![None, Some(lhs), None]));
             let rhs = self.parse_multiplication()?;
             lhs.set_def(2, rhs, &mut self.nodes);
-            lhs = self.peep(lhs.widen(&mut self.nodes));
+            lhs = lhs.widen(&mut self.nodes);
+            lhs = self.peep(lhs);
         }
     }
 
@@ -1087,7 +1105,8 @@ impl<'s, 't> Parser<'s, 't> {
             lhs = self.nodes.create((op, vec![None, Some(lhs), None]));
             let rhs = self.parse_unary()?;
             lhs.set_def(2, rhs, &mut self.nodes);
-            lhs = self.peep(lhs.widen(&mut self.nodes));
+            lhs = lhs.widen(&mut self.nodes);
+            lhs = self.peep(lhs);
         }
     }
 
@@ -1112,8 +1131,9 @@ impl<'s, 't> Parser<'s, 't> {
                         self.int_con(delta).to_node(),
                         &mut self.nodes,
                     );
-                    let expr = self.xz_mask(self.peep(add), t);
-                    self.scope.update_var_index(n, expr, &mut self.nodes);
+                    let add = self.peep(add);
+                    let expr = self.zs_mask(add, t)?;
+                    self.scope.update_var_index(n, Some(expr), &mut self.nodes);
                     return Ok(expr);
                 }
             }
@@ -1122,10 +1142,12 @@ impl<'s, 't> Parser<'s, 't> {
         }
         if self.match_("-") {
             self.parse_unary()
-                .map(|expr| self.peep(Minus::new(expr, &mut self.nodes).widen(&mut self.nodes)))
+                .map(|expr| Minus::new(expr, &mut self.nodes).widen(&mut self.nodes))
+                .map(|expr| self.peep(expr))
         } else if self.match_("!") {
             self.parse_unary()
-                .map(|expr| self.peep(Not::new(expr, &mut self.nodes)))
+                .map(|expr| Not::new(expr, &mut self.nodes))
+                .map(|expr| self.peep(expr))
         } else {
             let primary = self.parse_primary()?;
             self.parse_postfix(primary)
@@ -1267,8 +1289,9 @@ impl<'s, 't> Parser<'s, 't> {
 
         // Check that all fields are initialized
         for i in idx..init.inputs(&self.nodes).len() {
-            if (/*init.at(i)._type == Type.TOP ||*/init.inputs(&self.nodes)[i].unwrap().ty(&self.nodes) == Some(self.types.bot))
-            {
+            if
+            /*init.at(i)._type == Type.TOP ||*/
+            init.inputs(&self.nodes)[i].unwrap().ty(&self.nodes) == Some(self.types.bot) {
                 let fname = fs[i - idx].fname;
                 return Err(format!("'{}' is not fully initialized, field '{fname}' needs to be set in a constructor", tmp.data().to.name()));
             }
@@ -1356,72 +1379,203 @@ impl<'s, 't> Parser<'s, 't> {
     ///
     /// <pre>
     ///     expr ('.' IDENTIFIER)* [ = expr ]
+    ///     expr #
+    ///     expr ('[' expr ']')* = [ = expr ]
     /// </pre>
     fn parse_postfix(&mut self, expr: Node) -> PResult<Node> {
-        if !self.match_(".") {
-            return Ok(expr);
+        let name = if self.match_(".") {
+            self.require_id()?
+        } else if self.match_("#") {
+            "#"
+        } else if self.match_("[") {
+            "[]"
+        } else {
+            return Ok(expr); // No postfix
+        };
+
+        // Sanity check expr for being a reference
+        let expr_ty = expr.ty(&self.nodes).unwrap();
+        let Some(ptr) = expr_ty.to_mem_ptr() else {
+            return Err(format!("Expected reference but got {}", expr_ty.str()));
+        };
+
+        // Happens when parsing known dead code, which often has other typing
+        // issues.  Since the code is dead, possibly due to inlining, lets not
+        // spoil the user experience with error messages.
+        if self.ctrl().ty(&self.nodes) == Some(self.types.xctrl) {
+            // Exit out via parsing the trailing expression
+            return if self.match_opx(*b"==") {
+                self.parse_asgn()
+            } else {
+                self.parse_postfix(*self.con(self.types.top))
+            };
         }
 
-        let expr_ty = self.nodes.ty[expr].unwrap();
-        let Some(ptr) = expr_ty.to_mem_ptr() else {
-            return Err(format!(
-                "Expected struct reference but got {}",
-                expr_ty.str()
-            ));
+        // Sanity check field name for existing
+        let Some(tmp) = self.name_to_type.get(ptr.data().to.name()) else {
+            return Err(format!("Accessing unknown field '{name}' from '{ptr}'"));
         };
-        let name = self.types.get_str(self.require_id()?);
+        let tmp = tmp.to_mem_ptr().unwrap();
 
-        let Some(idx) = ptr.data().to.fields().iter().position(|&f| f.0 == name) else {
+        let base = tmp.data().to;
+        let Some(fidx) = base.find(name) else {
             return Err(format!(
                 "Accessing unknown field '{name}' from '{}'",
-                expr_ty.str()
+                ptr.str()
             ));
         };
 
-        let alias = self.nodes[self.nodes.start]
-            .alias_starts
-            .get(ptr.data().to.name())
-            .unwrap()
-            + idx as u32;
-
-        let old = self.lexer.remaining;
-        if self.match_("=") {
-            // Disambiguate "obj.fld==x" boolean test from "obj.fld=x" field assignment
-
-            if self.peek('=') {
-                self.lexer.remaining = old;
-            } else {
-                let val = self.parse_expression()?;
-                let mem_slice = self.mem_alias_lookup(alias).unwrap();
-                let store = Store::new(
-                    name,
-                    alias,
-                    [self.ctrl(), mem_slice, expr, val],
-                    &mut self.nodes,
-                )
-                .peephole(&mut self.nodes);
-                self.mem_alias_update(alias, store).unwrap();
-                return Ok(expr); // "obj.a = expr" returns the expression while updating memory
+        // Get field type and layout offset from base type and field index fidx
+        let f = &base.fields()[fidx]; // Field from field index
+        let mut tf = f.ty;
+        if let Some(ftmp) = tf.to_mem_ptr() {
+            if ftmp.is_fref() {
+                tf = ftmp.make_from(
+                    self.name_to_type
+                        .get(ftmp.data().to.name())
+                        .unwrap()
+                        .to_mem_ptr()
+                        .unwrap()
+                        .data()
+                        .to,
+                );
             }
         }
 
-        let declared_type = ptr.data().to.fields()[idx].1;
-        let mem_slice = self.mem_alias_lookup(alias).unwrap();
+        // Field offset; fixed for structs, computed for arrays
+        let off = if name == "[]" {
+            // If field is an array body
+            // Array index math
+            let b = self.int_con(base.ary_base());
+
+            let index = self.parse_asgn()?;
+            self.require("]")?;
+            let offset = Shl::new(index, Some(self.int_con(base.ary_scale())), &mut self.nodes);
+
+            self.peep(Add::new(*b, self.peep(offset), &mut self.nodes))
+        } else {
+            // Struct field offsets are hardwired
+            self.int_con(base.offset(fidx)).keep(&mut self.nodes)
+        };
+
+        // Disambiguate "obj.fld==x" boolean test from "obj.fld=x" field assignment
+        if self.match_opx(*b"==") {
+            let val = self.parse_asgn()?.keep(&mut self.nodes);
+            let lift = self.lift_expr(val, tf, f.final_field)?;
+
+            let st = Store::new(
+                name,
+                f.alias,
+                tf,
+                [
+                    self.mem_alias_lookup(f.alias),
+                    expr,
+                    off.unkeep(&mut self.nodes),
+                    lift,
+                ],
+                false,
+                &mut self.nodes,
+            );
+            // Arrays include control, as a proxy for a safety range check.
+            // Structs don't need this; they only need a NPE check which is
+            // done via the type system.
+            if base.is_ary() {
+                st.set_def(0, self.ctrl(), &mut self.nodes);
+            }
+            self.mem_alias_update(f.alias, st.peephole(&mut self.nodes));
+            return Ok(val.unkeep(&mut self.nodes)); // "obj.a = expr" returns the expression while updating memory
+        }
+
         let load = Load::new(
             name,
-            alias,
-            declared_type,
-            [mem_slice, expr],
-            &mut self.nodes,
-        )
-        .peephole(&mut self.nodes);
+            f.alias,
+            tf.glb(),
+            self.mem_alias_lookup(f.alias),
+            expr.keep(&mut self.nodes),
+            off,
+        );
+        // Arrays include control, as a proxy for a safety range check
+        // Structs don't need this; they only need a NPE check which is
+        // done via the type system.
+        if base.is_ary() {
+            load.set_def(0, self.ctrl(), &mut self.nodes);
+        }
+        let load = self.peep(load);
+
+        // ary[idx]++ or ptr.fld++
+        let inc = self.matchx("++");
+        if inc || self.matchx("--") {
+            if f.final_field && !f.fname == "[]" {
+                return Err(format!("Cannot reassign final '{}'", f.fname));
+            }
+            let delta = self.int_con(if inc { 1 } else { -1 });
+            let inc = self.peep(Add::new(load, *delta, &mut self.nodes));
+            let val = self.zs_mask(inc, tf);
+            let st = Store::new(
+                name,
+                f.alias,
+                tf,
+                [
+                    self.mem_alias_lookup(f.alias),
+                    expr.unkeep(&mut self.nodes),
+                    off,
+                    val,
+                ],
+                false,
+                &mut self.nodes,
+            );
+            // Arrays include control, as a proxy for a safety range check.
+            // Structs don't need this; they only need a NPE check which is
+            // done via the type system.
+            if base.is_ary() {
+                st.set_def(0, self.ctrl(), &mut self.nodes);
+            }
+            self.mem_alias_update(f.alias, self.peep(st));
+            // And use the original loaded value as the result
+        } else {
+            expr.unkill(&mut self.nodes);
+        }
+        off.unkill(&mut self.nodes);
+
         self.parse_postfix(load)
     }
 
     /// zero/sign extend.  "i" is limited to either classic unsigned (min==0) or
     /// classic signed (min=minus-power-of-2); max=power-of-2-minus-1.
     fn zs_mask(&mut self, val: Node, t: Ty<'t>) -> PResult<Node> {
-        todo!()
+        if let Some(tval) = val.ty(&self.nodes).and_then(|t| t.to_int()) {
+            if let Some(t0) = t.to_int() {
+                if !self.types.isa(tval, t0) {
+                    if t0.min() == 0 {
+                        self.peep(And::new(val, self.int_con(t0.max()))) // Unsigned
+                    }
+                    // Signed extension
+                    let shift = t0.max().leading_zeros() - 1;
+                    let shf = self.int_con(shift);
+                    if shf.ty(&self.nodes) == Some(self.types.int_zero) {
+                        return Ok(val);
+                    }
+                    return Ok(self.peep(Sar::new(
+                        self.peep(Shl::new(
+                            val,
+                            Some(shf.keep(&mut self.nodes)),
+                            &mut self.nodes,
+                        )),
+                        Some(shf.unkeep(&mut self.nodes)),
+                        &mut self.nodes,
+                    )));
+                }
+            }
+        }
+        if let Some(tval) = val.ty(&self.nodes).and_then(|t| t.to_float()) {
+            if let Some(t0) = t.to_float() {
+                if !self.types.isa(tval, t0) {
+                    // Float rounding
+                    return self.peep(RoundF32::new(val, &mut self.nodes));
+                }
+            }
+        }
+        val
     }
 
     /// <pre>

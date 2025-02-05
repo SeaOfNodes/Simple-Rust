@@ -745,17 +745,17 @@ impl Load {
     pub fn new<'t>(
         name: &'t str,
         alias: u32,
-        declared_type: Ty<'t>,
-        [mem_slice, mem_ptr]: [Node; 2],
+        glb: Ty<'t>,
+        [mem, ptr, off]: [Node; 3],
         sea: &mut Nodes<'t>,
     ) -> Self {
         Self::create(
             LoadOp {
                 name,
                 alias,
-                declared_type,
+                declared_type: glb,
             },
-            vec![None, Some(mem_slice), Some(mem_ptr)],
+            vec![None, Some(mem), Some(ptr), Some(off)],
             sea,
         )
     }
@@ -771,21 +771,31 @@ impl Load {
 pub struct StoreOp<'t> {
     pub name: &'t str,
     pub alias: u32,
+    pub declared_ty: Ty<'t>,
+    pub init: bool,
 }
 
 impl Store {
     pub fn new<'t>(
         name: &'t str,
         alias: u32,
-        [ctrl, mem_slice, mem_ptr, value]: [Node; 4],
+        glb: Ty<'t>,
+        [mem, ptr, off, value]: [Node; 4],
+        init: bool,
         sea: &mut Nodes<'t>,
     ) -> Self {
         Self::create(
-            StoreOp { name, alias },
-            vec![Some(ctrl), Some(mem_slice), Some(mem_ptr), Some(value)],
+            StoreOp {
+                name,
+                alias,
+                declared_ty: glb,
+                init,
+            },
+            vec![None, Some(mem), Some(ptr), Some(off), Some(value)],
             sea,
         )
     }
+
     pub fn mem(self, sea: &Nodes) -> Option<Node> {
         self.inputs(sea)[1]
     }
