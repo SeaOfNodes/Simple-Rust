@@ -219,9 +219,7 @@ impl Bool {
                 }
             }
             // Equals X==0 becomes a !X
-            if rhs.ty(sea) == Some(sea.types.int_zero)
-                || rhs.ty(sea) == Some(*sea.types.pointer_null)
-            {
+            if rhs.ty(sea) == Some(sea.types.int_zero) || rhs.ty(sea) == Some(*sea.types.ptr_null) {
                 return Some(*Not::new(lhs, sea));
             }
         }

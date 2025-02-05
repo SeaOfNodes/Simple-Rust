@@ -159,9 +159,9 @@ impl<'t> Node {
                         // top->top, bot->bot, null->1, *void->0, not-null ptr->0, ptr/nil->bot
                         // If input in null then true
                         // If input is not null ptr then false
-                        if t0 == *types.pointer_top {
+                        if t0 == *types.ptr_top {
                             types.int_top
-                        } else if t0 == *types.pointer_null {
+                        } else if t0 == *types.ptr_null {
                             types.int_one
                         } else if !p.nil {
                             types.int_zero

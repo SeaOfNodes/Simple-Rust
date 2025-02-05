@@ -12,29 +12,45 @@ pub enum Type<'a> {
     Ctrl,  // control flow bottom
     XCtrl, //  ctrl flow top (mini-lattice: any-xctrl-ctrl-all)
     Int(Int),
+    Float(Float),
     Tuple(Tuple<'a>),
     Struct(Struct<'a>),
     MemPtr(MemPtr<'a>),
-    Mem(Mem),
+    Mem(Mem<'a>),
 }
 
 #[derive(Eq, PartialEq, Copy, Clone, Hash, Debug)]
-pub enum Int {
-    Bot,
-    Top,
-    Constant(i64),
+pub struct Int {
+    pub min: i64,
+    pub max: i64,
+}
+
+#[derive(Eq, PartialEq, Copy, Clone, Hash, Debug)]
+pub struct Float {
+    sz: i8,
+    /// f64 bits as integer for easier eq/hashing
+    con: u64,
+}
+
+impl Float {
+    pub fn new(sz: i8, con: f64) -> Self {
+        Self {
+            sz,
+            con: con.to_bits(),
+        }
+    }
+
+    pub fn con(&self) -> f64 {
+        f64::from_bits(self.con)
+    }
 }
 
 pub type Tuple<'t> = &'t [Ty<'t>];
 
 #[derive(Eq, PartialEq, Copy, Clone, Hash, Debug)]
-pub enum Struct<'t> {
-    Bot,
-    Top,
-    Struct {
-        name: &'t str,
-        fields: &'t [(&'t str, Ty<'t>)],
-    },
+pub struct Struct<'t> {
+    pub name: &'t str,
+    pub fields: &'t [Field<'t>],
 }
 
 impl<'t> Struct<'t> {
@@ -67,10 +83,10 @@ pub struct MemPtr<'t> {
 }
 
 #[derive(Eq, PartialEq, Copy, Clone, Hash, Debug)]
-pub enum Mem {
-    Bot,
-    Top,
-    Alias(u32),
+pub struct Mem<'t> {
+    pub alias: u32,
+    /// Memory contents, some scalar type
+    pub t: Ty<'t>,
 }
 
 impl<'t> Type<'t> {

@@ -2,6 +2,7 @@ use crate::sea_of_nodes::types::Ty;
 
 /// Represents a field in a struct. This is not a Type in the type system.
 /// The pair {fieldName,type} uniquely identifies a field.
+#[derive(Eq, PartialEq, Copy, Clone, Hash, Debug)]
 pub struct Field<'t> {
     /// Field name
     pub fname: &'t str,

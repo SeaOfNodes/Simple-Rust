@@ -3,7 +3,7 @@ use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::{fmt, ptr};
 
-use crate::sea_of_nodes::types::{Int, Mem, MemPtr, Struct, Tuple, Type};
+use crate::sea_of_nodes::types::{Float, Int, Mem, MemPtr, Struct, Tuple, Type};
 
 /// A reference to an interned type.
 /// Equality and hashing is based on the value of the pointer.
@@ -110,7 +110,8 @@ macro_rules! impl_subtype {
 }
 
 impl_subtype!(TyInt(Int)           { to_int     is_int     });
+impl_subtype!(TyFloat(Float)       { to_float   is_float   });
 impl_subtype!(TyTuple(Tuple<'t>)   { to_tuple   is_tuple   });
 impl_subtype!(TyStruct(Struct<'t>) { to_struct  is_struct  });
 impl_subtype!(TyMemPtr(MemPtr<'t>) { to_mem_ptr is_mem_ptr });
-impl_subtype!(TyMem(Mem)           { to_mem     is_mem     });
+impl_subtype!(TyMem(Mem<'t>)       { to_mem     is_mem     });

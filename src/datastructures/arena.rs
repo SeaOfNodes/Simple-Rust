@@ -105,7 +105,7 @@ mod tests {
     use crate::datastructures::arena::{DroplessArena, CHUNK_SIZE};
 
     #[test]
-    fn pointer_values() {
+    fn ptr_values() {
         #[derive(Copy, Clone)]
         struct Test {
             x: u32,

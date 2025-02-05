@@ -48,13 +48,13 @@ fn test_type_ad_hoc() {
 
     assert_eq!(*ptr1, types.dual(types.dual(*ptr1)));
     assert_eq!(types.glb(*ptr1), types.glb(types.dual(*ptr1)));
-    assert_eq!(*types.pointer_bot, types.meet(*ptr1, *ptr2nil));
-    assert_eq!(types.glb(*ptr1), types.meet(*ptr1, *types.pointer_null));
+    assert_eq!(*types.ptr_bot, types.meet(*ptr1, *ptr2nil));
+    assert_eq!(types.glb(*ptr1), types.meet(*ptr1, *types.ptr_null));
 
-    let top = types.pointer_top;
-    let bot = types.pointer_bot;
-    let ptr = types.pointer_void;
-    let null = types.pointer_null;
+    let top = types.ptr_top;
+    let bot = types.ptr_bot;
+    let ptr = types.ptr_void;
+    let null = types.ptr_null;
 
     assert_eq!(*bot, types.meet(*ptr, *null));
     assert_eq!(*ptr, types.meet(*ptr1, *ptr2));
@@ -152,7 +152,7 @@ impl<'t> Types<'t> {
 
     fn gather(&self) -> Vec<Ty<'t>> {
         let struct_test = self.get_struct("test", &[("test", self.int_zero)]);
-        let pointer_test = self.get_mem_ptr(struct_test, false);
+        let ptr_test = self.get_mem_ptr(struct_test, false);
         let mut ts = vec![
             self.bot,
             self.ctrl,
@@ -163,14 +163,14 @@ impl<'t> Types<'t> {
             self.get_mem(1),
             self.mem_bot,
             //
-            *self.pointer_null,
-            *self.pointer_bot,
-            *pointer_test,
+            *self.ptr_null,
+            *self.ptr_bot,
+            *ptr_test,
             //
             *struct_test,
             *self.struct_bot,
             //
-            self.get_tuple_from_array([self.int_bot, *pointer_test]),
+            self.get_tuple_from_array([self.int_bot, *ptr_test]),
         ];
         let t2 = ts.iter().map(|t| self.dual(*t)).collect::<Vec<_>>();
         ts.extend(t2);

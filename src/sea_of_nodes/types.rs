@@ -3,6 +3,7 @@ pub use crate::sea_of_nodes::types::field::Field;
 use crate::sea_of_nodes::types::interner::Interner;
 pub use crate::sea_of_nodes::types::r#type::*;
 pub use crate::sea_of_nodes::types::ty::{Ty, TyMemPtr, TyStruct};
+use crate::sea_of_nodes::types::ty::{TyFloat, TyInt, TyMem, TyTuple};
 
 mod field;
 mod interner;
@@ -40,23 +41,68 @@ pub struct Types<'a> {
     pub top: Ty<'a>,
     pub ctrl: Ty<'a>,
     pub xctrl: Ty<'a>,
-    pub int_zero: Ty<'a>,
-    pub int_one: Ty<'a>,
-    pub int_two: Ty<'a>,
-    pub int_bot: Ty<'a>,
-    pub int_top: Ty<'a>,
-    pub if_both: Ty<'a>,
-    pub if_neither: Ty<'a>,
-    pub if_true: Ty<'a>,
-    pub if_false: Ty<'a>,
+    pub int_top: TyInt<'a>,
+    pub int_bot: TyInt<'a>,
+    pub int_zero: TyInt<'a>,
+    pub int_u1: TyInt<'a>,
+    pub int_bool: TyInt<'a>,
+    pub int_false: TyInt<'a>,
+    pub int_true: TyInt<'a>,
+    pub int_i8: TyInt<'a>,
+    pub int_i16: TyInt<'a>,
+    pub int_i32: TyInt<'a>,
+    pub int_u8: TyInt<'a>,
+    pub int_u16: TyInt<'a>,
+    pub int_u32: TyInt<'a>,
+    pub float_top: TyFloat<'a>,
+    pub float_t32: TyFloat<'a>,
+    pub float_zero: TyFloat<'a>,
+    pub float_b32: TyFloat<'a>,
+    pub float_bot: TyFloat<'a>,
+    pub if_both: TyTuple<'a>,
+    pub if_neither: TyTuple<'a>,
+    pub if_true: TyTuple<'a>,
+    pub if_false: TyTuple<'a>,
     pub struct_bot: TyStruct<'a>,
     pub struct_top: TyStruct<'a>,
-    pub mem_bot: Ty<'a>,
-    pub mem_top: Ty<'a>,
-    pub pointer_top: TyMemPtr<'a>,
-    pub pointer_bot: TyMemPtr<'a>,
-    pub pointer_null: TyMemPtr<'a>,
-    pub pointer_void: TyMemPtr<'a>,
+    pub mem_bot: TyMem<'a>,
+    pub mem_top: TyMem<'a>,
+    pub ptr_top: TyMemPtr<'a>,
+    pub ptr_bot: TyMemPtr<'a>,
+    pub ptr_null: TyMemPtr<'a>,
+    pub ptr_void: TyMemPtr<'a>,
+}
+
+impl<'a> Interner<'a> {
+    fn get_float(&self, sz: i8, con: f64) -> TyFloat<'a> {
+        self.intern(Type::Float(Float::new(sz, con)))
+            .to_float()
+            .unwrap()
+    }
+
+    fn get_int(&self, min: i64, max: i64) -> TyInt<'a> {
+        self.intern(Type::Int(Int { min, max })).to_int().unwrap()
+    }
+
+    fn get_mem(&self, alias: u32, t: Ty<'a>) -> TyMem<'a> {
+        self.intern(Type::Mem(Mem { alias, t })).to_mem().unwrap()
+    }
+
+    fn get_ptr(&self, obj: TyStruct<'a>, nil: bool) -> TyMemPtr<'a> {
+        self.intern(Type::MemPtr(MemPtr { to: obj, nil }))
+            .to_mem_ptr()
+            .unwrap()
+    }
+
+    fn get_struct(&self, name: &'a str, fields: &'a [Field<'a>]) -> TyStruct<'a> {
+        self.intern(Type::Struct(Struct { name, fields }))
+            .to_struct()
+            .unwrap()
+    }
+
+    fn get_tuple(&self, tuple: &'a [Ty<'a>]) -> TyTuple<'a> {
+        self.intern(Type::Tuple(tuple)).to_tuple().unwrap()
+    }
 }
 
 impl<'a> Types<'a> {
@@ -64,65 +110,62 @@ impl<'a> Types<'a> {
         let interner = Interner::new(arena);
         let intern = |x| interner.intern(x);
 
+        let bot = intern(Type::Bot);
+        let top = intern(Type::Top);
         let ctrl = intern(Type::Ctrl);
         let xctrl = intern(Type::XCtrl);
 
-        let struct_bot = intern(Type::Struct(Struct::Bot)).to_struct().unwrap();
-        let struct_top = intern(Type::Struct(Struct::Top)).to_struct().unwrap();
+        let int_zero = interner.get_int(0, 0);
+        let int_u1 = interner.get_int(0, 1);
+
+        let struct_top = interner.get_struct("$TOP", &[]);
+        let struct_bot = interner.get_struct("$BOT", &[]);
 
         Self {
-            bot: intern(Type::Bot),
-            top: intern(Type::Top),
+            bot,
+            top,
             ctrl,
             xctrl,
-            int_zero: intern(Type::Int(Int::Constant(0))),
-            int_one: intern(Type::Int(Int::Constant(1))),
-            int_two: intern(Type::Int(Int::Constant(2))),
-            int_bot: intern(Type::Int(Int::Bot)),
-            int_top: intern(Type::Int(Int::Top)),
-            if_both: intern(Type::Tuple(arena.alloc([ctrl, ctrl]))),
-            if_neither: intern(Type::Tuple(arena.alloc([xctrl, xctrl]))),
-            if_true: intern(Type::Tuple(arena.alloc([ctrl, xctrl]))),
-            if_false: intern(Type::Tuple(arena.alloc([xctrl, ctrl]))),
+            int_top: interner.get_int(i64::MAX, i64::MIN),
+            int_bot: interner.get_int(i64::MIN, i64::MAX),
+            int_zero,
+            int_u1,
+            int_bool: int_u1,
+            int_false: int_zero,
+            int_true: interner.get_int(1, 1),
+            int_i8: interner.get_int(-128, 127),
+            int_i16: interner.get_int(-32768, 32767),
+            int_i32: interner.get_int(-1 << 31, (1 << 31) - 1),
+            int_u8: interner.get_int(0, 255),
+            int_u16: interner.get_int(0, 65535),
+            int_u32: interner.get_int(0, (1 << 32) - 1),
+            float_top: interner.get_float(-64, 0.0),
+            float_t32: interner.get_float(-32, 0.0),
+            float_zero: interner.get_float(0, 0.0),
+            float_b32: interner.get_float(32, 0.0),
+            float_bot: interner.get_float(64, 0.0),
+            if_both: interner.get_tuple(arena.alloc([ctrl, ctrl])),
+            if_neither: interner.get_tuple(arena.alloc([xctrl, xctrl])),
+            if_true: interner.get_tuple(arena.alloc([ctrl, xctrl])),
+            if_false: interner.get_tuple(arena.alloc([xctrl, ctrl])),
             struct_bot,
             struct_top,
-            mem_bot: intern(Type::Mem(Mem::Bot)),
-            mem_top: intern(Type::Mem(Mem::Top)),
-            pointer_bot: intern(Type::MemPtr(MemPtr {
-                to: struct_bot,
-                nil: true,
-            }))
-            .to_mem_ptr()
-            .unwrap(),
-            pointer_top: intern(Type::MemPtr(MemPtr {
-                to: struct_top,
-                nil: false,
-            }))
-            .to_mem_ptr()
-            .unwrap(),
-            pointer_null: intern(Type::MemPtr(MemPtr {
-                to: struct_top,
-                nil: true,
-            }))
-            .to_mem_ptr()
-            .unwrap(),
-            pointer_void: intern(Type::MemPtr(MemPtr {
-                to: struct_bot,
-                nil: false,
-            }))
-            .to_mem_ptr()
-            .unwrap(),
+            mem_top: interner.get_mem(u32::MAX, top),
+            mem_bot: interner.get_mem(u32::MAX, bot),
+            ptr_bot: interner.get_ptr(struct_bot, true),
+            ptr_top: interner.get_ptr(struct_top, false),
+            ptr_null: interner.get_ptr(struct_top, true),
+            ptr_void: interner.get_ptr(struct_bot, false),
             interner,
         }
     }
 
-    pub fn get_int(&self, value: i64) -> Ty<'a> {
-        match value {
-            0 => self.int_zero,
-            1 => self.int_one,
-            2 => self.int_two,
-            _ => self.interner.intern(Type::Int(Int::Constant(value))),
-        }
+    pub fn make_int(&self, value: i64) -> TyInt<'a> {
+        self.interner.get_int(value, value)
+    }
+
+    pub fn make_float(&self, constant: f64) -> TyFloat<'a> {
+        self.interner.get_float(0, constant)
     }
 
     pub fn get_tuple_from_slice(&self, types: &[Ty<'a>]) -> Ty<'a> {
@@ -315,7 +358,7 @@ impl<'a> Types<'a> {
     pub fn make_init(&self, t: Ty<'a>) -> Option<Ty<'a>> {
         match *t {
             Type::Int(_) => Some(self.int_zero),
-            Type::MemPtr(_) => Some(*self.pointer_null),
+            Type::MemPtr(_) => Some(*self.ptr_null),
             _ => None,
         }
     }

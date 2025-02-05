@@ -1165,7 +1165,7 @@ impl<'s, 't> Parser<'s, 't> {
         } else if self.matchx("false") {
             Ok(*self.nodes.zero)
         } else if self.matchx("null") {
-            Ok(*self.con(*self.types.pointer_null))
+            Ok(*self.con(*self.types.ptr_null))
         } else if self.match_("(") {
             let e = self.parse_asgn()?;
             self.require(")")?;
