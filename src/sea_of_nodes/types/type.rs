@@ -3,6 +3,7 @@ use std::fmt;
 use std::fmt::Display;
 use std::hash::Hash;
 
+use crate::sea_of_nodes::types::ty::TyFloat;
 use crate::sea_of_nodes::types::{Field, Ty, TyStruct};
 
 #[derive(Eq, PartialEq, Copy, Clone, Hash, Debug)]
@@ -45,6 +46,13 @@ impl Float {
     }
 }
 
+impl<'t> TyFloat<'t> {
+    pub fn is_f32(&self) -> bool {
+        let v = self.data().con();
+        v as f32 as f64 == v
+    }
+}
+
 pub type Tuple<'t> = &'t [Ty<'t>];
 
 #[derive(Eq, PartialEq, Copy, Clone, Hash, Debug)]
@@ -53,26 +61,13 @@ pub struct Struct<'t> {
     pub fields: &'t [Field<'t>],
 }
 
-impl<'t> Struct<'t> {
-    pub fn name(&self) -> &'t str {
-        match self {
-            Struct::Bot => "$BOT",
-            Struct::Top => "$TOP",
-            Struct::Struct { name, .. } => name,
-        }
-    }
-}
-
 impl<'t> TyStruct<'t> {
     pub fn name(self) -> &'t str {
-        self.data().name()
+        self.data().name
     }
 
     pub fn fields(self) -> &'t [Field<'t>] {
-        match self.data() {
-            Struct::Bot | Struct::Top => &[],
-            Struct::Struct { fields, .. } => fields,
-        }
+        self.data().fields
     }
 }
 

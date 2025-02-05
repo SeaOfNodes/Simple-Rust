@@ -85,7 +85,7 @@ pub fn is_keyword(s: &str) -> bool {
 
 impl<'s, 't> Parser<'s, 't> {
     pub fn new(source: &'s str, types: &'t Types<'t>) -> Self {
-        Self::new_with_arg(source, types, types.int_bot)
+        Self::new_with_arg(source, types, *types.int_bot)
     }
 
     pub fn new_with_arg(source: &'s str, types: &'t Types<'t>, arg: Ty<'t>) -> Self {
@@ -131,20 +131,20 @@ impl<'s, 't> Parser<'s, 't> {
 
     fn default_types(types: &'t Types<'t>) -> HashMap<&'t str, Ty<'t>> {
         HashMap::from([
-            ("bool", types.u1),
-            ("byte", types.u8),
-            ("f32", types.f32),
-            ("f64", types.flt_bot),
-            ("flt", types.flt_bot),
-            ("i16", types.i16),
-            ("i32", types.i32),
-            ("i64", types.int_bot),
-            ("i8", types.i8),
-            ("int", types.int_bot),
-            ("u1", types.u1),
-            ("u16", types.u16),
-            ("u32", types.u32),
-            ("u8", types.u8),
+            ("bool", *types.int_u1),
+            ("byte", *types.int_u8),
+            ("f32", *types.float_b32),
+            ("f64", *types.float_bot),
+            ("flt", *types.float_bot),
+            ("i16", *types.int_i16),
+            ("i32", *types.int_i32),
+            ("i64", *types.int_bot),
+            ("i8", *types.int_i8),
+            ("int", *types.int_bot),
+            ("u1", *types.int_u1),
+            ("u16", *types.int_u16),
+            ("u32", *types.int_u32),
+            ("u8", *types.int_u8),
             ("val", types.top), // Marker type, indicates type inference
             ("var", types.bot), // Marker type, indicates type inference
         ])

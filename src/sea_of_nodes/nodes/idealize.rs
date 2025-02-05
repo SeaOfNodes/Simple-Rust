@@ -47,7 +47,7 @@ impl Add {
 
         // Add of 0.  We do not check for (0+x) because this will already
         // canonicalize to (x+0)
-        if t2 == sea.types.int_zero {
+        if t2 == *sea.types.int_zero {
             return Some(lhs);
         }
 
@@ -219,7 +219,8 @@ impl Bool {
                 }
             }
             // Equals X==0 becomes a !X
-            if rhs.ty(sea) == Some(sea.types.int_zero) || rhs.ty(sea) == Some(*sea.types.ptr_null) {
+            if rhs.ty(sea) == Some(*sea.types.int_zero) || rhs.ty(sea) == Some(*sea.types.ptr_null)
+            {
                 return Some(*Not::new(lhs, sea));
             }
         }

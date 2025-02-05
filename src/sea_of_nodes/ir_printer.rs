@@ -5,7 +5,7 @@ use std::fmt::Write;
 
 use crate::datastructures::id_set::IdSet;
 use crate::sea_of_nodes::nodes::{Cfg, Node, Nodes, Op};
-use crate::sea_of_nodes::types::{Int, Ty, Type};
+use crate::sea_of_nodes::types::{Ty, Types};
 
 pub fn pretty_print_llvm(node: impl Into<Node>, depth: usize, sea: &Nodes) -> String {
     pretty_print_(node.into(), depth, true, sea)
@@ -120,25 +120,40 @@ fn node_id(sea: &Nodes, n: Node, sb: &mut String) -> fmt::Result {
 }
 
 /// Display Type name in a format that's good for IR printer
-fn type_name(ty: Ty) -> Cow<str> {
-    use Cow::*;
-    match *ty {
-        Type::Int(i) => match i {
-            Int::Bot => Borrowed("IntBot"),
-            Int::Top => Borrowed("IntTop"),
-            Int::Constant(_) => Borrowed("Int"),
-        },
-        Type::Tuple(types) => {
-            let mut sb = "[".to_string();
-            for &t in types {
-                sb.push_str(type_name(t).as_ref());
-                sb.push(',');
-            }
-            sb.pop();
-            sb.push(']');
-            Owned(sb)
+fn type_name<'t>(ty: Ty<'t>, types: &Types<'t>) -> Cow<'static, str> {
+    if let Some(ty) = ty.to_int() {
+        Cow::Borrowed(if ty == types.int_top {
+            "IntTop"
+        } else if ty == types.int_bot {
+            "IntBot"
+        } else {
+            "Int"
+        })
+    } else if let Some(ty) = ty.to_float() {
+        Cow::Borrowed(if ty == types.float_top {
+            "FltTop"
+        } else if ty == types.float_t32 {
+            "F32Top"
+        } else if ty == types.float_b32 {
+            "F32Bot"
+        } else if ty == types.float_bot {
+            "FltBot"
+        } else if ty.is_f32() {
+            "F32"
+        } else {
+            "Flt"
+        })
+    } else if let Some(ty) = ty.to_tuple() {
+        let mut sb = "[".to_string();
+        for &t in *ty.data() {
+            sb.push_str(type_name(t, types).as_ref());
+            sb.push(',');
         }
-        _ => Owned(ty.to_string()),
+        sb.pop();
+        sb.push(']');
+        Cow::Owned(sb)
+    } else {
+        Cow::Owned(ty.to_string())
     }
 }
 
@@ -152,7 +167,7 @@ fn print_line_llvm(nodes: &Nodes, n: Node, sb: &mut String) -> fmt::Result {
         return writeln!(sb, "DEAD");
     }
     if let Some(ty) = nodes.ty[n] {
-        write!(sb, "{}", type_name(ty))?;
+        write!(sb, "{}", type_name(ty, nodes.types))?;
     }
 
     write!(sb, " = {}(", nodes[n].label())?;
