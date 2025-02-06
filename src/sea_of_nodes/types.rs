@@ -108,7 +108,7 @@ impl<'a> Interner<'a> {
             .unwrap()
     }
 
-    fn get_struct(&self, name: &'a str, fields: &'a [Field<'a>]) -> TyStruct<'a> {
+    fn get_struct(&self, name: &'a str, fields: Option<&'a [Field<'a>]>) -> TyStruct<'a> {
         self.intern(Type::Struct(Struct { name, fields }))
             .to_struct()
             .unwrap()
@@ -208,11 +208,40 @@ impl<'a> Types<'a> {
     }
 
     pub fn get_struct(&self, name: &'a str, fields: &[Field<'a>]) -> TyStruct<'a> {
-        let fields = self.interner.arena.alloc_slice_copy(fields);
+        let fields = Some(&*self.interner.arena.alloc_slice_copy(fields));
         self.interner
             .intern(Type::Struct(Struct { name, fields }))
             .to_struct()
             .unwrap()
+    }
+
+    pub fn make_ary(
+        &self,
+        len: TyInt<'a>,
+        len_alias: u32,
+        body: Ty<'a>,
+        body_alias: u32,
+    ) -> TyStruct<'a> {
+        debug_assert!(!body.to_mem_ptr().is_some_and(|t| !t.data().nil));
+        let name = self.get_str(&format!("[{}]", body.str()));
+        let fields = self.interner.arena.alloc([
+            Field {
+                fname: "#",
+                ty: *len,
+                alias: len_alias,
+                final_field: true,
+            },
+            Field {
+                fname: "[]",
+                ty: body,
+                alias: body_alias,
+                final_field: false,
+            },
+        ]);
+        self.interner.get_struct(name, Some(fields))
+    }
+    pub fn make_struct_fref(&self, name: &'a str) -> TyStruct<'a> {
+        self.interner.get_struct(name, None)
     }
 
     pub fn get_mem_ptr(&self, to: TyStruct<'a>, nil: bool) -> TyMemPtr<'a> {

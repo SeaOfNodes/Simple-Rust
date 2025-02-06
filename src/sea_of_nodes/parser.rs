@@ -153,9 +153,6 @@ impl<'s, 't> Parser<'s, 't> {
     fn ctrl(&mut self) -> Node {
         self.nodes.inputs[self.scope][0].expect("has ctrl")
     }
-    fn set_ctrl(&mut self, node: Node) {
-        self.scope.set_def(0, node, &mut self.nodes);
-    }
 
     pub fn parse(&mut self) -> PResult<Stop> {
         self.x_scopes.push(self.scope);
@@ -324,8 +321,9 @@ impl<'s, 't> Parser<'s, 't> {
         // used as an indicator to switch off peepholes of the region and
         // associated phis; see {@code inProgress()}.
 
-        let ctrl = Loop::new(self.ctrl(), &mut self.nodes).peephole(&mut self.nodes); // Note we set back edge to null here
-        self.set_ctrl(ctrl);
+        let ctrl = Loop::new(self.ctrl(), &mut self.nodes) // Note we set back edge to null here
+            .peephole(&mut self.nodes)
+            .ctrl(self);
 
         // At loop head, we clone the current Scope (this includes all
         // names in every nesting level within the Scope).
@@ -374,7 +372,7 @@ impl<'s, 't> Parser<'s, 't> {
         // side effects in the predicate.  The break/exit Scope will be the final
         // scope after the loop, and its control input is the False branch of
         // the loop predicate.  Note that body Scope is still our current scope.
-        self.set_ctrl(if_false);
+        if_false.ctrl(self);
         let break_scope = self.scope.dup(false, &mut self.nodes);
         self.break_scope = Some(break_scope);
         self.x_scopes.push(break_scope);
@@ -385,8 +383,7 @@ impl<'s, 't> Parser<'s, 't> {
 
         // Parse the true side, which corresponds to loop body
         // Our current scope is the body Scope
-        if_true.unkeep(&mut self.nodes);
-        self.set_ctrl(if_true);
+        if_true.unkeep(&mut self.nodes).ctrl(self);
         self.scope.add_guards(
             if_true,
             Some(pred.unkeep(&mut self.nodes)),
@@ -442,7 +439,7 @@ impl<'s, 't> Parser<'s, 't> {
 
     fn jump_to(&mut self, to_scope: Option<Scope>) -> Scope {
         let cur = self.scope.dup(false, &mut self.nodes);
-        self.set_ctrl(**self.nodes.xctrl); // Kill current scope
+        self.nodes.xctrl.ctrl(self); // Kill current scope
 
         // Prune nested lexical scopes that have depth > than the loop head
         // We use _breakScope as a proxy for the loop head scope to obtain the depth
@@ -554,7 +551,7 @@ impl<'s, 't> Parser<'s, 't> {
         self.x_scopes.push(false_scope);
 
         // Parse the true side
-        self.set_ctrl(if_true.unkeep(&mut self.nodes));
+        if_true.unkeep(&mut self.nodes).ctrl(self);
         self.scope
             .add_guards(if_true, Some(pred), false, &mut self.nodes); // Up-cast predicate
         let mut lhs = if stmt {
@@ -569,7 +566,7 @@ impl<'s, 't> Parser<'s, 't> {
 
         // Parse the false side
         self.scope = false_scope; // Restore scope, then parse else block if any
-        self.set_ctrl(if_false.unkeep(&mut self.nodes)); // Ctrl token is now set to ifFalse projection
+        if_false.unkeep(&mut self.nodes).ctrl(self); // Ctrl token is now set to ifFalse projection
 
         // Up-cast predicate, even if not else clause, because predicate can
         // remain true if the true clause exits: `if( !ptr ) return 0; return ptr.fld;`
@@ -605,13 +602,9 @@ impl<'s, 't> Parser<'s, 't> {
                 self.widen_int(rhs.unwrap(), lhs.unwrap().ty(&self.nodes).unwrap())
                     .keep(&mut self.nodes),
             );
-            lhs = Some(
-                self.widen_int(
-                    lhs.unwrap().unkeep(&mut self.nodes),
-                    rhs.unwrap().ty(&self.nodes).unwrap(),
-                )
-                .keep(&mut self.nodes),
-            );
+            let l = lhs.unwrap().unkeep(&mut self.nodes);
+            let rty = rhs.unwrap().ty(&self.nodes).unwrap();
+            lhs = Some(self.widen_int(l, rty).keep(&mut self.nodes));
             rhs.unwrap().unkeep(&mut self.nodes);
         }
 
@@ -619,10 +612,11 @@ impl<'s, 't> Parser<'s, 't> {
         self.scope = true_scope;
         self.x_scopes.pop();
 
-        let r = true_scope.merge_scopes(false_scope, &mut self.nodes);
-        self.set_ctrl(**r);
+        let r = true_scope
+            .merge_scopes(false_scope, &mut self.nodes)
+            .ctrl(self);
         let ret = if stmt {
-            r.to_node()
+            r
         } else {
             Phi::new(
                 "",
@@ -630,7 +624,7 @@ impl<'s, 't> Parser<'s, 't> {
                     lhs.unwrap().ty(&self.nodes).unwrap(),
                     rhs.unwrap().ty(&self.nodes).unwrap(),
                 ),
-                vec![Some(**r), Some(lhs.unwrap().unkeep(&mut self.nodes)), rhs],
+                vec![Some(r), Some(lhs.unwrap().unkeep(&mut self.nodes)), rhs],
                 &mut self.nodes,
             )
             .peep(self)
@@ -653,7 +647,7 @@ impl<'s, 't> Parser<'s, 't> {
             Return::new(ctrl, expr, Some(self.scope), &mut self.nodes).peephole(&mut self.nodes);
 
         self.stop.add_def(ret, &mut self.nodes);
-        self.set_ctrl(**self.nodes.xctrl);
+        self.nodes.xctrl.ctrl(self);
         Ok(())
     }
 
@@ -893,6 +887,8 @@ impl<'s, 't> Parser<'s, 't> {
         let Some(tname) = self.lexer.match_id() else {
             return Ok(None);
         };
+        let tname = self.types.get_str(tname);
+
         // Convert the type name to a type.
         let t0 = self.name_to_type.get(tname).copied();
         // No new types as keywords
@@ -1349,8 +1345,8 @@ impl<'s, 't> Parser<'s, 't> {
         let size = Add::new(*con_base, shl, &mut self.nodes).peep(self);
         self.altmp.clear();
         self.altmp.push(Some(len.unkeep(&mut self.nodes)));
-        self.altmp
-            .push(Some(*self.con(ary.fields()[1].ty.make_init(&self.types))));
+        let init = *self.con(ary.fields()[1].ty.make_init(&self.types));
+        self.altmp.push(Some(init));
         self.new_struct(ary, size)
     }
 
@@ -1382,7 +1378,7 @@ impl<'s, 't> Parser<'s, 't> {
     /// </pre>
     fn parse_postfix(&mut self, expr: Node) -> PResult<Node> {
         let name = if self.match_(".") {
-            self.require_id()?
+            self.types.get_str(self.require_id()?)
         } else if self.match_("#") {
             "#"
         } else if self.match_("[") {
@@ -1405,7 +1401,8 @@ impl<'s, 't> Parser<'s, 't> {
             return if self.match_opx(*b"==") {
                 self.parse_asgn()
             } else {
-                self.parse_postfix(*self.con(self.types.top))
+                let c = *self.con(self.types.top);
+                self.parse_postfix(c)
             };
         }
 
@@ -1428,7 +1425,7 @@ impl<'s, 't> Parser<'s, 't> {
         let mut tf = f.ty;
         if let Some(ftmp) = tf.to_mem_ptr() {
             if ftmp.is_fref() {
-                tf = ftmp.make_from(
+                tf = *self.types.get_mem_ptr(
                     self.name_to_type
                         .get(ftmp.data().to.name())
                         .unwrap()
@@ -1436,6 +1433,7 @@ impl<'s, 't> Parser<'s, 't> {
                         .unwrap()
                         .data()
                         .to,
+                    ftmp.data().nil,
                 );
             }
         }
@@ -1484,7 +1482,8 @@ impl<'s, 't> Parser<'s, 't> {
             if base.is_ary() {
                 st.set_def(0, self.ctrl(), &mut self.nodes);
             }
-            self.mem_alias_update(f.alias, st.peephole(&mut self.nodes));
+            let st = st.peephole(&mut self.nodes);
+            self.mem_alias_update(f.alias, st);
             return Ok(val.unkeep(&mut self.nodes)); // "obj.a = expr" returns the expression while updating memory
         }
 
@@ -1663,6 +1662,11 @@ impl Node {
         parser
             .scope
             .upcast_guard(self.peephole(&mut parser.nodes), &mut parser.nodes)
+    }
+
+    fn ctrl(self, parser: &mut Parser) -> Node {
+        parser.scope.set_def(0, self, &mut parser.nodes);
+        self
     }
 }
 
