@@ -295,8 +295,24 @@ impl<'t> Node {
             Op::Load(l) => l.declared_type,
             Op::Store(s) => types.get_mem(s.alias),
             Op::New(t) => **t,
+            Op::AddF => self.compute_binary_float(|a, b| a + b, sea),
+            Op::DivF => self.compute_binary_float(|a, b| a / b, sea),
+            Op::MulF => self.compute_binary_float(|a, b| a * b, sea),
+            Op::SubF => self.compute_binary_float(|a, b| a - b, sea),
             op => todo!("{op:?}"),
         }
+    }
+
+    fn compute_binary_float<F: FnOnce(f64, f64) -> f64>(self, op: F, sea: &Nodes<'t>) -> Ty<'t> {
+        let t1 = self.inputs(sea)[1].unwrap().ty(sea).unwrap();
+        let t2 = self.inputs(sea)[2].unwrap().ty(sea).unwrap();
+
+        if let Some(v1) = t1.to_float().and_then(|t| t.value()) {
+            if let Some(v2) = t2.to_float().and_then(|t| t.value()) {
+                return *sea.tys.get_float(op(v1, v2));
+            }
+        }
+        t1.meet(t2, sea.tys)
     }
 
     fn compute_binary_int<F: FnOnce(i64, i64) -> i64>(self, op: F, sea: &Nodes<'t>) -> Ty<'t> {

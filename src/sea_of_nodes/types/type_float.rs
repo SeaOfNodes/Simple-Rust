@@ -34,6 +34,11 @@ impl<'t> TyFloat<'t> {
         self.data().is_f32()
     }
 
+    pub fn value(self) -> Option<f64> {
+        let d = self.data();
+        (d.sz == 0).then_some(d.con())
+    }
+
     pub fn meet(self, that: TyFloat<'t>, tys: &Types<'t>) -> TyFloat<'t> {
         // Larger size in i1, smaller in i0
         let (i0, i1) = if self.sz() < that.sz() {
