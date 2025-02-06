@@ -713,11 +713,8 @@ impl<'s, 't> Parser<'s, 't> {
         }
 
         // Lift expression, based on type
-        let lift = self.lift_expr(
-            expr,
-            self.nodes[self.scope].vars[def].ty(),
-            self.nodes[self.scope].vars[def].final_field,
-        )?;
+        let var_t = self.nodes[self.scope].vars[def].ty(&self.name_to_type, &self.types);
+        let lift = self.lift_expr(expr, var_t, self.nodes[self.scope].vars[def].final_field)?;
         // Update
         self.scope.update(name, lift, &mut self.nodes);
         // Return un-lifted expr
@@ -757,7 +754,8 @@ impl<'s, 't> Parser<'s, 't> {
 
     fn widen_int(&mut self, expr: Node, t: Ty<'t>) -> Node {
         if t.is_float() && expr.ty(&self.nodes).is_some_and(|i| i.is_int()) {
-            self.peep(ToFloat::new(expr, &mut self.nodes))
+            let f = ToFloat::new(expr, &mut self.nodes);
+            self.peep(f)
         } else {
             expr
         }
@@ -832,7 +830,7 @@ impl<'s, 't> Parser<'s, 't> {
         if self.x_scopes.len() > 1 {
             return Err(self.error_syntax("struct declarations can only appear in top level scope"));
         }
-        let type_name = self.require_id()?;
+        let type_name = self.types.get_str(self.require_id()?);
         let t = self.name_to_type.get(type_name);
         if t.is_some_and(|t| !t.to_mem_ptr().is_some_and(|tmp| tmp.is_fref())) {
             return Err(self.error_syntax(&format!("struct '{type_name}' cannot be redefined")));
@@ -862,7 +860,7 @@ impl<'s, 't> Parser<'s, 't> {
             });
             self.alias += 1;
         }
-        let ts = self.types.get_struct(type_name, fs);
+        let ts = self.types.get_struct(type_name, &fs);
         self.name_to_type
             .insert(type_name, *self.types.get_mem_ptr(ts, false));
         self.inits.insert(
@@ -967,7 +965,7 @@ impl<'s, 't> Parser<'s, 't> {
 
     /// Fixup forward refs lazily.  Basically a Union-Find flavored read
     /// barrier.
-    fn lazy_f_ref(&mut self, t: Ty<'t>) -> PResult<Ty<'t>> {
+    fn lazy_f_ref(&mut self, _t: Ty<'t>) -> PResult<Ty<'t>> {
         //if( !t.isFRef() ) return t;
         //Type def = Parser.TYPES.get(((TypeMemPtr)t)._obj._name);
         Err("Not yet implemented".to_string())
@@ -1194,12 +1192,16 @@ impl<'s, 't> Parser<'s, 't> {
                 '-' => self.nodes.create((Op::Sub, vec![None, Some(rvalue), None])),
                 '*' => self.nodes.create((Op::Mul, vec![None, Some(rvalue), None])),
                 '/' => self.nodes.create((Op::Div, vec![None, Some(rvalue), None])),
-                '\u{1}' => self
-                    .nodes
-                    .create((Op::Add, vec![None, Some(rvalue), Some(*self.int_con(1))])),
-                '\u{FFFF}' => self
-                    .nodes
-                    .create((Op::Add, vec![None, Some(rvalue), Some(*self.int_con(-1))])),
+                '\u{1}' => {
+                    let rhs = self.int_con(1);
+                    self.nodes
+                        .create((Op::Add, vec![None, Some(rvalue), Some(*rhs)]))
+                }
+                '\u{FFFF}' => {
+                    let rhs = self.int_con(-1);
+                    self.nodes
+                        .create((Op::Add, vec![None, Some(rvalue), Some(*rhs)]))
+                }
                 _ => return Err("Not yet implemented".to_string()),
             };
             // Return pre-value (x+=1) or post-value (x++)
@@ -1213,8 +1215,9 @@ impl<'s, 't> Parser<'s, 't> {
                 rvalue.keep(&mut self.nodes); // Keep post-value across peeps
             }
             let n_ty = self.nodes[self.scope].vars[n].ty(&self.name_to_type, self.types);
-            let op = self.zs_mask(self.peep(op), n_ty)?;
-            self.scope.update(n, op, &mut self.nodes);
+            let op = self.peep(op);
+            let op = self.zs_mask(op, n_ty)?;
+            self.scope.update_var_index(n, Some(op), &mut self.nodes);
             Ok(if pre {
                 op
             } else {
@@ -1451,7 +1454,11 @@ impl<'s, 't> Parser<'s, 't> {
 
             let index = self.parse_asgn()?;
             self.require("]")?;
-            let offset = Shl::new(index, Some(self.int_con(base.ary_scale())), &mut self.nodes);
+            let offset = Shl::new(
+                index,
+                Some(*self.int_con(base.ary_scale())),
+                &mut self.nodes,
+            );
 
             self.peep(Add::new(*b, self.peep(offset), &mut self.nodes))
         } else {
@@ -1506,12 +1513,12 @@ impl<'s, 't> Parser<'s, 't> {
         // ary[idx]++ or ptr.fld++
         let inc = self.matchx("++");
         if inc || self.matchx("--") {
-            if f.final_field && !f.fname == "[]" {
+            if f.final_field && f.fname != "[]" {
                 return Err(format!("Cannot reassign final '{}'", f.fname));
             }
             let delta = self.int_con(if inc { 1 } else { -1 });
             let inc = self.peep(Add::new(load, *delta, &mut self.nodes));
-            let val = self.zs_mask(inc, tf);
+            let val = self.zs_mask(inc, tf)?;
             let st = Store::new(
                 name,
                 f.alias,
@@ -1548,11 +1555,15 @@ impl<'s, 't> Parser<'s, 't> {
             if let Some(t0) = t.to_int() {
                 if !self.types.isa(tval, t0) {
                     if t0.min() == 0 {
-                        self.peep(And::new(val, self.int_con(t0.max()))) // Unsigned
+                        return Ok(self.peep(And::new(
+                            val,
+                            Some(*self.int_con(t0.max())),
+                            &mut self.nodes,
+                        ))); // Unsigned
                     }
                     // Signed extension
                     let shift = t0.max().leading_zeros() - 1;
-                    let shf = self.int_con(shift);
+                    let shf = self.int_con(shift as i64);
                     if shf.ty(&self.nodes) == Some(*self.types.int_zero) {
                         return Ok(val);
                     }

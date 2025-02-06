@@ -3,7 +3,7 @@ use std::fmt;
 use std::fmt::Display;
 use std::hash::Hash;
 
-use crate::sea_of_nodes::types::ty::TyFloat;
+use crate::sea_of_nodes::types::ty::{TyFloat, TyInt};
 use crate::sea_of_nodes::types::{Field, Ty, TyStruct};
 
 #[derive(Eq, PartialEq, Copy, Clone, Hash, Debug)]
@@ -24,6 +24,25 @@ pub enum Type<'a> {
 pub struct Int {
     pub min: i64,
     pub max: i64,
+}
+
+impl<'t> TyInt<'t> {
+    pub fn min(self) -> i64 {
+        self.data().min
+    }
+
+    pub fn max(self) -> i64 {
+        self.data().max
+    }
+
+    pub fn value(self) -> i64 {
+        debug_assert!(self.is_constant());
+        self.min()
+    }
+
+    pub fn mask(self) -> i64 {
+        todo!()
+    }
 }
 
 #[derive(Eq, PartialEq, Copy, Clone, Hash, Debug)]
@@ -68,6 +87,30 @@ impl<'t> TyStruct<'t> {
 
     pub fn fields(self) -> &'t [Field<'t>] {
         self.data().fields
+    }
+
+    pub fn find(self, fname: &str) -> Option<usize> {
+        self.data().fields.iter().position(|f| f.fname == fname)
+    }
+
+    pub fn find_alias(self, alias: u32) -> Option<usize> {
+        self.data().fields.iter().position(|f| f.alias == alias)
+    }
+
+    pub fn is_ary(self) -> bool {
+        self.fields().len() == 2 && self.fields()[1].fname == "[]"
+    }
+
+    pub fn ary_base(self) -> i64 {
+        todo!()
+    }
+
+    pub fn ary_scale(self) -> i64 {
+        todo!()
+    }
+
+    pub fn offset(self, index: usize) -> i64 {
+        todo!()
     }
 }
 
