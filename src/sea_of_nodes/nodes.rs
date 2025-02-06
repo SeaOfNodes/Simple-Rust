@@ -82,6 +82,7 @@ pub struct Nodes<'t> {
     /// Creating nodes such as constants and computing peepholes requires
     /// interning new types and operations such as meet and join.
     pub types: &'t Types<'t>,
+    pub tys: &'t Types<'t>,
 
     /// Worklist for iterative peepholes
     iter_peeps: IterPeeps,
@@ -124,6 +125,7 @@ impl<'t> Nodes<'t> {
             zero: Constant::DUMMY,
             xctrl: XCtrl::DUMMY,
             types,
+            tys: types,
             iter_peeps: IterPeeps::new(),
             iter_cnt: 0,
             iter_nop_cnt: 0,
@@ -355,7 +357,7 @@ impl Node {
             .inputs(sea)
             .iter()
             .skip(1)
-            .find(|n| !n.unwrap().ty(sea).unwrap().is_constant())
+            .find(|n| !n.unwrap().ty(sea).unwrap().is_constant(sea.tys))
         {
             non_const.unwrap().add_dep(dep, sea); // If in(i) becomes a constant later, will trigger some peephole
             false

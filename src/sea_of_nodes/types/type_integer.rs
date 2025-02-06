@@ -16,7 +16,7 @@ impl<'t> TyInt<'t> {
     }
 
     pub fn value(self) -> i64 {
-        debug_assert!(self.is_constant());
+        debug_assert_eq!(self.min(), self.max());
         self.min()
     }
 

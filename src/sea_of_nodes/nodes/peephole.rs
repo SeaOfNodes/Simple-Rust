@@ -48,7 +48,7 @@ impl<'t> Node {
         // println!("{:<3} {:<8} {}->{}", self, &sea[self].label(), old.map(|t| t.to_string()).unwrap_or("null".to_string()), ty);
 
         // Replace constant computations from non-constants with a constant node
-        if !self.is_constant(sea) && !self.is_xctrl(sea) && ty.is_high_or_constant() {
+        if !self.is_constant(sea) && !self.is_xctrl(sea) && ty.is_high_or_constant(sea.tys) {
             return if ty == sea.types.xctrl {
                 **XCtrl::new(sea)
             } else {

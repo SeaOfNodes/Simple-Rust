@@ -181,6 +181,10 @@ impl<'a> Types<'a> {
         self.interner.get_int(value, value)
     }
 
+    pub fn make_int(&self, min: i64, max: i64) -> TyInt<'a> {
+        self.interner.get_int(min, max)
+    }
+
     pub fn get_float(&self, constant: f64) -> TyFloat<'a> {
         self.interner.get_float(0, constant)
     }
@@ -215,77 +219,9 @@ impl<'a> Types<'a> {
         self.interner.get_mem(alias, ty)
     }
 
+    // TODO remove this function
     pub fn meet(&self, a: Ty<'a>, b: Ty<'a>) -> Ty<'a> {
-        match (*a, *b) {
-            (_, _) if a == b => a,
-
-            // Bot wins, Top looses
-            (Type::Bot, _) | (_, Type::Top) => a,
-            (Type::Top, _) | (_, Type::Bot) => b,
-
-            // Ctrl sub-lattice: Ctrl meets ~Ctrl is Ctrl
-            (Type::Ctrl, Type::XCtrl) => a,
-            (Type::XCtrl, Type::Ctrl) => b,
-
-            // Int sub-lattice
-            (Type::Int(ia), Type::Int(ib)) => match (ia, ib) {
-                (Int::Bot, _) | (_, Int::Top) => a,
-                (_, Int::Bot) | (Int::Top, _) => b,
-                (Int::Constant(ca), Int::Constant(cb)) if ca == cb => a,
-                _ => self.int_bot,
-            },
-
-            // Tuple sub-lattice
-            (Type::Tuple(t1), Type::Tuple(t2)) => {
-                assert_eq!(t1.len(), t2.len(), "{a} meet {b} not implemented");
-                self.get_tuple_from_slice(
-                    &t1.iter()
-                        .zip(t2.iter())
-                        .map(|(x, y)| self.meet(*x, *y))
-                        .collect::<Vec<_>>(),
-                )
-            }
-
-            // Struct sub-lattice
-            (Type::Struct(sa), Type::Struct(sb)) => match (sa, sb) {
-                (Struct::Bot, _) | (_, Struct::Top) => a,
-                (_, Struct::Bot) | (Struct::Top, _) => b,
-                (
-                    Struct::Struct {
-                        name: na,
-                        fields: fas,
-                    },
-                    Struct::Struct {
-                        name: nb,
-                        fields: fbs,
-                    },
-                ) if na == nb => {
-                    assert_eq!(fas.len(), fbs.len(), "{a} meet {b} can't happen because struct name must be uniuqe in a compilation unit");
-                    let fields = fas.iter().zip(fbs).map(|(fa, fb)| {
-                        debug_assert_eq!(fa.0, fb.0, "{a} meet {b} can't happen because struct name must be uniuqe in a compilation unit");
-                        (fa.0, self.meet(fa.1, fb.1))
-                    }).collect::<Vec<_>>();
-                    *self.get_struct(na, &fields)
-                }
-                _ => *self.struct_bot, // It's a struct; that's about all we know
-            },
-
-            // Pointer sub-lattice
-            (Type::MemPtr(pa), Type::MemPtr(pb)) => *self.get_mem_ptr(
-                self.meet(*pa.to, *pb.to).to_struct().unwrap(),
-                pa.nil | pb.nil,
-            ),
-
-            // Memory sub-lattice
-            (Type::Mem(ma), Type::Mem(mb)) => match (ma, mb) {
-                (Mem::Bot, _) | (_, Mem::Top) => a,
-                (_, Mem::Bot) | (Mem::Top, _) => b,
-                _ => self.mem_bot,
-            },
-
-            // different sub-lattices meet at bottom
-            _ => self.bot,
-        }
+        a.meet(b, self)
     }
 
     /// True if this "isa" t; e.g. 17 isa TypeInteger.BOT

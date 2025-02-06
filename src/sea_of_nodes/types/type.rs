@@ -3,7 +3,7 @@ use std::fmt;
 use std::fmt::Display;
 use std::hash::Hash;
 
-use crate::sea_of_nodes::types::{Float, Int, Mem, MemPtr, Struct, Tuple};
+use crate::sea_of_nodes::types::{Float, Int, Mem, MemPtr, Struct, Tuple, Ty, Types};
 
 #[derive(Eq, PartialEq, Copy, Clone, Hash, Debug)]
 pub enum Type<'a> {
@@ -20,25 +20,6 @@ pub enum Type<'a> {
 }
 
 impl<'t> Type<'t> {
-    /// Is high or on the lattice centerline.
-    pub fn is_high_or_constant(&'t self) -> bool {
-        match self {
-            Type::Bot => false,
-            Type::Top => true,
-            Type::Ctrl => false,
-            Type::XCtrl => true,
-            Type::Int(i) => !matches!(i, Int::Bot),
-            Type::Tuple { .. } => false,
-            Type::Struct(_) => false,
-            Type::MemPtr(_) => false,
-            Type::Mem(_) => false,
-        }
-    }
-
-    pub fn is_constant(&'t self) -> bool {
-        matches!(self, Type::Int(Int::Constant(_)))
-    }
-
     pub fn unwrap_int(&'t self) -> i64 {
         match self {
             Type::Int(Int::Constant(value)) => *value,
@@ -134,6 +115,110 @@ impl<'t> Type<'t> {
             Type::Struct(s) => todo!("is struct {s:?} an fref?"),
             Type::MemPtr(m) => m.to.is_fref(),
             Type::Mem(_) => false,
+        }
+    }
+}
+
+impl<'t> Ty<'t> {
+    /// Is high or on the lattice centerline.
+    pub fn is_high(self, tys: &Types<'t>) -> bool {
+        match self.data() {
+            Type::Top | Type::XCtrl => true,
+            Type::Int(i) => i.min > i.max,
+            Type::Float(f) => f.sz < 0,
+            Type::MemPtr(_) => self == *tys.ptr_top,
+            Type::Bot | Type::Ctrl | Type::Tuple(_) | Type::Struct(_) | Type::Mem(_) => false,
+        }
+    }
+
+    /// Is high or on the lattice centerline.
+    pub fn is_high_or_constant(self, tys: &Types<'t>) -> bool {
+        match self.data() {
+            Type::Top | Type::XCtrl => true,
+            Type::Int(i) => i.min >= i.max,
+            Type::Float(f) => f.sz <= 0,
+            Type::MemPtr(_) => self == *tys.ptr_top || self == *tys.ptr_null,
+            Type::Bot | Type::Ctrl | Type::Tuple(_) | Type::Struct(_) | Type::Mem(_) => false,
+        }
+    }
+
+    /// Strict constant values, things on the lattice centerline.
+    /// Excludes both high and low values
+    pub fn is_constant(self, tys: &Types<'t>) -> bool {
+        match self.data() {
+            Type::Int(i) => i.min == i.max,
+            Type::Float(f) => f.sz == 0,
+            Type::MemPtr(_) => self == *tys.ptr_null,
+            Type::Top | Type::Bot => false,
+            Type::XCtrl | Type::Ctrl => false,
+            Type::Tuple(_) | Type::Struct(_) | Type::Mem(_) => false,
+        }
+    }
+
+    pub fn meet(self, that: Ty<'t>, tys: &Types<'t>) -> Ty<'t> {
+        match (*self, *that) {
+            (_, _) if self == that => self, // Shortcut for the self case
+
+            // Bot wins, Top looses
+            (Type::Bot, _) | (_, Type::Top) => self,
+            (Type::Top, _) | (_, Type::Bot) => that,
+
+            // Ctrl sub-lattice: Ctrl meets ~Ctrl is Ctrl
+            (Type::Ctrl, Type::XCtrl) => self,
+            (Type::XCtrl, Type::Ctrl) => that,
+
+            // Float sub-lattice
+            (Type::Float(_), Type::Float(_)) => {
+                *self.to_float().unwrap().meet(that.to_float().unwrap(), tys)
+            }
+
+            // Int sub-lattice
+            (Type::Int(a), Type::Int(b)) => *tys.make_int(a.min.min(b.min), a.max.max(b.max)),
+
+            // Tuple sub-lattice
+            (Type::Tuple(t1), Type::Tuple(t2)) => {
+                if t1.len() != t2.len() {
+                    tys.bot
+                } else {
+                    tys.get_tuple_from_slice(
+                        &t1.iter()
+                            .zip(t2.iter())
+                            .map(|(x, y)| x.meet(*y, tys))
+                            .collect::<Vec<_>>(),
+                    )
+                }
+            }
+
+            // Struct sub-lattice
+            (Type::Struct(_), Type::Struct(_)) => *self
+                .to_struct()
+                .unwrap()
+                .meet(that.to_struct().unwrap(), tys),
+
+            // Pointer sub-lattice
+            (Type::MemPtr(s), Type::MemPtr(t)) => {
+                *tys.get_mem_ptr(s.to.meet(t.to, tys), s.nil | t.nil)
+            }
+
+            // Memory sub-lattice
+            (Type::Mem(s), Type::Mem(t)) => {
+                if self == *tys.mem_bot || that == *tys.mem_top {
+                    self
+                } else if that == *tys.mem_bot || self == *tys.mem_top {
+                    that
+                } else {
+                    let alias = if s.alias == t.alias {
+                        s.alias
+                    } else {
+                        u32::MAX
+                    };
+                    let mt = s.t.meet(t.t, tys);
+                    *tys.get_mem(alias, mt)
+                }
+            }
+
+            // different sub-lattices meet at bottom
+            _ => tys.bot,
         }
     }
 }

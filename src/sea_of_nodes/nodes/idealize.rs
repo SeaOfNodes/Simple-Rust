@@ -110,8 +110,8 @@ impl Add {
             .add_dep(*self, sea)
             .ty(sea)
             .unwrap()
-            .is_constant()
-            && t2.is_constant()
+            .is_constant(sea.tys)
+            && t2.is_constant(sea.tys)
         {
             let x = lhs.inputs(sea)[1]?;
             let con1 = lhs.inputs(sea)[2]?;
@@ -180,7 +180,7 @@ impl Mul {
 
         if right_ty == *sea.types.int_one {
             Some(left)
-        } else if left_ty.is_constant() && !right_ty.is_constant() {
+        } else if left_ty.is_constant(sea.tys) && !right_ty.is_constant(sea.tys) {
             self.swap_12(sea);
             Some(*self)
         } else {
@@ -466,7 +466,7 @@ impl If {
         // Hunt up the immediate dominator tree.  If we find an identical if
         // test on either the true or false branch, that side wins.
         let pred = self.pred(sea).unwrap();
-        if !pred.ty(sea)?.is_high_or_constant() {
+        if !pred.ty(sea)?.is_high_or_constant(sea.tys) {
             let mut prior = *self;
             let mut dom = self.idom(sea);
             while let Some(d) = dom {
@@ -652,10 +652,10 @@ impl<'t> Nodes<'t> {
     // Ties with in a category sort by node ID.
     // TRUE if swapping hi and lo.
     fn spine_cmp(&mut self, hi: Node, lo: Node, dep: Node) -> bool {
-        if lo.ty(self).is_some_and(|t| t.is_constant()) {
+        if lo.ty(self).is_some_and(|t| t.is_constant(self.tys)) {
             return false;
         }
-        if hi.ty(self).is_some_and(|t| t.is_constant()) {
+        if hi.ty(self).is_some_and(|t| t.is_constant(self.tys)) {
             return true;
         }
 
