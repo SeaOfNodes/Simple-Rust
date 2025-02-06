@@ -726,14 +726,14 @@ impl<'s, 't> Parser<'s, 't> {
 
     /// Make finals deep; widen ints to floats; narrow wide int types.
     /// Early error if types do not match variable.
-    fn lift_expr(&mut self, mut expr: Node, t: Ty<'t>, xfinal: bool) -> PResult<Node> {
+    fn lift_expr(&mut self, mut expr: Node, mut t: Ty<'t>, xfinal: bool) -> PResult<Node> {
         assert!(!expr
             .ty(&self.nodes)
             .is_some_and(|t| t.to_mem_ptr().is_none_or(|t| !t.is_fref())));
         // Final is deep on ptrs
         if xfinal {
             if let Some(tmp) = t.to_mem_ptr() {
-                t = tmp.make_ro();
+                t = tmp.make_ro(self.types);
                 expr = ReadOnly::new(expr, &mut self.nodes).peep(self);
             }
         }
@@ -789,7 +789,7 @@ impl<'s, 't> Parser<'s, 't> {
         // Has var/val instead of a user-declared type
         let infer_type = t == self.types.top || t == self.types.bot;
         let has_bang = self.match_("!");
-        let name = self.require_id()?;
+        let name = self.types.get_str(self.require_id()?);
 
         // Optional initializing expression follows
         let mut xfinal = false;
@@ -808,14 +808,14 @@ impl<'s, 't> Parser<'s, 't> {
             if infer_type && !self.scope.in_con(&self.nodes) {
                 return Err(self.error_syntax("=expression"));
             }
-            expr = *self.con(t.make_init());
+            expr = *self.con(t.make_init(self.types));
         }
 
         // Lift expression, based on type
         let lift = self.lift_expr(expr, t, xfinal)?;
         if xfinal {
             if let Some(tmp) = t.to_mem_ptr() {
-                t = tmp.make_ro();
+                t = tmp.make_ro(self.types);
             }
         }
 

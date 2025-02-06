@@ -3,7 +3,7 @@ use std::fmt;
 use std::fmt::Display;
 use std::hash::Hash;
 
-use crate::sea_of_nodes::types::{Float, Int, Mem, MemPtr, Struct, Tuple, Ty, Types};
+use crate::sea_of_nodes::types::{Field, Float, Int, Mem, MemPtr, Struct, Tuple, Ty, Types};
 
 #[derive(Eq, PartialEq, Copy, Clone, Hash, Debug)]
 pub enum Type<'a> {
@@ -324,6 +324,95 @@ impl<'t> Ty<'t> {
             Type::Struct(s) => s.fields.is_none(),
             Type::MemPtr(m) => m.to.data().fields.is_none(),
             _ => false,
+        }
+    }
+
+    /// All reachable struct Fields are final
+    pub fn is_final(self) -> bool {
+        match self.data() {
+            Type::MemPtr(m) => m.to.is_final(),
+            Type::Struct(s) => match s.fields {
+                None => true,
+                Some(fields) => fields.iter().all(|f| f.final_field && f.ty.is_final()),
+            },
+            _ => true,
+        }
+    }
+
+    /// Make all reachable struct Fields final
+    pub fn make_ro(self, tys: &Types<'t>) -> Ty<'t> {
+        match self.data() {
+            Type::MemPtr(m) => {
+                let to = m.to.make_ro(tys);
+                if to == *m.to {
+                    self
+                } else {
+                    *tys.get_mem_ptr(to.as_struct(), m.nil)
+                }
+            }
+            Type::Struct(s) => match s.fields {
+                _ if self.is_final() => self,
+                None => unreachable!("is_final"),
+                Some(fields) => {
+                    let new_fields = fields
+                        .iter()
+                        .map(|f| Field {
+                            fname: f.fname,
+                            ty: if f.final_field {
+                                f.ty
+                            } else {
+                                f.ty.make_ro(tys)
+                            },
+                            alias: f.alias,
+                            final_field: true,
+                        })
+                        .collect::<Vec<_>>();
+                    *tys.get_struct(s.name, &new_fields)
+                }
+            },
+            _ => self,
+        }
+    }
+
+    // Size in bits to hold an instance of this type.
+    // Sizes are expected to be between 1 and 64 bits.
+    // Size 0 means this either takes no space (such as a known-zero field)
+    // or isn't a scalar to be stored in memory.
+    pub fn log_size(self, tys: &Types<'t>) -> usize {
+        match self.data() {
+            Type::Int(_) => {
+                if [*tys.int_i8, *tys.int_u8, *tys.int_bool].contains(&self) {
+                    0 // 1<<0 == 1 bytes
+                } else if [*tys.int_i16, *tys.int_u16].contains(&self) {
+                    1 // 1<<1 == 2 bytes
+                } else if [*tys.int_i32, *tys.int_u32].contains(&self) {
+                    2 // 1<<2 == 4 bytes
+                } else if self == *tys.int_bot {
+                    3 // 1<<3 == 8 bytes
+                } else if self.is_high_or_constant(tys) {
+                    0
+                } else {
+                    todo!()
+                }
+            }
+            Type::Float(f) => {
+                let sz = if f.sz == 0 {
+                    if self.as_float().is_f32() {
+                        32
+                    } else {
+                        64
+                    }
+                } else {
+                    f.sz.abs()
+                };
+                if sz == 32 {
+                    2
+                } else {
+                    3
+                }
+            }
+            Type::MemPtr(_) => 2, // (1<<2)==4-byte pointers
+            _ => todo!(),
         }
     }
 }
