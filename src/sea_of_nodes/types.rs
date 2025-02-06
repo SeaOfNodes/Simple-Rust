@@ -1,14 +1,26 @@
 use crate::datastructures::arena::DroplessArena;
 pub use crate::sea_of_nodes::types::field::Field;
-use crate::sea_of_nodes::types::interner::Interner;
 pub use crate::sea_of_nodes::types::r#type::*;
 pub use crate::sea_of_nodes::types::ty::{Ty, TyMemPtr, TyStruct};
 use crate::sea_of_nodes::types::ty::{TyFloat, TyInt, TyMem, TyTuple};
+pub use crate::sea_of_nodes::types::type_float::Float;
+pub use crate::sea_of_nodes::types::type_integer::Int;
+pub use crate::sea_of_nodes::types::type_mem::Mem;
+pub use crate::sea_of_nodes::types::type_mem_ptr::MemPtr;
+pub use crate::sea_of_nodes::types::type_struct::Struct;
+pub use crate::sea_of_nodes::types::type_tuple::Tuple;
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
 
 mod field;
-mod interner;
 mod ty;
 mod r#type;
+mod type_float;
+mod type_integer;
+mod type_mem;
+mod type_mem_ptr;
+mod type_struct;
+mod type_tuple;
 
 /// Types are interned, so that equality checks and hashing are cheap.
 ///
@@ -190,7 +202,7 @@ impl<'a> Types<'a> {
     pub fn get_struct(&self, name: &'a str, fields: &[Field<'a>]) -> TyStruct<'a> {
         let fields = self.interner.arena.alloc_slice_copy(fields);
         self.interner
-            .intern(Type::Struct(Struct::Struct { name, fields }))
+            .intern(Type::Struct(Struct { name, fields }))
             .to_struct()
             .unwrap()
     }
@@ -363,5 +375,98 @@ impl<'a> Types<'a> {
             Type::MemPtr(_) => Some(*self.ptr_null),
             _ => None,
         }
+    }
+}
+
+struct Interner<'a> {
+    arena: &'a DroplessArena,
+
+    // If we ever want multithreading this could be a sharded hashmap like in rustc.
+    // See InternedSet in rustc_middle/src/ty/context.rs
+    type_to_ty: RefCell<HashMap<&'a Type<'a>, Ty<'a>>>,
+
+    strings: RefCell<HashSet<&'a str>>,
+}
+
+impl<'t> Interner<'t> {
+    fn new(arena: &'t DroplessArena) -> Self {
+        Self {
+            arena,
+            type_to_ty: Default::default(),
+            strings: Default::default(),
+        }
+    }
+
+    fn intern(&self, t: Type<'t>) -> Ty<'t> {
+        *self
+            .type_to_ty
+            .borrow_mut()
+            .raw_entry_mut()
+            .from_key(&t)
+            .or_insert_with(|| {
+                let copy = &*self.arena.alloc(t);
+                let ty = Ty::new(copy);
+                (copy, ty)
+            })
+            .1
+    }
+
+    fn intern_str(&self, s: &str) -> &'t str {
+        self.strings
+            .borrow_mut()
+            .get_or_insert_with(s, |_| self.arena.alloc_str(s))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::datastructures::arena::DroplessArena;
+    use crate::sea_of_nodes::types::interner::Interner;
+    use crate::sea_of_nodes::types::{Int, Type};
+    use std::ptr;
+
+    #[test]
+    fn test_interner() {
+        let arena = DroplessArena::new();
+        let interner = crate::sea_of_nodes::types::interner::Interner::new(&arena);
+
+        let ty_bot_1 = interner.intern(Type::Bot);
+        let ty_bot_2 = interner.intern(Type::Bot);
+        assert!(ptr::eq(ty_bot_1.data(), ty_bot_2.data()));
+
+        let ty_42 = interner.intern(Type::Int(Int::Constant(42)));
+        let ty_2 = interner.intern(Type::Int(Int::Constant(2)));
+        let ty_42_too = interner.intern(Type::Int(Int::Constant(42)));
+
+        assert!(!ptr::eq(ty_42.data(), ty_2.data()));
+        assert!(ptr::eq(ty_42.data(), ty_42_too.data()));
+
+        let t1 = interner.intern(Type::Tuple(
+            arena.alloc([ty_bot_1, ty_bot_2, ty_42, ty_2, ty_42_too]),
+        ));
+        let t2 = interner.intern(Type::Tuple(
+            arena.alloc([ty_bot_2, ty_bot_1, ty_42_too, ty_2, ty_42]),
+        ));
+        let t3 = interner.intern(Type::Tuple(
+            arena.alloc([ty_bot_1, ty_bot_2, ty_42, ty_2, ty_2]),
+        ));
+        assert!(ptr::eq(t1.data(), t2.data()));
+        assert!(!ptr::eq(t1.data(), t3.data()));
+    }
+
+    #[test]
+    fn test_strings() {
+        let arena = DroplessArena::new();
+        let interner = crate::sea_of_nodes::types::interner::Interner::new(&arena);
+        let a = interner.intern_str("foo");
+        let b = interner.intern_str("bar");
+        let aa = interner.intern_str("foo");
+        let aaa = interner.intern_str(a);
+        let bb = interner.intern_str(b);
+
+        assert!(ptr::eq(a, aa));
+        assert!(ptr::eq(a, aaa));
+        assert_ne!(a, b);
+        assert!(ptr::eq(b, bb));
     }
 }

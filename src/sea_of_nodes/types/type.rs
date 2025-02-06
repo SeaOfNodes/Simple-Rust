@@ -3,8 +3,7 @@ use std::fmt;
 use std::fmt::Display;
 use std::hash::Hash;
 
-use crate::sea_of_nodes::types::ty::{TyFloat, TyInt};
-use crate::sea_of_nodes::types::{Field, Ty, TyStruct};
+use crate::sea_of_nodes::types::{Float, Int, Mem, MemPtr, Struct, Tuple};
 
 #[derive(Eq, PartialEq, Copy, Clone, Hash, Debug)]
 pub enum Type<'a> {
@@ -18,113 +17,6 @@ pub enum Type<'a> {
     Struct(Struct<'a>),
     MemPtr(MemPtr<'a>),
     Mem(Mem<'a>),
-}
-
-#[derive(Eq, PartialEq, Copy, Clone, Hash, Debug)]
-pub struct Int {
-    pub min: i64,
-    pub max: i64,
-}
-
-impl<'t> TyInt<'t> {
-    pub fn min(self) -> i64 {
-        self.data().min
-    }
-
-    pub fn max(self) -> i64 {
-        self.data().max
-    }
-
-    pub fn value(self) -> i64 {
-        debug_assert!(self.is_constant());
-        self.min()
-    }
-
-    pub fn mask(self) -> i64 {
-        todo!()
-    }
-}
-
-#[derive(Eq, PartialEq, Copy, Clone, Hash, Debug)]
-pub struct Float {
-    sz: i8,
-    /// f64 bits as integer for easier eq/hashing
-    con: u64,
-}
-
-impl Float {
-    pub fn new(sz: i8, con: f64) -> Self {
-        Self {
-            sz,
-            con: con.to_bits(),
-        }
-    }
-
-    pub fn con(&self) -> f64 {
-        f64::from_bits(self.con)
-    }
-}
-
-impl<'t> TyFloat<'t> {
-    pub fn is_f32(&self) -> bool {
-        let v = self.data().con();
-        v as f32 as f64 == v
-    }
-}
-
-pub type Tuple<'t> = &'t [Ty<'t>];
-
-#[derive(Eq, PartialEq, Copy, Clone, Hash, Debug)]
-pub struct Struct<'t> {
-    pub name: &'t str,
-    pub fields: &'t [Field<'t>],
-}
-
-impl<'t> TyStruct<'t> {
-    pub fn name(self) -> &'t str {
-        self.data().name
-    }
-
-    pub fn fields(self) -> &'t [Field<'t>] {
-        self.data().fields
-    }
-
-    pub fn find(self, fname: &str) -> Option<usize> {
-        self.data().fields.iter().position(|f| f.fname == fname)
-    }
-
-    pub fn find_alias(self, alias: u32) -> Option<usize> {
-        self.data().fields.iter().position(|f| f.alias == alias)
-    }
-
-    pub fn is_ary(self) -> bool {
-        self.fields().len() == 2 && self.fields()[1].fname == "[]"
-    }
-
-    pub fn ary_base(self) -> i64 {
-        todo!()
-    }
-
-    pub fn ary_scale(self) -> i64 {
-        todo!()
-    }
-
-    pub fn offset(self, index: usize) -> i64 {
-        todo!()
-    }
-}
-
-#[derive(Eq, PartialEq, Copy, Clone, Hash, Debug)]
-pub struct MemPtr<'t> {
-    pub to: TyStruct<'t>,
-    pub nil: bool,
-}
-
-#[derive(Eq, PartialEq, Copy, Clone, Hash, Debug)]
-pub struct Mem<'t> {
-    pub alias: u32,
-    /// Memory contents, some scalar type
-    pub t: Ty<'t>,
 }
 
 impl<'t> Type<'t> {
