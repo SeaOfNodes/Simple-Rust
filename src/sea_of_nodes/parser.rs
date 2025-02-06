@@ -622,7 +622,7 @@ impl<'s, 't> Parser<'s, 't> {
         let ret = if stmt {
             r.to_node()
         } else {
-            self.peep(Phi::new(
+            Phi::new(
                 "",
                 self.types.meet(
                     lhs.unwrap().ty(&self.nodes).unwrap(),
@@ -630,7 +630,8 @@ impl<'s, 't> Parser<'s, 't> {
                 ),
                 vec![Some(**r), Some(lhs.unwrap().unkeep(&mut self.nodes)), rhs],
                 &mut self.nodes,
-            ))
+            )
+            .peep(self)
         };
         r.peephole(&mut self.nodes);
         Ok(ret)
@@ -731,7 +732,7 @@ impl<'s, 't> Parser<'s, 't> {
         if xfinal {
             if let Some(tmp) = t.to_mem_ptr() {
                 t = tmp.make_ro();
-                expr = self.peep(ReadOnly::new(expr, &mut self.nodes));
+                expr = ReadOnly::new(expr, &mut self.nodes).peep(self);
             }
         }
         // Auto-widen int to float
@@ -754,8 +755,7 @@ impl<'s, 't> Parser<'s, 't> {
 
     fn widen_int(&mut self, expr: Node, t: Ty<'t>) -> Node {
         if t.is_float() && expr.ty(&self.nodes).is_some_and(|i| i.is_int()) {
-            let f = ToFloat::new(expr, &mut self.nodes);
-            self.peep(f)
+            ToFloat::new(expr, &mut self.nodes).peep(self)
         } else {
             expr
         }
@@ -1000,7 +1000,7 @@ impl<'s, 't> Parser<'s, 't> {
             };
             let rhs = self.parse_comparison()?;
             lhs.set_def(2, rhs, &mut self.nodes);
-            lhs = self.peep(lhs);
+            lhs = lhs.peep(self);
         }
     }
 
@@ -1037,11 +1037,9 @@ impl<'s, 't> Parser<'s, 't> {
                 },
             ));
             lhs.set_def(idx, self.parse_shift()?, &mut self.nodes);
-            lhs = lhs.widen(&mut self.nodes);
-            lhs = self.peep(lhs);
+            lhs = lhs.widen(&mut self.nodes).peep(self);
             if negate {
-                lhs = *Not::new(lhs, &mut self.nodes);
-                lhs = self.peep(lhs);
+                lhs = Not::new(lhs, &mut self.nodes).peep(self);
             }
         }
     }
@@ -1062,8 +1060,7 @@ impl<'s, 't> Parser<'s, 't> {
                 return Ok(lhs);
             }
             lhs.set_def(2, self.parse_addition()?, &mut self.nodes);
-            lhs = lhs.widen(&mut self.nodes);
-            lhs = self.peep(lhs);
+            lhs = lhs.widen(&mut self.nodes).peep(self);
         }
     }
 
@@ -1083,8 +1080,7 @@ impl<'s, 't> Parser<'s, 't> {
             lhs = self.nodes.create((op, vec![None, Some(lhs), None]));
             let rhs = self.parse_multiplication()?;
             lhs.set_def(2, rhs, &mut self.nodes);
-            lhs = lhs.widen(&mut self.nodes);
-            lhs = self.peep(lhs);
+            lhs = lhs.widen(&mut self.nodes).peep(self);
         }
     }
 
@@ -1104,8 +1100,7 @@ impl<'s, 't> Parser<'s, 't> {
             lhs = self.nodes.create((op, vec![None, Some(lhs), None]));
             let rhs = self.parse_unary()?;
             lhs.set_def(2, rhs, &mut self.nodes);
-            lhs = lhs.widen(&mut self.nodes);
-            lhs = self.peep(lhs);
+            lhs = lhs.widen(&mut self.nodes).peep(self);
         }
     }
 
@@ -1129,8 +1124,8 @@ impl<'s, 't> Parser<'s, 't> {
                         self.scope.inputs(&self.nodes)[n].unwrap(),
                         self.int_con(delta).to_node(),
                         &mut self.nodes,
-                    );
-                    let add = self.peep(add);
+                    )
+                    .peep(self);
                     let expr = self.zs_mask(add, t)?;
                     self.scope.update_var_index(n, Some(expr), &mut self.nodes);
                     return Ok(expr);
@@ -1140,13 +1135,14 @@ impl<'s, 't> Parser<'s, 't> {
             self.set_pos(old);
         }
         if self.match_("-") {
-            self.parse_unary()
-                .map(|expr| Minus::new(expr, &mut self.nodes).widen(&mut self.nodes))
-                .map(|expr| self.peep(expr))
+            self.parse_unary().map(|expr| {
+                Minus::new(expr, &mut self.nodes)
+                    .widen(&mut self.nodes)
+                    .peep(self)
+            })
         } else if self.match_("!") {
             self.parse_unary()
-                .map(|expr| Not::new(expr, &mut self.nodes))
-                .map(|expr| self.peep(expr))
+                .map(|expr| Not::new(expr, &mut self.nodes).peep(self))
         } else {
             let primary = self.parse_primary()?;
             self.parse_postfix(primary)
@@ -1215,7 +1211,7 @@ impl<'s, 't> Parser<'s, 't> {
                 rvalue.keep(&mut self.nodes); // Keep post-value across peeps
             }
             let n_ty = self.nodes[self.scope].vars[n].ty(&self.name_to_type, self.types);
-            let op = self.peep(op);
+            let op = op.peep(self);
             let op = self.zs_mask(op, n_ty)?;
             self.scope.update_var_index(n, Some(op), &mut self.nodes);
             Ok(if pre {
@@ -1347,12 +1343,8 @@ impl<'s, 't> Parser<'s, 't> {
         let con_base = self.int_con(base);
         let con_scale = self.int_con(scale);
 
-        let shl = self.peep(Shl::new(
-            len.keep(&mut self.nodes),
-            Some(*con_scale),
-            &mut self.nodes,
-        ));
-        let size = self.peep(Add::new(*con_base, shl, &mut self.nodes));
+        let shl = Shl::new(len.keep(&mut self.nodes), Some(*con_scale), &mut self.nodes).peep(self);
+        let size = Add::new(*con_base, shl, &mut self.nodes).peep(self);
         self.altmp.clear();
         self.altmp.push(Some(len.unkeep(&mut self.nodes)));
         self.altmp
@@ -1460,7 +1452,7 @@ impl<'s, 't> Parser<'s, 't> {
                 &mut self.nodes,
             );
 
-            self.peep(Add::new(*b, self.peep(offset), &mut self.nodes))
+            Add::new(*b, offset.peep(self), &mut self.nodes).peep(self)
         } else {
             // Struct field offsets are hardwired
             self.int_con(base.offset(fidx)).keep(&mut self.nodes)
@@ -1511,7 +1503,7 @@ impl<'s, 't> Parser<'s, 't> {
         if base.is_ary() {
             load.set_def(0, self.ctrl(), &mut self.nodes);
         }
-        let load = self.peep(load);
+        let load = load.peep(self);
 
         // ary[idx]++ or ptr.fld++
         let inc = self.matchx("++");
@@ -1520,7 +1512,7 @@ impl<'s, 't> Parser<'s, 't> {
                 return Err(format!("Cannot reassign final '{}'", f.fname));
             }
             let delta = self.int_con(if inc { 1 } else { -1 });
-            let inc = self.peep(Add::new(load, *delta, &mut self.nodes));
+            let inc = Add::new(load, *delta, &mut self.nodes).peep(self);
             let val = self.zs_mask(inc, tf)?;
             let st = Store::new(
                 name,
@@ -1541,7 +1533,8 @@ impl<'s, 't> Parser<'s, 't> {
             if base.is_ary() {
                 st.set_def(0, self.ctrl(), &mut self.nodes);
             }
-            self.mem_alias_update(f.alias, self.peep(st));
+            let st = st.peep(self);
+            self.mem_alias_update(f.alias, st);
             // And use the original loaded value as the result
         } else {
             expr.unkill(&mut self.nodes);
@@ -1558,11 +1551,10 @@ impl<'s, 't> Parser<'s, 't> {
             if let Some(t0) = t.to_int() {
                 if !tval.isa(*t0, self.types) {
                     if t0.min() == 0 {
-                        return Ok(self.peep(And::new(
-                            val,
-                            Some(*self.int_con(t0.max())),
-                            &mut self.nodes,
-                        ))); // Unsigned
+                        return Ok(
+                            And::new(val, Some(*self.int_con(t0.max())), &mut self.nodes)
+                                .peep(self),
+                        ); // Unsigned
                     }
                     // Signed extension
                     let shift = t0.max().leading_zeros() - 1;
@@ -1570,15 +1562,12 @@ impl<'s, 't> Parser<'s, 't> {
                     if shf.ty(&self.nodes) == Some(*self.types.int_zero) {
                         return Ok(val);
                     }
-                    return Ok(self.peep(Sar::new(
-                        self.peep(Shl::new(
-                            val,
-                            Some(shf.keep(&mut self.nodes)),
-                            &mut self.nodes,
-                        )),
+                    return Ok(Sar::new(
+                        Shl::new(val, Some(shf.keep(&mut self.nodes)), &mut self.nodes).peep(self),
                         Some(shf.unkeep(&mut self.nodes)),
                         &mut self.nodes,
-                    )));
+                    )
+                    .peep(self));
                 }
             }
         }
@@ -1586,7 +1575,7 @@ impl<'s, 't> Parser<'s, 't> {
             if let Some(t0) = t.to_float() {
                 if !tval.isa(*t0, self.types) {
                     // Float rounding
-                    return Ok(self.peep(RoundF32::new(val, &mut self.nodes)));
+                    return Ok(RoundF32::new(val, &mut self.nodes).peep(self));
                 }
             }
         }
@@ -1611,12 +1600,6 @@ impl<'s, 't> Parser<'s, 't> {
             .peephole(&mut self.nodes)
             .to_constant(&self.nodes)
             .unwrap()
-    }
-
-    fn peep(&mut self, n: impl Into<Node>) -> Node {
-        // Peephole, then improve with lexically scoped guards
-        self.scope
-            .upcast_guard(n.into().peephole(&mut self.nodes), &mut self.nodes)
     }
 
     //
@@ -1669,6 +1652,15 @@ impl<'s, 't> Parser<'s, 't> {
             "Syntax error, expected {syntax}: {}",
             self.lexer.get_any_next_token()
         )
+    }
+}
+
+impl Node {
+    fn peep(self, parser: &mut Parser) -> Node {
+        // Peephole, then improve with lexically scoped guards
+        parser
+            .scope
+            .upcast_guard(self.peephole(&mut parser.nodes), &mut parser.nodes)
     }
 }
 
