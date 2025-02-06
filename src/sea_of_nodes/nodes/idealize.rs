@@ -5,7 +5,7 @@ use crate::sea_of_nodes::nodes::node::{
     Sub, TypedNode,
 };
 use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes, Op};
-use crate::sea_of_nodes::types::{Int, Type};
+use crate::sea_of_nodes::types::Type;
 
 impl Node {
     /// do not peephole directly returned values!
@@ -534,7 +534,7 @@ impl Load {
                         name,
                         alias,
                         declared_ty,
-                        [mem.inputs(sea)[1].unwrap(), ptr],
+                        [mem.inputs(sea)[1].unwrap(), ptr, todo!()],
                         sea,
                     )
                     .peephole(sea);
@@ -542,7 +542,7 @@ impl Load {
                         name,
                         alias,
                         declared_ty,
-                        [mem.inputs(sea)[2].unwrap(), ptr],
+                        [mem.inputs(sea)[2].unwrap(), ptr, todo!()],
                         sea,
                     )
                     .peephole(sea);
@@ -629,9 +629,7 @@ impl Minus {
 impl Div {
     fn idealize_div(self, sea: &mut Nodes) -> Option<Node> {
         // Div of 1.
-        if let Some(Type::Int(Int::Constant(1))) =
-            self.inputs(sea)[2].and_then(|n| n.ty(sea)).as_deref()
-        {
+        if Some(*sea.tys.int_one) == self.inputs(sea)[2].and_then(|n| n.ty(sea)) {
             return self.inputs(sea)[1];
         }
         None

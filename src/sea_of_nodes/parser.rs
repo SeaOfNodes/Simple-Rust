@@ -241,8 +241,8 @@ impl<'s, 't> Parser<'s, 't> {
     /// </pre>
     ///
     /// Does not parse the opening or closing `{}`
-    fn parse_block(&mut self, inCon: bool) -> PResult<()> {
-        self.scope.push(inCon, &mut self.nodes);
+    fn parse_block(&mut self, in_con: bool) -> PResult<()> {
+        self.scope.push(in_con, &mut self.nodes);
         while !self.peek('}') && !self.lexer.is_eof() {
             self.parse_statement()?;
         }
@@ -303,7 +303,7 @@ impl<'s, 't> Parser<'s, 't> {
         self.scope.push(false, &mut self.nodes); // Scope for the index variables
         if !self.match_(";") {
             // Can be empty init "for(;test;next) body"
-            self.parse_declaration_statement(); // Non-empty init
+            self.parse_declaration_statement()?; // Non-empty init
         }
         let rez = self.parse_looping(true);
         self.scope.pop(&mut self.nodes); // Exit index variable scope
@@ -629,7 +629,7 @@ impl<'s, 't> Parser<'s, 't> {
             )
             .peep(self)
         };
-        r.peephole(&mut self.nodes);
+        let _ = r.peephole(&mut self.nodes);
         Ok(ret)
     }
 

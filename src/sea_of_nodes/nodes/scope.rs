@@ -8,7 +8,7 @@ use std::fmt;
 //
 
 #[derive(Clone, Debug)]
-struct Var<'t> {
+pub struct Var<'t> {
     /// index in containing scope
     pub index: usize,
     /// Declared name

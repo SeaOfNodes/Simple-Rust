@@ -404,7 +404,7 @@ impl<'t> Node {
                 ts.push(types.ctrl);
                 ts.push(**ptr);
                 for (i, f) in fs.iter().enumerate() {
-                    let mem = in_ty(i+2).as_mem();
+                    let mem = in_ty(i + 2).as_mem();
                     let tfld = in_ty(2 + fs.len() + i).meet(mem.data().t, types);
                     ts.push(*types.get_mem(f.alias, tfld));
                 }
