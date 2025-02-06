@@ -117,4 +117,19 @@ impl<'t> TyStruct<'t> {
             self
         }
     }
+
+    pub fn lub(self, tys: &Types<'t>) -> TyStruct<'t> {
+        if let Some(fields) = self.data().fields {
+            let new_fields = fields
+                .iter()
+                .map(|f| Field {
+                    ty: f.ty.lub(tys),
+                    ..*f
+                })
+                .collect::<Vec<_>>();
+            tys.get_struct(self.name(), &new_fields)
+        } else {
+            self
+        }
+    }
 }

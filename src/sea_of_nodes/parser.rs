@@ -583,7 +583,9 @@ impl<'s, 't> Parser<'s, 't> {
             }
             (true, false) => Some(self.parse_asgn()?),
             (false, true) => None,
-            (false, false) => Some(self.con(lhs.unwrap().ty(&self.nodes).make_zero(&self.types))),
+            (false, false) => {
+                Some(*self.con(lhs.unwrap().ty(&self.nodes).unwrap().make_zero(&self.types)))
+            }
         };
         self.scope.remove_guards(if_false, &mut self.nodes);
         if do_rhs {
@@ -600,13 +602,13 @@ impl<'s, 't> Parser<'s, 't> {
         // Check the trinary widening int/flt
         if !stmt {
             rhs = Some(
-                self.widen_int(rhs, lhs.unwrap().ty(&self.nodes).unwrap())
+                self.widen_int(rhs.unwrap(), lhs.unwrap().ty(&self.nodes).unwrap())
                     .keep(&mut self.nodes),
             );
             lhs = Some(
                 self.widen_int(
                     lhs.unwrap().unkeep(&mut self.nodes),
-                    rhs.unwrap().ty(&self.nodes),
+                    rhs.unwrap().ty(&self.nodes).unwrap(),
                 )
                 .keep(&mut self.nodes),
             );
@@ -1348,7 +1350,7 @@ impl<'s, 't> Parser<'s, 't> {
         self.altmp.clear();
         self.altmp.push(Some(len.unkeep(&mut self.nodes)));
         self.altmp
-            .push(Some(*self.con(ary.fields()[1].ty.make_init())));
+            .push(Some(*self.con(ary.fields()[1].ty.make_init(&self.types))));
         self.new_struct(ary, size)
     }
 

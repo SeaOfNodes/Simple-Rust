@@ -103,22 +103,6 @@ impl<'t> Display for Type<'t> {
     }
 }
 
-impl<'t> Type<'t> {
-    pub fn is_fref(&self) -> bool {
-        match self {
-            Type::Bot => false,
-            Type::Top => false,
-            Type::Ctrl => false,
-            Type::XCtrl => false,
-            Type::Int(_) => false,
-            Type::Tuple(_) => false,
-            Type::Struct(s) => todo!("is struct {s:?} an fref?"),
-            Type::MemPtr(m) => m.to.is_fref(),
-            Type::Mem(_) => false,
-        }
-    }
-}
-
 impl<'t> Ty<'t> {
     /// Is high or on the lattice centerline.
     pub fn is_high(self, tys: &Types<'t>) -> bool {
@@ -270,6 +254,76 @@ impl<'t> Ty<'t> {
             Type::Struct(_) => *self.as_struct().glb(tys),
             Type::MemPtr(MemPtr { to, .. }) => *tys.get_mem_ptr(to.glb(tys), true),
             Type::Mem(m) => *tys.get_mem(m.alias, m.t.glb(tys)),
+        }
+    }
+
+    /// Compute least upper bound in the lattice
+    pub fn lub(self, tys: &Types<'t>) -> Ty<'t> {
+        match self.data() {
+            Type::Bot | Type::Top => tys.top,
+            Type::Ctrl => tys.xctrl,
+            Type::XCtrl => tys.top, // why?
+            Type::Int(_) => *tys.int_top,
+            Type::Float(_) => *tys.float_top,
+            Type::Tuple(types) => tys.top, // why?
+            Type::Struct(_) => *self.as_struct().lub(tys),
+            Type::MemPtr(MemPtr { to, .. }) => *tys.get_mem_ptr(to.lub(tys), false),
+            Type::Mem(m) => *tys.get_mem(m.alias, m.t.lub(tys)),
+        }
+    }
+
+    /// Make an initial/default version of this type.  Typically, 0 for integers
+    /// and null for nullable pointers.
+    pub fn make_init(self, tys: &Types<'t>) -> Ty<'t> {
+        match self.data() {
+            Type::Int(_) => *tys.int_zero,
+            Type::Float(_) => *tys.float_zero,
+            Type::MemPtr(m) => {
+                if m.nil {
+                    *tys.ptr_null
+                } else {
+                    tys.top
+                }
+            }
+            _ => self,
+        }
+    }
+    /// Make a zero version of this type, 0 for integers and null for pointers.
+    pub fn make_zero(self, tys: &Types<'t>) -> Ty<'t> {
+        match self.data() {
+            Type::Int(_) => *tys.int_zero,
+            Type::Float(_) => *tys.float_zero,
+            Type::MemPtr(_) => *tys.ptr_null,
+            _ => unreachable!(),
+        }
+    }
+
+    /// Make a non-zero version of this type, if possible.  Integers attempt to
+    /// exclude zero from their range and pointers become not-null.
+    pub fn non_zero(self, tys: &Types<'t>) -> Ty<'t> {
+        match self.data() {
+            Type::Int(i) => {
+                if i.min > i.max {
+                    self
+                } else if i.min == 0 {
+                    *tys.make_int(1, i.max.max(1)) // specifically good on BOOL
+                } else if i.max == 0 {
+                    *tys.make_int(i.min, -1)
+                } else {
+                    self
+                }
+            }
+            Type::MemPtr(_) => *tys.ptr_void,
+            _ => self.glb(tys),
+        }
+    }
+
+    /// Is forward-reference
+    pub fn is_fref(self) -> bool {
+        match self.data() {
+            Type::Struct(s) => s.fields.is_none(),
+            Type::MemPtr(m) => m.to.data().fields.is_none(),
+            _ => false,
         }
     }
 }
