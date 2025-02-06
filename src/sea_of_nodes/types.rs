@@ -189,6 +189,10 @@ impl<'a> Types<'a> {
         self.interner.get_float(0, constant)
     }
 
+    pub fn make_float(&self, sz: i8, constant: f64) -> TyFloat<'a> {
+        self.interner.get_float(sz, constant)
+    }
+
     pub fn get_tuple_from_slice(&self, types: &[Ty<'a>]) -> Ty<'a> {
         let types: &'a [Ty<'a>] = self.interner.arena.alloc_slice_copy(types);
         self.interner.intern(Type::Tuple(types))
@@ -219,90 +223,29 @@ impl<'a> Types<'a> {
         self.interner.get_mem(alias, ty)
     }
 
-    // TODO remove this function
+    // TODO remove these functions
     pub fn meet(&self, a: Ty<'a>, b: Ty<'a>) -> Ty<'a> {
         a.meet(b, self)
     }
 
     /// True if this "isa" t; e.g. 17 isa TypeInteger.BOT
     pub fn isa(&self, this: Ty<'a>, that: Ty<'a>) -> bool {
-        self.meet(this, that) == that
+        this.isa(that, self)
     }
 
     /// Our lattice is defined with a MEET and a DUAL.
     /// JOIN is dual of meet of both duals.
     pub fn join(&self, this: Ty<'a>, that: Ty<'a>) -> Ty<'a> {
-        if this == that {
-            this
-        } else {
-            self.dual(self.meet(self.dual(this), self.dual(that)))
-        }
+        this.join(that, self)
     }
 
     pub fn dual(&self, ty: Ty<'a>) -> Ty<'a> {
-        match *ty {
-            Type::Bot => self.top,
-            Type::Top => self.bot,
-            Type::Ctrl => self.xctrl,
-            Type::XCtrl => self.ctrl,
-            Type::Int(i) => match i {
-                Int::Bot => self.int_top,
-                Int::Top => self.int_bot,
-                Int::Constant(_) => ty, // self dual
-            },
-            Type::Tuple(types) => {
-                self.get_tuple_from_slice(&types.iter().map(|t| self.dual(*t)).collect::<Vec<_>>())
-            }
-            Type::Struct(s) => match s {
-                Struct::Bot => *self.struct_top,
-                Struct::Top => *self.struct_bot,
-                Struct::Struct { name, fields } => {
-                    let fields = fields
-                        .iter()
-                        .map(|&(name, ty)| (name, self.dual(ty)))
-                        .collect::<Vec<_>>();
-                    *self.get_struct(name, &fields)
-                }
-            },
-            Type::MemPtr(p) => {
-                let to = self.dual(*p.to).to_struct().unwrap();
-                *self.get_mem_ptr(to, !p.nil)
-            }
-            Type::Mem(m) => match m {
-                Mem::Bot => self.mem_top,
-                Mem::Top => self.mem_bot,
-                Mem::Alias(_) => ty, // self dual
-            },
-        }
+        ty.dual(self)
     }
 
     /// compute greatest lower bound in the lattice
     pub fn glb(&self, ty: Ty<'a>) -> Ty<'a> {
-        match *ty {
-            Type::Bot | Type::Top => self.bot,
-            Type::Ctrl => self.xctrl, // why?
-            Type::XCtrl => self.bot,  // why?
-            Type::Int(_) => self.int_bot,
-            Type::Tuple(types) => {
-                let types = types.iter().map(|&ty| self.glb(ty)).collect::<Vec<_>>();
-                self.get_tuple_from_slice(&types)
-            }
-            Type::Struct(s) => match s {
-                Struct::Bot => ty,
-                Struct::Top => ty, // no fields to lower?
-                Struct::Struct { name, fields } => {
-                    let fields = fields
-                        .iter()
-                        .map(|&(name, ty)| (name, self.glb(ty)))
-                        .collect::<Vec<_>>();
-                    *self.get_struct(name, &fields)
-                }
-            },
-            Type::MemPtr(MemPtr { to, .. }) => {
-                *self.get_mem_ptr(self.glb(*to).to_struct().unwrap(), true)
-            }
-            Type::Mem(_) => self.mem_bot,
-        }
+        ty.glb(self)
     }
 
     pub fn make_init(&self, t: Ty<'a>) -> Option<Ty<'a>> {

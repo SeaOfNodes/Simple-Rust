@@ -55,7 +55,7 @@ impl<'a> Deref for Ty<'a> {
 }
 
 macro_rules! impl_subtype {
-    ($Subtype:ident($Variant:ident$(<$v:lifetime>)?) { $cast:ident $checkcast:ident } ) => {
+    ($Subtype:ident($Variant:ident$(<$v:lifetime>)?) { $cast:ident $checkcast:ident $as_cast:ident } ) => {
         #[derive(Copy, Clone, Eq, PartialEq, Hash)]
         pub struct $Subtype<'t>(Ty<'t>);
 
@@ -85,6 +85,9 @@ macro_rules! impl_subtype {
             pub fn $checkcast(self) -> bool {
                 self.$cast().is_some()
             }
+            pub fn $as_cast(self) -> $Subtype<'t> {
+                self.try_into().unwrap()
+            }
         }
 
         impl<'t> Deref for $Subtype<'t> {
@@ -109,9 +112,9 @@ macro_rules! impl_subtype {
     };
 }
 
-impl_subtype!(TyInt(Int)           { to_int     is_int     });
-impl_subtype!(TyFloat(Float)       { to_float   is_float   });
-impl_subtype!(TyTuple(Tuple<'t>)   { to_tuple   is_tuple   });
-impl_subtype!(TyStruct(Struct<'t>) { to_struct  is_struct  });
-impl_subtype!(TyMemPtr(MemPtr<'t>) { to_mem_ptr is_mem_ptr });
-impl_subtype!(TyMem(Mem<'t>)       { to_mem     is_mem     });
+impl_subtype!(TyInt(Int)           { to_int     is_int     as_int     });
+impl_subtype!(TyFloat(Float)       { to_float   is_float   as_float   });
+impl_subtype!(TyTuple(Tuple<'t>)   { to_tuple   is_tuple   as_tuple   });
+impl_subtype!(TyStruct(Struct<'t>) { to_struct  is_struct  as_struct  });
+impl_subtype!(TyMemPtr(MemPtr<'t>) { to_mem_ptr is_mem_ptr as_mem_ptr });
+impl_subtype!(TyMem(Mem<'t>)       { to_mem     is_mem     as_mem     });

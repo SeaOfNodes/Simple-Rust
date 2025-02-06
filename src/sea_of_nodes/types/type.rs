@@ -168,9 +168,7 @@ impl<'t> Ty<'t> {
             (Type::XCtrl, Type::Ctrl) => that,
 
             // Float sub-lattice
-            (Type::Float(_), Type::Float(_)) => {
-                *self.to_float().unwrap().meet(that.to_float().unwrap(), tys)
-            }
+            (Type::Float(_), Type::Float(_)) => *self.as_float().meet(that.as_float(), tys),
 
             // Int sub-lattice
             (Type::Int(a), Type::Int(b)) => *tys.make_int(a.min.min(b.min), a.max.max(b.max)),
@@ -190,10 +188,7 @@ impl<'t> Ty<'t> {
             }
 
             // Struct sub-lattice
-            (Type::Struct(_), Type::Struct(_)) => *self
-                .to_struct()
-                .unwrap()
-                .meet(that.to_struct().unwrap(), tys),
+            (Type::Struct(_), Type::Struct(_)) => *self.as_struct().meet(that.as_struct(), tys),
 
             // Pointer sub-lattice
             (Type::MemPtr(s), Type::MemPtr(t)) => {
@@ -219,6 +214,62 @@ impl<'t> Ty<'t> {
 
             // different sub-lattices meet at bottom
             _ => tys.bot,
+        }
+    }
+
+    pub fn dual(self, tys: &Types<'t>) -> Ty<'t> {
+        match self.data() {
+            Type::Bot => tys.top,
+            Type::Top => tys.bot,
+            Type::Ctrl => tys.xctrl,
+            Type::XCtrl => tys.ctrl,
+            Type::Float(f) => {
+                if f.sz == 0 {
+                    self // Constants are a self-dual
+                } else {
+                    *tys.make_float(-f.sz, 0.0)
+                }
+            }
+            Type::Int(i) => *tys.make_int(i.max, i.min),
+            Type::Tuple(types) => {
+                tys.get_tuple_from_slice(&types.iter().map(|t| t.dual(tys)).collect::<Vec<_>>())
+            }
+            Type::Struct(s) => *self.as_struct().dual(tys),
+            Type::MemPtr(p) => *tys.get_mem_ptr(p.to.dual(tys), !p.nil),
+            Type::Mem(m) => *tys.get_mem(m.alias, m.t.dual(tys)),
+        }
+    }
+
+    /// Our lattice is defined with a MEET and a DUAL.
+    /// JOIN is dual of meet of both duals.
+    pub fn join(self, that: Ty<'t>, tys: &Types<'t>) -> Ty<'t> {
+        if self == that {
+            self
+        } else {
+            self.dual(tys).meet(that.dual(tys), tys).dual(tys)
+        }
+    }
+
+    /// True if this "isa" t; e.g. 17 isa TypeInteger.BOT
+    pub fn isa(self, t: Ty<'t>, tys: &Types<'t>) -> bool {
+        self.meet(t, tys) == t
+    }
+
+    /// Compute greatest lower bound in the lattice
+    pub fn glb(self, tys: &Types<'t>) -> Ty<'t> {
+        match self.data() {
+            Type::Bot | Type::Top => tys.bot,
+            Type::Ctrl => tys.ctrl,
+            Type::XCtrl => tys.bot, // why?
+            Type::Int(_) => *tys.int_bot,
+            Type::Float(_) => *tys.float_bot,
+            Type::Tuple(types) => {
+                let types = types.iter().map(|ty| ty.glb(tys)).collect::<Vec<_>>();
+                tys.get_tuple_from_slice(&types)
+            }
+            Type::Struct(_) => *self.as_struct().glb(tys),
+            Type::MemPtr(MemPtr { to, .. }) => *tys.get_mem_ptr(to.glb(tys), true),
+            Type::Mem(m) => *tys.get_mem(m.alias, m.t.glb(tys)),
         }
     }
 }

@@ -741,7 +741,7 @@ impl<'s, 't> Parser<'s, 't> {
         expr = self.zs_mask(expr, t)?;
 
         // Type is sane
-        if !expr.ty(&self.nodes).isa(t) {
+        if !expr.ty(&self.nodes).unwrap().isa(t, self.types) {
             return Err(format!(
                 "Type {} is not of declared type {}",
                 expr.ty(&self.nodes).unwrap().str(),
@@ -800,7 +800,7 @@ impl<'s, 't> Parser<'s, 't> {
                 (t != self.types.bot && !has_bang && t.is_mem_ptr());
             // var/val, then type comes from expression
             if infer_type {
-                t = expr.ty(&self.nodes).glb();
+                t = expr.ty(&self.nodes).unwrap().glb(self.types);
             }
         } else {
             if infer_type && !self.scope.in_con(&self.nodes) {
@@ -1497,10 +1497,13 @@ impl<'s, 't> Parser<'s, 't> {
         let load = Load::new(
             name,
             f.alias,
-            tf.glb(),
-            self.mem_alias_lookup(f.alias),
-            expr.keep(&mut self.nodes),
-            off,
+            tf.glb(self.types),
+            [
+                self.mem_alias_lookup(f.alias),
+                expr.keep(&mut self.nodes),
+                off,
+            ],
+            &mut self.nodes,
         );
         // Arrays include control, as a proxy for a safety range check
         // Structs don't need this; they only need a NPE check which is
@@ -1553,7 +1556,7 @@ impl<'s, 't> Parser<'s, 't> {
     fn zs_mask(&mut self, val: Node, t: Ty<'t>) -> PResult<Node> {
         if let Some(tval) = val.ty(&self.nodes).and_then(|t| t.to_int()) {
             if let Some(t0) = t.to_int() {
-                if !self.types.isa(tval, t0) {
+                if !tval.isa(*t0, self.types) {
                     if t0.min() == 0 {
                         return Ok(self.peep(And::new(
                             val,
@@ -1581,7 +1584,7 @@ impl<'s, 't> Parser<'s, 't> {
         }
         if let Some(tval) = val.ty(&self.nodes).and_then(|t| t.to_float()) {
             if let Some(t0) = t.to_float() {
-                if !self.types.isa(tval, t0) {
+                if !tval.isa(*t0, self.types) {
                     // Float rounding
                     return Ok(self.peep(RoundF32::new(val, &mut self.nodes)));
                 }

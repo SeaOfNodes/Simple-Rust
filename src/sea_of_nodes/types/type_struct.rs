@@ -81,4 +81,40 @@ impl<'t> TyStruct<'t> {
         }
         tys.get_struct(self.name(), &flds)
     }
+
+    pub fn dual(self, tys: &Types<'t>) -> TyStruct<'t> {
+        if self == tys.struct_top {
+            tys.struct_bot
+        } else if self == tys.struct_bot {
+            tys.struct_top
+        } else if let Some(fields) = self.data().fields {
+            let fields = fields
+                .iter()
+                .map(|f| Field {
+                    fname: f.fname,
+                    ty: f.ty.dual(tys),
+                    alias: f.alias,
+                    final_field: !f.final_field,
+                })
+                .collect::<Vec<_>>();
+            tys.get_struct(self.name(), &fields)
+        } else {
+            self
+        }
+    }
+
+    pub fn glb(self, tys: &Types<'t>) -> TyStruct<'t> {
+        if let Some(fields) = self.data().fields {
+            let new_fields = fields
+                .iter()
+                .map(|f| Field {
+                    ty: f.ty.glb(tys),
+                    ..*f
+                })
+                .collect::<Vec<_>>();
+            tys.get_struct(self.name(), &new_fields)
+        } else {
+            self
+        }
+    }
 }
