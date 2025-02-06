@@ -17,7 +17,7 @@ impl<'t> Ty<'t> {
     pub fn new(t: &'t Type<'t>) -> Self {
         Self(t)
     }
-    pub fn inner(&self) -> &'t Type<'t> {
+    pub fn data(&self) -> &'t Type<'t> {
         self.0
     }
 }
@@ -61,7 +61,7 @@ macro_rules! impl_subtype {
 
         impl<'t> $Subtype<'t> {
             pub fn data(self) -> &'t $Variant$(<$v> where $v : 't)? {
-                match self.0.inner() {
+                match self.0.data() {
                     Type::$Variant(x) => x,
                     _ => unreachable!(),
                 }

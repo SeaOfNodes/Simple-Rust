@@ -20,7 +20,7 @@ pub struct Parser<'s, 't> {
     pub nodes: Nodes<'t>,
 
     /// Next available memory alias number
-    alias: usize,
+    alias: u32,
 
     /// returned after parsing
     pub(crate) stop: Stop,
@@ -98,7 +98,7 @@ impl<'s, 't> Parser<'s, 't> {
 
         let stop = Stop::new(&mut nodes);
 
-        nodes.zero = Constant::new(types.int_zero, &mut nodes)
+        nodes.zero = Constant::new(*types.int_zero, &mut nodes)
             .peephole(&mut nodes)
             .keep(&mut nodes)
             .to_constant(&nodes)
@@ -181,7 +181,7 @@ impl<'s, 't> Parser<'s, 't> {
         self.scope
             .define(
                 Scope::MEM0,
-                self.types.mem_top,
+                *self.types.mem_top,
                 false,
                 mem0.peephole(&mut self.nodes),
                 &mut self.nodes,
@@ -190,7 +190,7 @@ impl<'s, 't> Parser<'s, 't> {
         self.scope
             .define(
                 Scope::ARG0,
-                self.types.int_bot,
+                *self.types.int_bot,
                 false,
                 Proj::new(start, 2, Scope::ARG0, &mut self.nodes).peephole(&mut self.nodes),
                 &mut self.nodes,
@@ -573,7 +573,8 @@ impl<'s, 't> Parser<'s, 't> {
 
         // Up-cast predicate, even if not else clause, because predicate can
         // remain true if the true clause exits: `if( !ptr ) return 0; return ptr.fld;`
-        self.scope.add_guards(if_false, pred, true, &mut self.nodes);
+        self.scope
+            .add_guards(if_false, Some(pred), true, &mut self.nodes);
         let do_rhs = self.match_(fside);
         let mut rhs = match (do_rhs, stmt) {
             (true, true) => {
@@ -599,7 +600,7 @@ impl<'s, 't> Parser<'s, 't> {
         // Check the trinary widening int/flt
         if !stmt {
             rhs = Some(
-                self.widen_int(rhs, lhs.unwrap().ty(&self.nodes))
+                self.widen_int(rhs, lhs.unwrap().ty(&self.nodes).unwrap())
                     .keep(&mut self.nodes),
             );
             lhs = Some(
@@ -740,7 +741,7 @@ impl<'s, 't> Parser<'s, 't> {
         expr = self.widen_int(expr, t);
 
         // Auto-narrow wide ints to narrow ints
-        expr = self.zs_mask(expr, t);
+        expr = self.zs_mask(expr, t)?;
 
         // Type is sane
         if !expr.ty(&self.nodes).isa(t) {
@@ -768,9 +769,9 @@ impl<'s, 't> Parser<'s, 't> {
     /// </pre>
     fn parse_declaration_statement(&mut self) -> PResult<()> {
         let Some(t) = self.type_()? else {
-            let e = self.parse_asgn()?;
+            self.parse_asgn()?;
             self.require(";")?;
-            return Ok(e);
+            return Ok(());
         };
 
         // now parse var['=' asgnexpr] in a loop
@@ -807,7 +808,7 @@ impl<'s, 't> Parser<'s, 't> {
             if infer_type && !self.scope.in_con(&self.nodes) {
                 return Err(self.error_syntax("=expression"));
             }
-            expr = self.con(t.make_init());
+            expr = *self.con(t.make_init());
         }
 
         // Lift expression, based on type
@@ -1552,7 +1553,7 @@ impl<'s, 't> Parser<'s, 't> {
                     // Signed extension
                     let shift = t0.max().leading_zeros() - 1;
                     let shf = self.int_con(shift);
-                    if shf.ty(&self.nodes) == Some(self.types.int_zero) {
+                    if shf.ty(&self.nodes) == Some(*self.types.int_zero) {
                         return Ok(val);
                     }
                     return Ok(self.peep(Sar::new(
@@ -1571,11 +1572,11 @@ impl<'s, 't> Parser<'s, 't> {
             if let Some(t0) = t.to_float() {
                 if !self.types.isa(tval, t0) {
                     // Float rounding
-                    return self.peep(RoundF32::new(val, &mut self.nodes));
+                    return Ok(self.peep(RoundF32::new(val, &mut self.nodes)));
                 }
             }
         }
-        val
+        Ok(val)
     }
 
     /// <pre>
@@ -1588,7 +1589,7 @@ impl<'s, 't> Parser<'s, 't> {
 
     fn int_con(&mut self, con: i64) -> Constant {
         let ty = self.types.get_int(con);
-        self.con(ty)
+        self.con(*ty)
     }
 
     fn con(&mut self, t: Ty<'t>) -> Constant {
@@ -1799,13 +1800,13 @@ impl<'a> Lexer<'a> {
             if snum.chars().next() == Some('0') {
                 Err("Syntax error: integer values cannot start with '0'".to_string())
             } else {
-                snum.parse().map(|i| types.get_int(i)).map_err(|_| {
+                snum.parse().map(|i| *types.get_int(i)).map_err(|_| {
                     format!("{snum} could not be parsed to a positive signed 64 bit integer")
                 })
             }
         } else {
             snum.parse()
-                .map(|f| types.get_float(f))
+                .map(|f| *types.get_float(f))
                 .map_err(|_| format!("{snum} could not be parsed to a floating point value"))
         }
     }

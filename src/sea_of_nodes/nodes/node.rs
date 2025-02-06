@@ -582,7 +582,7 @@ impl Minus {
 impl ScopeMin {
     pub fn new(sea: &mut Nodes) -> Self {
         let this = Self::create(vec![], sea);
-        sea.ty[this] = Some(sea.types.mem_bot);
+        sea.ty[this] = Some(*sea.types.mem_bot);
         this
     }
 }
@@ -837,5 +837,11 @@ impl Struct {
     pub fn new(sea: &mut Nodes) -> Self {
         // differs from java. We use temporarily use top instead of null
         Self::create(sea.types.struct_top, vec![], sea)
+    }
+}
+
+impl RoundF32 {
+    pub fn new(lhs: Node, sea: &mut Nodes) -> Self {
+        Self::create(vec![None, Some(lhs)], sea)
     }
 }

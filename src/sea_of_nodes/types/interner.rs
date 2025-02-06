@@ -57,14 +57,14 @@ mod tests {
 
         let ty_bot_1 = interner.intern(Type::Bot);
         let ty_bot_2 = interner.intern(Type::Bot);
-        assert!(ptr::eq(ty_bot_1.inner(), ty_bot_2.inner()));
+        assert!(ptr::eq(ty_bot_1.data(), ty_bot_2.data()));
 
         let ty_42 = interner.intern(Type::Int(Int::Constant(42)));
         let ty_2 = interner.intern(Type::Int(Int::Constant(2)));
         let ty_42_too = interner.intern(Type::Int(Int::Constant(42)));
 
-        assert!(!ptr::eq(ty_42.inner(), ty_2.inner()));
-        assert!(ptr::eq(ty_42.inner(), ty_42_too.inner()));
+        assert!(!ptr::eq(ty_42.data(), ty_2.data()));
+        assert!(ptr::eq(ty_42.data(), ty_42_too.data()));
 
         let t1 = interner.intern(Type::Tuple(
             arena.alloc([ty_bot_1, ty_bot_2, ty_42, ty_2, ty_42_too]),
@@ -75,8 +75,8 @@ mod tests {
         let t3 = interner.intern(Type::Tuple(
             arena.alloc([ty_bot_1, ty_bot_2, ty_42, ty_2, ty_2]),
         ));
-        assert!(ptr::eq(t1.inner(), t2.inner()));
-        assert!(!ptr::eq(t1.inner(), t3.inner()));
+        assert!(ptr::eq(t1.data(), t2.data()));
+        assert!(!ptr::eq(t1.data(), t3.data()));
     }
 
     #[test]

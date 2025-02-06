@@ -40,7 +40,7 @@ fn test_zero() {
     assert!(matches!(&parser.nodes[parser.nodes.start], StartOp { .. }));
     for output in &parser.nodes.outputs[parser.nodes.start] {
         if let Op::Constant(c) = &parser.nodes[*output] {
-            if let Type::Int(value) = c.inner() {
+            if let Type::Int(value) = c.data() {
                 assert_eq!(Int::Constant(0), *value);
             }
         }

@@ -93,7 +93,7 @@ impl ScopeMin {
                 let name = sea.types.get_str(&Parser::mem_name(alias as u32));
                 let phi = Phi::new(
                     name,
-                    sea.types.mem_bot,
+                    *sea.types.mem_bot,
                     vec![loop_.ctrl(sea), loopmem._mem(alias, None, sea), None],
                     sea,
                 )
@@ -122,8 +122,8 @@ impl ScopeMin {
                 let rhs = that._mem(i, None, sea);
 
                 let name = sea.types.get_str(&Parser::mem_name(i as u32));
-                let phi =
-                    Phi::new(name, sea.types.mem_bot, vec![Some(**r), lhs, rhs], sea).peephole(sea);
+                let phi = Phi::new(name, *sea.types.mem_bot, vec![Some(**r), lhs, rhs], sea)
+                    .peephole(sea);
                 self.alias_st(i, Some(phi), sea);
             }
         }

@@ -44,6 +44,8 @@ pub struct Types<'a> {
     pub int_top: TyInt<'a>,
     pub int_bot: TyInt<'a>,
     pub int_zero: TyInt<'a>,
+    pub int_one: TyInt<'a>,
+    pub int_two: TyInt<'a>,
     pub int_u1: TyInt<'a>,
     pub int_bool: TyInt<'a>,
     pub int_false: TyInt<'a>,
@@ -116,6 +118,7 @@ impl<'a> Types<'a> {
         let xctrl = intern(Type::XCtrl);
 
         let int_zero = interner.get_int(0, 0);
+        let int_one = interner.get_int(1, 1);
         let int_u1 = interner.get_int(0, 1);
 
         let struct_top = interner.get_struct("$TOP", &[]);
@@ -129,10 +132,12 @@ impl<'a> Types<'a> {
             int_top: interner.get_int(i64::MAX, i64::MIN),
             int_bot: interner.get_int(i64::MIN, i64::MAX),
             int_zero,
+            int_one,
+            int_two: interner.get_int(2, 2),
             int_u1,
             int_bool: int_u1,
             int_false: int_zero,
-            int_true: interner.get_int(1, 1),
+            int_true: int_one,
             int_i8: interner.get_int(-128, 127),
             int_i16: interner.get_int(-32768, 32767),
             int_i32: interner.get_int(-1 << 31, (1 << 31) - 1),
@@ -160,11 +165,11 @@ impl<'a> Types<'a> {
         }
     }
 
-    pub fn make_int(&self, value: i64) -> TyInt<'a> {
+    pub fn get_int(&self, value: i64) -> TyInt<'a> {
         self.interner.get_int(value, value)
     }
 
-    pub fn make_float(&self, constant: f64) -> TyFloat<'a> {
+    pub fn get_float(&self, constant: f64) -> TyFloat<'a> {
         self.interner.get_float(0, constant)
     }
 
@@ -182,7 +187,7 @@ impl<'a> Types<'a> {
         self.interner.intern_str(name)
     }
 
-    pub fn get_struct(&self, name: &'a str, fields: &[(&'a str, Ty<'a>)]) -> TyStruct<'a> {
+    pub fn get_struct(&self, name: &'a str, fields: &[Field<'a>]) -> TyStruct<'a> {
         let fields = self.interner.arena.alloc_slice_copy(fields);
         self.interner
             .intern(Type::Struct(Struct::Struct { name, fields }))
@@ -191,14 +196,11 @@ impl<'a> Types<'a> {
     }
 
     pub fn get_mem_ptr(&self, to: TyStruct<'a>, nil: bool) -> TyMemPtr<'a> {
-        self.interner
-            .intern(Type::MemPtr(MemPtr { to, nil }))
-            .to_mem_ptr()
-            .unwrap()
+        self.interner.get_ptr(to, nil)
     }
 
-    pub fn get_mem(&self, alias: u32) -> Ty<'a> {
-        self.interner.intern(Type::Mem(Mem::Alias(alias)))
+    pub fn get_mem(&self, alias: u32, ty: Ty<'a>) -> TyMem<'a> {
+        self.interner.get_mem(alias, ty)
     }
 
     pub fn meet(&self, a: Ty<'a>, b: Ty<'a>) -> Ty<'a> {

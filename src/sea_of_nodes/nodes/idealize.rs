@@ -53,7 +53,7 @@ impl Add {
 
         // Add of same to a multiply by 2
         if lhs == rhs {
-            let two = Constant::new(sea.types.int_two, sea).peephole(sea);
+            let two = Constant::new(*sea.types.int_two, sea).peephole(sea);
             return Some(*Mul::new(lhs, two, sea));
         }
 
@@ -178,7 +178,7 @@ impl Mul {
         let left_ty = left.ty(sea)?;
         let right_ty = right.ty(sea)?;
 
-        if matches!(&*right_ty, Type::Int(Int::Constant(1))) {
+        if right_ty == *sea.types.int_one {
             Some(left)
         } else if left_ty.is_constant() && !right_ty.is_constant() {
             self.swap_12(sea);
@@ -201,7 +201,7 @@ impl Bool {
             } else {
                 sea.types.int_zero
             };
-            return Some(*Constant::new(value, sea));
+            return Some(*Constant::new(*value, sea));
         }
 
         // Equals pushes constant to the right; 5==X becomes X==5.
@@ -479,7 +479,7 @@ impl If {
                             } else {
                                 sea.types.int_zero
                             };
-                            let new_constant = Constant::new(value, sea).peephole(sea);
+                            let new_constant = Constant::new(*value, sea).peephole(sea);
                             self.set_def(1, new_constant, sea);
                             return Some(**self);
                         }

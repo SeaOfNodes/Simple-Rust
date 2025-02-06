@@ -111,7 +111,7 @@ fn test_lattice_theory() {
 
 fn assert_same<'t>(a: Ty<'t>, b: Ty<'t>) {
     assert_eq!(a, b);
-    assert!(ptr::eq(a.inner(), b.inner()));
+    assert!(ptr::eq(a.data(), b.data()));
 }
 
 impl<'t> Types<'t> {

@@ -209,7 +209,7 @@ impl<'a, 't> Evaluator<'a, 't> {
     }
 
     fn cons(&self, cons: Constant) -> Object {
-        match self.sea[cons].inner() {
+        match self.sea[cons].data() {
             Type::Int(Int::Constant(i)) => Object::Long(*i),
             Type::MemPtr(_) => Object::Null,
             _ => unreachable!(),
