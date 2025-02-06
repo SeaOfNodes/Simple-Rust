@@ -4,7 +4,7 @@ use crate::sea_of_nodes::nodes::node::{Constant, Div, Load, New, Start, Store, T
 use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes};
 use crate::sea_of_nodes::tests::scheduler;
 use crate::sea_of_nodes::tests::scheduler::{Block, BlockId};
-use crate::sea_of_nodes::types::{Int, TyStruct, Type};
+use crate::sea_of_nodes::types::{TyStruct, Type};
 use std::fmt::{Display, Formatter};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -58,10 +58,11 @@ impl<'a, 't> Display for PrintableObject<'a, 't> {
             Object::Obj(obj) => {
                 let obj = &self.heap.objs[obj];
                 writeln!(f, "Obj<{}> {{", obj.ty.name())?;
-                for ((name, _ty), &val) in obj.ty.fields().iter().zip(&obj.fields) {
+                for (field, &val) in obj.ty.fields().iter().zip(&obj.fields) {
                     writeln!(
                         f,
-                        "  {name}={}",
+                        "  {}={}",
+                        field.fname,
                         Self {
                             object: val,
                             ..*self
@@ -77,7 +78,7 @@ impl<'a, 't> Display for PrintableObject<'a, 't> {
 fn get_field_index(s: TyStruct, name: &str) -> usize {
     s.fields()
         .iter()
-        .position(|f| f.0 == name)
+        .position(|f| f.fname == name)
         .unwrap_or_else(|| unreachable!("Field {name} not found in struct {}", s.name()))
 }
 
@@ -210,7 +211,8 @@ impl<'a, 't> Evaluator<'a, 't> {
 
     fn cons(&self, cons: Constant) -> Object {
         match self.sea[cons].data() {
-            Type::Int(Int::Constant(i)) => Object::Long(*i),
+            Type::Int(i) => Object::Long(i.min),
+            Type::Float(f) => Object::Double(f.con()),
             Type::MemPtr(_) => Object::Null,
             _ => unreachable!(),
         }

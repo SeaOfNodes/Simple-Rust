@@ -90,6 +90,9 @@ macro_rules! impl_subtype {
             }
         }
 
+        impl<'t> From<$Subtype<'t>> for Ty<'t> {
+            fn from(t: $Subtype<'t>) -> Self { t.0 }
+        }
         impl<'t> Deref for $Subtype<'t> {
             type Target = Ty<'t>;
             fn deref(&self) -> &Self::Target {

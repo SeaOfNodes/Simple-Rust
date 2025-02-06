@@ -333,23 +333,23 @@ impl<'t> Interner<'t> {
 
 #[cfg(test)]
 mod tests {
+    use super::Interner;
     use crate::datastructures::arena::DroplessArena;
-    use crate::sea_of_nodes::types::interner::Interner;
     use crate::sea_of_nodes::types::{Int, Type};
     use std::ptr;
 
     #[test]
     fn test_interner() {
         let arena = DroplessArena::new();
-        let interner = crate::sea_of_nodes::types::interner::Interner::new(&arena);
+        let interner = Interner::new(&arena);
 
         let ty_bot_1 = interner.intern(Type::Bot);
         let ty_bot_2 = interner.intern(Type::Bot);
         assert!(ptr::eq(ty_bot_1.data(), ty_bot_2.data()));
 
-        let ty_42 = interner.intern(Type::Int(Int::Constant(42)));
-        let ty_2 = interner.intern(Type::Int(Int::Constant(2)));
-        let ty_42_too = interner.intern(Type::Int(Int::Constant(42)));
+        let ty_42 = interner.intern(Type::Int(Int { min: 42, max: 42 }));
+        let ty_2 = interner.intern(Type::Int(Int { min: 2, max: 2 }));
+        let ty_42_too = interner.intern(Type::Int(Int { min: 42, max: 42 }));
 
         assert!(!ptr::eq(ty_42.data(), ty_2.data()));
         assert!(ptr::eq(ty_42.data(), ty_42_too.data()));
@@ -370,7 +370,7 @@ mod tests {
     #[test]
     fn test_strings() {
         let arena = DroplessArena::new();
-        let interner = crate::sea_of_nodes::types::interner::Interner::new(&arena);
+        let interner = Interner::new(&arena);
         let a = interner.intern_str("foo");
         let b = interner.intern_str("bar");
         let aa = interner.intern_str("foo");

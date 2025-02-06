@@ -83,13 +83,13 @@ impl<'s, 't> Parser<'s, 't> {
         Self::new_with_arg(source, types, *types.int_bot)
     }
 
-    pub fn new_with_arg(source: &'s str, types: &'t Types<'t>, arg: Ty<'t>) -> Self {
+    pub fn new_with_arg(source: &'s str, types: &'t Types<'t>, arg: impl Into<Ty<'t>>) -> Self {
         let mut nodes = Nodes::new(types);
 
         let scope = Scope::new(&mut nodes);
         nodes.ty[scope] = Some(types.bot); // in java this is done by the constructor
 
-        nodes.start = Start::new(&[types.ctrl, *types.mem_top, arg], &mut nodes);
+        nodes.start = Start::new(&[types.ctrl, *types.mem_top, arg.into()], &mut nodes);
 
         let stop = Stop::new(&mut nodes);
 
