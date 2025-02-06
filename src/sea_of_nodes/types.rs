@@ -133,8 +133,8 @@ impl<'a> Types<'a> {
         let int_one = interner.get_int(1, 1);
         let int_u1 = interner.get_int(0, 1);
 
-        let struct_top = interner.get_struct("$TOP", &[]);
-        let struct_bot = interner.get_struct("$BOT", &[]);
+        let struct_top = interner.get_struct("$TOP", Some(&[]));
+        let struct_bot = interner.get_struct("$BOT", Some(&[]));
 
         Self {
             bot,
@@ -279,7 +279,7 @@ impl<'a> Types<'a> {
 
     pub fn make_init(&self, t: Ty<'a>) -> Option<Ty<'a>> {
         match *t {
-            Type::Int(_) => Some(self.int_zero),
+            Type::Int(_) => Some(*self.int_zero),
             Type::MemPtr(_) => Some(*self.ptr_null),
             _ => None,
         }

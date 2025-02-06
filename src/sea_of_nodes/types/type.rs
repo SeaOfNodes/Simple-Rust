@@ -22,37 +22,67 @@ pub enum Type<'a> {
 impl<'t> Type<'t> {
     pub fn unwrap_int(&'t self) -> i64 {
         match self {
-            Type::Int(Int::Constant(value)) => *value,
+            Type::Int(i) if i.min == i.max => i.min,
             _ => unreachable!(),
         }
     }
 
-    // This is used by error messages, and is a shorted print.
+    /// This is used by error messages, and is a shorted print.
     pub fn str(&self) -> Cow<str> {
         use Cow::*;
-        match self {
-            Type::Bot => Borrowed("Bot"),
-            Type::Top => Borrowed("Top"),
-            Type::Ctrl => Borrowed("Ctrl"),
-            Type::XCtrl => Borrowed("~Ctrl"),
-            Type::Int(i) => match i {
-                Int::Bot => Borrowed("int"),
-                Int::Top => Borrowed("~int"),
-                Int::Constant(c) => Owned(c.to_string()),
+        Borrowed(match self {
+            Type::Bot => "Bot",
+            Type::Top => "Top",
+            Type::Ctrl => "Ctrl",
+            Type::XCtrl => "~Ctrl",
+            Type::Float(f) => match (f.sz, f.con()) {
+                (-64, 0.0) => "~flt",
+                (-32, 0.0) => "~f32",
+                (32, 0.0) => "f32",
+                (64, 0.0) => "flt",
+                _ => return Owned(format!("{}{}", f.con(), if f.is_f32() { "f" } else { "" })),
             },
-            Type::Tuple { .. } => Owned(self.to_string()),
-            Type::Struct(s) => Borrowed(s.name()),
+            Type::Int(i) => match (i.min, i.max) {
+                (i64::MAX, i64::MIN) => "~int",
+                (i64::MIN, i64::MAX) => "int",
+                (0, 1) => "bool",
+                (-128, 127) => "i8",
+                (-32768, 32767) => "i16",
+                (-2147483648, 2147483647) => "i32",
+                (0, 255) => "u8",
+                (0, 65535) => "u16",
+                (0, 4294967295) => "u32",
+                (min, max) => {
+                    return Owned(if min == max {
+                        format!("{}", min)
+                    } else {
+                        format!("[{}-{}]", min, max)
+                    })
+                }
+            },
+            Type::Tuple(ts) => {
+                let mut sb = "[  ".to_string();
+                for t in *ts {
+                    sb.push_str(t.str().as_ref());
+                    sb.push_str(", ");
+                }
+                sb.pop();
+                sb.pop();
+                sb.push(']');
+                return Owned(sb);
+            }
+            Type::Struct(s) => s.name,
             Type::MemPtr(p) => {
-                if *p.to.data() == Struct::Top && p.nil {
-                    Borrowed("null")
-                } else if *p.to.data() == Struct::Bot && !p.nil {
-                    Borrowed("*void")
+                if p.nil && p.to.name() == "$TOP" && p.to.data().fields == Some(&[]) {
+                    "null"
+                } else if !p.nil && p.to.name() == "$BOT" && p.to.data().fields == Some(&[]) {
+                    "*void"
                 } else {
-                    Owned(format!("*{}{}", p.to.str(), if p.nil { "?" } else { "" }))
+                    return Owned(format!("*{}{}", p.to.str(), if p.nil { "?" } else { "" }));
                 }
             }
-            Type::Mem(_) => Owned(self.to_string()),
-        }
+            Type::Mem(_) => return Owned(self.to_string()),
+        })
     }
 }
 
@@ -63,41 +93,54 @@ impl<'t> Display for Type<'t> {
             Type::Top => "Top",
             Type::Ctrl => "Ctrl",
             Type::XCtrl => "~Ctrl",
-            Type::Int(Int::Bot) => "IntBot",
-            Type::Int(Int::Top) => "IntTop",
-            Type::Int(Int::Constant(c)) => return write!(f, "{c}"),
+            Type::Float(float) => match (float.sz, float.con()) {
+                (-64, 0.0) => "FltTop",
+                (-32, 0.0) => "F32Top",
+                (32, 0.0) => "F32Bot",
+                (64, 0.0) => "FltBot",
+                (_, c) => return write!(f, "{}", c),
+            },
+            Type::Int(_) => return f.write_str(self.str().as_ref()),
             Type::Tuple(types) => {
                 write!(f, "[")?;
                 for (i, ty) in types.iter().enumerate() {
                     if i > 0 {
-                        write!(f, ",")?;
+                        write!(f, ", {ty}")?;
+                    } else {
+                        write!(f, "  {ty}")?;
                     }
-                    write!(f, "{ty}")?;
                 }
                 return write!(f, "]");
             }
-            Type::Struct(s) => match s {
-                Struct::Bot => "$BOT",
-                Struct::Top => "$TOP",
-                Struct::Struct { name, fields } => {
-                    writeln!(f, "{name} {{")?;
-                    for (name, ty) in fields.iter() {
-                        writeln!(f, "  {name}:{ty};")?;
+            Type::Struct(s) => {
+                write!(f, "{}", s.name)?;
+                // Forward reference struct, just print the name
+                if let Some(fs) = s.fields {
+                    write!(f, " {{")?;
+                    for field in fs {
+                        write!(f, " {} ", field.ty)?;
+                        if field.final_field {
+                            write!(f, "!")?;
+                        }
+                        write!(f, "{}; ", field.fname)?;
                     }
-                    return write!(f, "}}");
+                    write!(f, "}}")?;
                 }
-            },
-            Type::MemPtr(p) => match *p {
-                MemPtr { to, nil: true } if *to.data() == Struct::Top => "null",
-                MemPtr { to, nil: false } if *to.data() == Struct::Bot => "*void",
-                MemPtr { to, nil } => {
-                    return write!(f, "*{to}{}", if nil { "?" } else { "" });
+                return Ok(());
+            }
+            Type::MemPtr(p) => {
+                if p.nil && p.to.name() == "$TOP" && p.to.data().fields == Some(&[]) {
+                    "null"
+                } else if !p.nil && p.to.name() == "$BOT" && p.to.data().fields == Some(&[]) {
+                    "*void"
+                } else {
+                    return write!(f, "*{}{}", p.to, if p.nil { "?" } else { "" });
                 }
-            },
-            Type::Mem(m) => match m {
-                Mem::Bot => "MEM#BOT",
-                Mem::Top => "MEMTOP",
-                Mem::Alias(a) => return write!(f, "MEM#{a}"),
+            }
+            Type::Mem(m) => match m.alias {
+                0 => "MEM#TOP",
+                u32::MAX => "MEM#BOT",
+                _ => return write!(f, "MEM#{}:{}", m.alias, m.t),
             },
         })
     }
@@ -218,7 +261,7 @@ impl<'t> Ty<'t> {
             Type::Tuple(types) => {
                 tys.get_tuple_from_slice(&types.iter().map(|t| t.dual(tys)).collect::<Vec<_>>())
             }
-            Type::Struct(s) => *self.as_struct().dual(tys),
+            Type::Struct(_) => *self.as_struct().dual(tys),
             Type::MemPtr(p) => *tys.get_mem_ptr(p.to.dual(tys), !p.nil),
             Type::Mem(m) => *tys.get_mem(m.alias, m.t.dual(tys)),
         }
@@ -265,7 +308,7 @@ impl<'t> Ty<'t> {
             Type::XCtrl => tys.top, // why?
             Type::Int(_) => *tys.int_top,
             Type::Float(_) => *tys.float_top,
-            Type::Tuple(types) => tys.top, // why?
+            Type::Tuple(_) => tys.top, // why?
             Type::Struct(_) => *self.as_struct().lub(tys),
             Type::MemPtr(MemPtr { to, .. }) => *tys.get_mem_ptr(to.lub(tys), false),
             Type::Mem(m) => *tys.get_mem(m.alias, m.t.lub(tys)),

@@ -19,6 +19,11 @@ impl Float {
     pub fn con(&self) -> f64 {
         f64::from_bits(self.con)
     }
+
+    pub fn is_f32(&self) -> bool {
+        let v = self.con();
+        v as f32 as f64 == v
+    }
 }
 
 impl<'t> TyFloat<'t> {
@@ -26,8 +31,7 @@ impl<'t> TyFloat<'t> {
         self.data().sz
     }
     pub fn is_f32(&self) -> bool {
-        let v = self.data().con();
-        v as f32 as f64 == v
+        self.data().is_f32()
     }
 
     pub fn meet(self, that: TyFloat<'t>, tys: &Types<'t>) -> TyFloat<'t> {

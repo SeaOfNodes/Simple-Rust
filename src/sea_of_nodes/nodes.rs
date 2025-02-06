@@ -436,7 +436,7 @@ impl Node {
     fn copy_f(self, sea: &mut Nodes) -> Option<Node> {
         let op = match &sea[self] {
             Op::Add => Op::AddF,
-            Op::Bool(b) => todo!(),
+            Op::Bool(_) => todo!(),
             Op::Div => Op::DivF,
             Op::Minus => return Some(sea.create((Op::MinusF, vec![None, None]))),
             Op::Mul => Op::MulF,
