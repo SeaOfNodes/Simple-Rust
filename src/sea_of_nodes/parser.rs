@@ -1296,7 +1296,7 @@ impl<'s, 't> Parser<'s, 't> {
                 return Err(format!("'{}' is not fully initialized, field '{fname}' needs to be set in a constructor", tmp.data().to.name()));
             }
         }
-        let size = self.int_con(tmp.data().to.offset(fs.len()));
+        let size = self.int_con(tmp.data().to.offset(fs.len(), self.types));
         self.altmp.clear();
         self.altmp.copy_from_slice(&init.inputs(&self.nodes)[idx..]);
         let ptr = self.new_struct(tmp.data().to, *size);
@@ -1337,8 +1337,8 @@ impl<'s, 't> Parser<'s, 't> {
     }
 
     fn new_array(&mut self, ary: TyStruct<'t>, len: Node) -> Node {
-        let base = ary.ary_base();
-        let scale = ary.ary_scale();
+        let base = ary.ary_base(self.types);
+        let scale = ary.ary_scale(self.types);
 
         let con_base = self.int_con(base);
         let con_scale = self.int_con(scale);
@@ -1443,20 +1443,21 @@ impl<'s, 't> Parser<'s, 't> {
         let off = if name == "[]" {
             // If field is an array body
             // Array index math
-            let b = self.int_con(base.ary_base());
+            let b = self.int_con(base.ary_base(self.types));
 
             let index = self.parse_asgn()?;
             self.require("]")?;
             let offset = Shl::new(
                 index,
-                Some(*self.int_con(base.ary_scale())),
+                Some(*self.int_con(base.ary_scale(self.types))),
                 &mut self.nodes,
             );
 
             Add::new(*b, offset.peep(self), &mut self.nodes).peep(self)
         } else {
             // Struct field offsets are hardwired
-            self.int_con(base.offset(fidx)).keep(&mut self.nodes)
+            self.int_con(base.offset(fidx, self.types))
+                .keep(&mut self.nodes)
         };
 
         // Disambiguate "obj.fld==x" boolean test from "obj.fld=x" field assignment

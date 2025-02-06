@@ -28,16 +28,54 @@ impl<'t> TyStruct<'t> {
         self.fields().len() == 2 && self.fields()[1].fname == "[]"
     }
 
-    pub fn ary_base(self) -> i64 {
-        todo!()
+    pub fn ary_base(self, tys: &Types<'t>) -> i64 {
+        debug_assert!(self.is_ary());
+        self.offset(1, tys)
     }
 
-    pub fn ary_scale(self) -> i64 {
-        todo!()
+    pub fn ary_scale(self, tys: &Types<'t>) -> i64 {
+        debug_assert!(self.is_ary());
+        self.fields()[1].ty.log_size(tys) as i64
     }
 
-    pub fn offset(self, _index: usize) -> i64 {
-        todo!()
+    pub fn offset(self, index: usize, tys: &Types<'t>) -> i64 {
+        tys.struct_offsets
+            .borrow_mut()
+            .entry(self)
+            .or_insert_with(|| tys.get_slice(&self.offsets(tys)))[index] as i64
+    }
+
+    /// Field byte offsets
+    fn offsets(self, tys: &Types<'t>) -> Vec<usize> {
+        // Compute a layout for a collection of fields
+        let fields = self.fields(); // No forward refs
+
+        // Compute a layout
+        let mut cnts = [0, 0, 0, 0]; // Count of fields at log field size
+        for f in fields {
+            cnts[f.ty.log_size(tys)] += 1; // Log size is 0(byte), 1(i16/u16), 2(i32/f32), 3(i64/dbl)
+        }
+
+        // Base common struct fields go here, e.g. Mark/Klass
+        let mut off = 0;
+
+        // Compute offsets to the start of each power-of-2 aligned fields.
+        let mut offs = [0, 0, 0, 0];
+        for i in (0..4).rev() {
+            offs[i] = off;
+            off += cnts[i] << i;
+        }
+        // Assign offsets to all fields.
+        // Really a hidden radix sort.
+        let mut result = Vec::with_capacity(fields.len() + 1);
+        for f in fields {
+            let log = f.ty.log_size(tys);
+            result.push(offs[log]); // Field offset
+            offs[log] += 1 << log; // Next field offset at same alignment
+            cnts[log] -= 1; // Count down, should be all zero at end
+        }
+        result.push((off + 7) & !7); // Round out to max alignment
+        result
     }
 
     pub fn meet(self, that: TyStruct<'t>, tys: &Types<'t>) -> TyStruct<'t> {

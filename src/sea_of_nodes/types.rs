@@ -48,6 +48,7 @@ mod type_tuple;
 /// successfully compile and run.
 pub struct Types<'a> {
     interner: Interner<'a>,
+    struct_offsets: RefCell<HashMap<TyStruct<'a>, &'a [usize]>>,
 
     pub bot: Ty<'a>,
     pub top: Ty<'a>,
@@ -137,6 +138,7 @@ impl<'a> Types<'a> {
         let struct_bot = interner.get_struct("$BOT", Some(&[]));
 
         Self {
+            struct_offsets: RefCell::new(HashMap::new()),
             bot,
             top,
             ctrl,
@@ -205,6 +207,10 @@ impl<'a> Types<'a> {
 
     pub fn get_str(&self, name: &str) -> &'a str {
         self.interner.intern_str(name)
+    }
+
+    pub fn get_slice<T: Copy>(&self, slice: &[T]) -> &'a [T] {
+        self.interner.arena.alloc_slice_copy(slice)
     }
 
     pub fn get_struct(&self, name: &'a str, fields: &[Field<'a>]) -> TyStruct<'a> {
