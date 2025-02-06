@@ -36,11 +36,6 @@ pub struct Parser<'s, 't> {
     /// Merge all the while-breaks here
     break_scope: Option<Scope>,
 
-    /// Mapping from a type name to a Type.  The string name matches
-    /// `type.str()` call.  No TypeMemPtrs are in here, because Simple does not
-    /// have C-style '*ptr' references.
-    name_to_type: HashMap<&'t str, Ty<'t>>,
-
     /// Mapping from a type name to the constructor for a Type.
     inits: HashMap<&'t str, Struct>,
 
@@ -122,7 +117,6 @@ impl<'s, 't> Parser<'s, 't> {
             continue_scope: None,
             break_scope: None,
             alias: 2, // alias 0 for the control, 1 for memory
-            name_to_type: Self::default_types(types),
             inits: HashMap::new(),
             altmp: vec![],
             disable_show_graph_println: false,
@@ -154,7 +148,13 @@ impl<'s, 't> Parser<'s, 't> {
         self.nodes.inputs[self.scope][0].expect("has ctrl")
     }
 
+    fn get_type(&self, name: &str) -> Option<Ty<'t>> {
+        self.nodes.name_to_type.get(name).cloned()
+    }
+
     pub fn parse(&mut self) -> PResult<Stop> {
+        self.nodes.name_to_type = Self::default_types(self.types);
+
         self.x_scopes.push(self.scope);
 
         // Enter a new scope for the initial control and arguments
@@ -710,7 +710,7 @@ impl<'s, 't> Parser<'s, 't> {
         }
 
         // Lift expression, based on type
-        let var_t = self.nodes[self.scope].vars[def].ty(&self.name_to_type, &self.types);
+        let var_t = self.scope.var_ty(def, &mut self.nodes);
         let lift = self.lift_expr(expr, var_t, self.nodes[self.scope].vars[def].final_field)?;
         // Update
         self.scope.update(name, lift, &mut self.nodes);
@@ -827,7 +827,7 @@ impl<'s, 't> Parser<'s, 't> {
             return Err(self.error_syntax("struct declarations can only appear in top level scope"));
         }
         let type_name = self.types.get_str(self.require_id()?);
-        let t = self.name_to_type.get(type_name);
+        let t = self.get_type(type_name);
         if t.is_some_and(|t| !t.to_mem_ptr().is_some_and(|tmp| tmp.is_fref())) {
             return Err(self.error_syntax(&format!("struct '{type_name}' cannot be redefined")));
         }
@@ -847,17 +847,19 @@ impl<'s, 't> Parser<'s, 't> {
         let mut fs = Vec::with_capacity(varlen - lexlen);
         for i in lexlen..varlen {
             s.add_def(self.scope.inputs(&self.nodes)[i], &mut self.nodes);
-            let v = &mut self.nodes[self.scope].vars[i];
+            let ty = self.scope.var_ty(i, &mut self.nodes);
+            let v = &self.nodes[self.scope].vars[i];
             fs.push(Field {
                 fname: v.name,
-                ty: v.ty(&self.name_to_type, self.types),
+                ty,
                 alias: self.alias,
                 final_field: v.final_field,
             });
             self.alias += 1;
         }
         let ts = self.types.get_struct(type_name, &fs);
-        self.name_to_type
+        self.nodes
+            .name_to_type
             .insert(type_name, *self.types.get_mem_ptr(ts, false));
         self.inits.insert(
             type_name,
@@ -890,7 +892,7 @@ impl<'s, 't> Parser<'s, 't> {
         let tname = self.types.get_str(tname);
 
         // Convert the type name to a type.
-        let t0 = self.name_to_type.get(tname).copied();
+        let t0 = self.get_type(tname);
         // No new types as keywords
         if t0.is_none() && is_keyword(tname) {
             self.set_pos(old1);
@@ -937,7 +939,7 @@ impl<'s, 't> Parser<'s, 't> {
             return Ok(None);
         }
         // Yes a forward ref, so declare it
-        self.name_to_type.insert(tname, t1);
+        self.nodes.name_to_type.insert(tname, t1);
         Ok(Some(t2))
     }
 
@@ -947,7 +949,7 @@ impl<'s, 't> Parser<'s, 't> {
             return Err("Arrays of reference types must always be nullable".to_string());
         };
         let tname = self.types.get_str(&format!("[{}]", t.str()));
-        if let Some(ta) = self.name_to_type.get(tname) {
+        if let Some(ta) = self.get_type(tname) {
             return Ok(ta.to_mem_ptr().unwrap());
         }
         // Need make an array type.
@@ -957,7 +959,7 @@ impl<'s, 't> Parser<'s, 't> {
         self.alias += 2;
         debug_assert_eq!(ts.str(), tname);
         let tary = self.types.get_mem_ptr(ts, false);
-        self.name_to_type.insert(tname, *tary);
+        self.nodes.name_to_type.insert(tname, *tary);
         Ok(tary)
     }
 
@@ -1113,11 +1115,11 @@ impl<'s, 't> Parser<'s, 't> {
             let delta = if dec { -1 } else { 1 }; // Pre vs post
             if let Some(name) = self.lexer.match_id() {
                 if let Ok(n) = self.scope.lookup(name, &mut self.nodes) {
-                    let v = &mut self.nodes[self.scope].vars[n];
+                    let v = &self.nodes[self.scope].vars[n];
                     if v.final_field {
                         return Err(format!("Cannot reassign final '{}'", v.name));
                     }
-                    let t = v.ty(&self.name_to_type, self.types);
+                    let t = self.scope.var_ty(n, &mut self.nodes);
                     let add = Add::new(
                         self.scope.inputs(&self.nodes)[n].unwrap(),
                         self.int_con(delta).to_node(),
@@ -1208,7 +1210,7 @@ impl<'s, 't> Parser<'s, 't> {
             } else {
                 rvalue.keep(&mut self.nodes); // Keep post-value across peeps
             }
-            let n_ty = self.nodes[self.scope].vars[n].ty(&self.name_to_type, self.types);
+            let n_ty = self.scope.var_ty(n, &mut self.nodes);
             let op = op.peep(self);
             let op = self.zs_mask(op, n_ty)?;
             self.scope.update_var_index(n, Some(op), &mut self.nodes);
@@ -1407,7 +1409,7 @@ impl<'s, 't> Parser<'s, 't> {
         }
 
         // Sanity check field name for existing
-        let Some(tmp) = self.name_to_type.get(ptr.data().to.name()) else {
+        let Some(tmp) = self.get_type(ptr.data().to.name()) else {
             return Err(format!("Accessing unknown field '{name}' from '{ptr}'"));
         };
         let tmp = tmp.to_mem_ptr().unwrap();
@@ -1426,8 +1428,7 @@ impl<'s, 't> Parser<'s, 't> {
         if let Some(ftmp) = tf.to_mem_ptr() {
             if ftmp.is_fref() {
                 tf = *self.types.get_mem_ptr(
-                    self.name_to_type
-                        .get(ftmp.data().to.name())
+                    self.get_type(ftmp.data().to.name())
                         .unwrap()
                         .to_mem_ptr()
                         .unwrap()

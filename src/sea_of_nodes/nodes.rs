@@ -105,6 +105,14 @@ pub struct Nodes<'t> {
 
     /// True if debug printer can use schedule info
     pub scheduled: bool,
+
+    /// Mapping from a type name to a Type.  The string name matches
+    /// `type.str()` call.  No TypeMemPtrs are in here, because Simple does not
+    /// have C-style '*ptr' references.
+    ///
+    /// differs from java: this doesn't live in the parser, because function
+    /// in scope.rs had to access it to resolve types
+    pub name_to_type: HashMap<&'t str, Ty<'t>>,
 }
 
 pub type NodeCreation<'t> = (Op<'t>, Vec<Option<Node>>);
@@ -133,6 +141,7 @@ impl<'t> Nodes<'t> {
             gvn: HashMap::new(),
             hash: IdVec::new(vec![None]),
             scheduled: false,
+            name_to_type: HashMap::new(),
         }
     }
     pub fn len(&self) -> usize {

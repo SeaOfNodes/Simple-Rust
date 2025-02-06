@@ -1,8 +1,7 @@
 use crate::sea_of_nodes::nodes::node::{Cast, Not, Phi, Region, Scope, ScopeMin};
 use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
 use crate::sea_of_nodes::parser::Parser;
-use crate::sea_of_nodes::types::{Ty, Types};
-use std::collections::HashMap;
+use crate::sea_of_nodes::types::Ty;
 use std::fmt;
 //
 // ScopeMinNode:
@@ -20,25 +19,25 @@ struct Var<'t> {
     pub final_field: bool,
 }
 
-impl<'t> Var<'t> {
-    pub(crate) fn ty(
-        &mut self,
-        name_to_type: &HashMap<&'t str, Ty<'t>>,
-        types: &Types<'t>,
-    ) -> Ty<'t> {
-        if self.ty.is_fref() {
+impl Scope {
+    pub(crate) fn var_ty<'t>(self, idx: usize, sea: &mut Nodes<'t>) -> Ty<'t> {
+        let t = sea[self].vars[idx].ty;
+        if t.is_fref() {
             // Update self to no longer use the forward ref type
-            let def = *name_to_type
-                .get(self.ty.to_mem_ptr().unwrap().data().to.name())
+            let def = *sea
+                .name_to_type
+                .get(t.to_mem_ptr().unwrap().data().to.name())
                 .unwrap();
-            self.ty = types.meet(self.ty, def);
+            sea[self].vars[idx].ty = t.meet(def, sea.types);
         }
-        self.ty
+        sea[self].vars[idx].ty
     }
 
-    fn lazy_glb(&mut self, name_to_type: &HashMap<&'t str, Ty<'t>>, types: &Types<'t>) -> Ty<'t> {
-        let t = self.ty(name_to_type, types);
-        t.to_mem_ptr().map(|m| *m).unwrap_or_else(|| types.glb(t))
+    fn var_lazy_glb<'t>(self, var_idx: usize, sea: &mut Nodes<'t>) -> Ty<'t> {
+        let t = self.var_ty(var_idx, sea);
+        t.to_mem_ptr()
+            .map(|m| *m)
+            .unwrap_or_else(|| sea.types.glb(t))
     }
 }
 
@@ -303,8 +302,8 @@ impl Scope {
                 // Set real Phi in the loop head
                 // The phi takes its one input (no backedge yet) from a recursive
                 // lookup, which might have insert a Phi in every loop nest.
-                let name = &sea[self].vars[var_index].name;
-                let lglb = sea[self].vars[var_index].lazy_glb();
+                let name = sea[self].vars[var_index].name;
+                let lglb = self.var_lazy_glb(var_index, sea);
                 loop_.update_var_index(var_index, None, sea);
                 let inputs = vec![loop_.ctrl(sea), loop_.inputs(sea)[var_index], None];
                 let phi = Phi::new(name, lglb, inputs, sea).peephole(sea);
@@ -418,7 +417,7 @@ impl Scope {
                 let rhs = that.inputs(sea)[i];
 
                 let name = sea[self].vars[i].name;
-                let ty = sea[self].vars[i].ty();
+                let ty = self.var_ty(i, sea);
                 self.set_def(
                     i,
                     Phi::new(name, ty, vec![Some(r.to_node()), lhs, rhs], sea).peephole(sea),
@@ -438,7 +437,7 @@ impl Scope {
 
         self.mem(sea)
             ._end_loop_mem(self, back.mem(sea), exit.mem(sea), sea);
-        self._end_loop(self, back, exit, sea);
+        self._end_loop(back, exit, sea);
         back.kill(sea); // Loop backedge is dead
 
         // Now one-time do a useless-phi removal
@@ -491,7 +490,7 @@ impl Scope {
 
         // This is a zero/null test.
         // Compute the positive test type.
-        let tnz = pred.ty(sea).unwrap().non_zero();
+        let tnz = pred.ty(sea).unwrap().non_zero(sea.types);
         let tcast = sea.types.join(tnz, pred.ty(sea).unwrap());
         if tcast != pred.ty(sea).unwrap() {
             let cast = Cast::new(tnz, ctrl, pred.keep(sea), sea)
@@ -505,7 +504,7 @@ impl Scope {
         // Compute the negative test type.
         if let Some(not) = pred.to_not(sea) {
             let npred = not.inputs(sea)[1].unwrap();
-            let tzero = npred.ty(sea).unwrap().make_zero();
+            let tzero = npred.ty(sea).unwrap().make_zero(sea.types);
             let tzcast = sea.types.join(tzero, npred.ty(sea).unwrap());
             if tzcast != npred.ty(sea).unwrap() {
                 let cast = Cast::new(tzero, ctrl, npred.keep(sea), sea)
