@@ -6,8 +6,7 @@ use crate::datastructures::id_vec::IdVec;
 use crate::sea_of_nodes::nodes::cfg::CfgData;
 use crate::sea_of_nodes::nodes::gvn::GvnEntry;
 use crate::sea_of_nodes::nodes::node::{CProj, ToFloat};
-use crate::sea_of_nodes::parser::Parser;
-use crate::sea_of_nodes::types::{Ty, TyStruct, Type, Types};
+use crate::sea_of_nodes::types::{Ty, Types};
 use iter_peeps::IterPeeps;
 pub use iter_peeps::WorkList;
 pub use node::{
@@ -525,41 +524,6 @@ impl<'t> Nodes<'t> {
     }
 
     pub fn instanceof_region(&self, node: Option<Node>) -> bool {
-        node.is_some_and(|n| matches!(&self[n], Op::Region { .. } | Op::Loop))
-    }
-}
-
-impl Start {
-    /// Creates a projection for each of the struct's fields, using the field alias
-    /// as the key.
-    pub fn add_mem_proj<'t>(self, ts: TyStruct<'t>, scope: Scope, sea: &mut Nodes<'t>) {
-        let Type::Tuple(types) = *sea[self].args else {
-            unreachable!()
-        };
-
-        let len = types.len();
-        sea[self].alias_starts.insert(ts.name(), len as u32);
-
-        // resize the tuple's type array to include all fields of the struct
-        let args = types
-            .iter()
-            .copied()
-            .chain(ts.fields().iter().enumerate().map(|(i, _)| {
-                // The new members of the tuple get a mem type with an alias
-                sea.types.get_mem((i + types.len()) as u32)
-            }))
-            .collect::<Vec<Ty>>();
-
-        let args_ty = sea.types.get_tuple_from_slice(&args);
-        sea.ops[self].args = args_ty;
-        sea.ty[self] = Some(args_ty);
-
-        // For each of the fields we now add a mem projection.  Note that the
-        // alias matches the slot of the field in the tuple
-        for (alias, &alias_ty) in args.iter().enumerate().skip(len) {
-            let name = sea.types.get_str(&Parser::mem_name(alias as u32));
-            let n = Proj::new(self, alias, name, sea).peephole(sea);
-            scope.define(name, alias_ty, n, sea).unwrap()
-        }
+        node.is_some_and(|n| n.is_region(self))
     }
 }

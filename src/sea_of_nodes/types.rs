@@ -1,8 +1,7 @@
 use crate::datastructures::arena::DroplessArena;
 pub use crate::sea_of_nodes::types::field::Field;
 pub use crate::sea_of_nodes::types::r#type::*;
-pub use crate::sea_of_nodes::types::ty::{Ty, TyMemPtr, TyStruct};
-use crate::sea_of_nodes::types::ty::{TyFloat, TyInt, TyMem, TyTuple};
+pub use crate::sea_of_nodes::types::ty::{Ty, TyFloat, TyInt, TyMem, TyMemPtr, TyStruct, TyTuple};
 pub use crate::sea_of_nodes::types::type_float::Float;
 pub use crate::sea_of_nodes::types::type_integer::Int;
 pub use crate::sea_of_nodes::types::type_mem::Mem;

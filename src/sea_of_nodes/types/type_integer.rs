@@ -15,9 +15,9 @@ impl<'t> TyInt<'t> {
         self.data().max
     }
 
-    pub fn value(self) -> i64 {
-        debug_assert_eq!(self.min(), self.max());
-        self.min()
+    pub fn value(self) -> Option<i64> {
+        let d = self.data();
+        (d.min == d.max).then_some(d.min)
     }
 
     pub fn mask(self) -> i64 {

@@ -1,7 +1,7 @@
 use crate::sea_of_nodes::nodes::node::IfOp;
 use crate::sea_of_nodes::nodes::node::{Constant, XCtrl};
 use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
-use crate::sea_of_nodes::types::{Int, Ty, Type};
+use crate::sea_of_nodes::types::{Ty, Type};
 
 impl<'t> Node {
     /// Try to peephole at this node and return a better replacement Node.
@@ -110,157 +110,224 @@ impl<'t> Node {
 
     pub(crate) fn compute(self, sea: &mut Nodes<'t>) -> Ty<'t> {
         let types = sea.types;
+        let in_ty = |i: usize| self.inputs(sea)[i].unwrap().ty(sea).unwrap();
+        let high = |t: Ty<'t>| t.is_high(types);
+
         match &sea[self] {
             Op::Constant(ty) => *ty,
             Op::XCtrl => types.xctrl,
             Op::Return => {
-                let ctrl = self.inputs(sea)[0]
-                    .and_then(|n| n.ty(sea))
-                    .unwrap_or(types.bot);
-                let expr = self.inputs(sea)[1]
-                    .and_then(|n| n.ty(sea))
-                    .unwrap_or(types.bot);
+                let ctrl = self.inputs(sea)[0].unwrap().ty(sea).unwrap();
+                let expr = self.inputs(sea)[1].unwrap().ty(sea).unwrap();
                 types.get_tuple_from_array([ctrl, expr])
             }
             Op::Start(s) => s.args,
-            Op::Add => self.compute_binary_int(i64::wrapping_add, sea),
+            Op::Add => {
+                let (t1, t2) = (in_ty(1), in_ty(2));
+                if high(t1) || high(t2) {
+                    return *types.int_top;
+                }
+                if let (Some(t1), Some(t2)) = (t1.to_int(), t2.to_int()) {
+                    if let (Some(c1), Some(c2)) = (t1.value(), t2.value()) {
+                        return *types.get_int(c1.wrapping_add(c2));
+                    }
+                    // Fold ranges like {0-1} + {2-3} into {2-4}.
+                    if let Some(min) = t1.min().checked_add(t2.min()) {
+                        if let Some(max) = t1.max().checked_add(t2.max()) {
+                            return *types.make_int(min, max);
+                        }
+                    }
+                }
+                *types.int_bot
+            }
             Op::Sub => {
+                let (t1, t2) = (in_ty(1), in_ty(2));
+                if high(t1) || high(t2) {
+                    return *types.int_top;
+                }
+                if let (Some(t1), Some(t2)) = (t1.to_int(), t2.to_int()) {
+                    if let (Some(c1), Some(c2)) = (t1.value(), t2.value()) {
+                        return *types.get_int(c1.wrapping_sub(c2));
+                    }
+                    // Fold ranges like {0-1} + {2-3} into {2-4}.
+                    if let Some(min) = t1.min().checked_sub(t2.max()) {
+                        if let Some(max) = t1.max().checked_sub(t2.min()) {
+                            return *types.make_int(min, max);
+                        }
+                    }
+                }
                 // Sub of same is 0
                 if self.inputs(sea)[1] == self.inputs(sea)[2] {
-                    sea.types.int_zero
+                    *sea.types.int_zero
                 } else {
-                    self.compute_binary_int(i64::wrapping_sub, sea)
+                    *types.int_bot
                 }
             }
-            Op::Mul => self.compute_binary_int(i64::wrapping_mul, sea),
+            Op::Mul => {
+                let (t1, t2) = (in_ty(1), in_ty(2));
+                if high(t1) || high(t2) {
+                    return *types.int_top;
+                }
+                if let (Some(t1), Some(t2)) = (t1.to_int(), t2.to_int()) {
+                    if t1 == types.int_zero || t2 == types.int_zero {
+                        return *types.int_zero;
+                    }
+                    if let (Some(c1), Some(c2)) = (t1.value(), t2.value()) {
+                        return *types.get_int(c1.wrapping_mul(c2));
+                    }
+                }
+                *types.int_bot
+            }
             Op::Div => {
-                self.compute_binary_int(|a, b| if b == 0 { 0 } else { a.wrapping_div(b) }, sea)
+                let (t1, t2) = (in_ty(1), in_ty(2));
+                if high(t1) || high(t2) {
+                    return *types.int_top;
+                }
+                if let (Some(t1), Some(t2)) = (t1.to_int(), t2.to_int()) {
+                    if let (Some(c1), Some(c2)) = (t1.value(), t2.value()) {
+                        return if c2 == 0 {
+                            *types.int_zero
+                        } else {
+                            *types.get_int(c1.wrapping_div(c2))
+                        };
+                    }
+                }
+                *types.int_bot
             }
             Op::Minus => {
-                let Some(input) = self.inputs(sea)[1].and_then(|n| n.ty(sea)) else {
-                    return types.bot;
-                };
-                match &*input {
-                    Type::Int(Int::Constant(v)) => types.get_int(v.wrapping_neg()),
-                    _ => types.meet(types.top, input),
+                let t = in_ty(1);
+                if let Some(t) = t.to_int() {
+                    return *if high(*t) {
+                        types.int_top
+                    } else if t == types.int_bot || t.min() == i64::MIN || t.max() == i64::MIN {
+                        types.int_bot
+                    } else {
+                        types.make_int(-t.max(), -t.min())
+                    };
+                }
+                types.int_top.meet(t, types)
+            }
+            Op::MinusF => {
+                *if let Some(t) = in_ty(1).to_float() {
+                    t.value().map(|v| types.get_float(-v)).unwrap_or(t)
+                } else {
+                    types.float_bot
                 }
             }
-            Op::Scope(_) | Op::ScopeMin => types.mem_bot,
-            Op::Bool(op) => self.compute_binary_int(|x, y| op.compute(x, y) as i64, sea),
+            Op::Scope(_) | Op::ScopeMin => *types.mem_bot,
+            Op::Bool(_) => {
+                let (t1, t2) = (in_ty(1), in_ty(2));
+                if high(t1) || high(t2) {
+                    return types.int_bool.dual(types);
+                }
+                if let (Some(t1), Some(t2)) = (t1.to_int(), t2.to_int()) {
+                    todo!("{t1}{t2}")
+                }
+                if let (Some(t1), Some(t2)) = (t1.to_float(), t2.to_float()) {
+                    todo!("{t1}{t2}")
+                }
+                *types.int_bool
+            }
             Op::Not => {
-                let t0 = self.inputs(sea)[1].unwrap().ty(sea).unwrap();
-                match &*t0 {
-                    Type::Int(i) => match i {
-                        Int::Constant(0) => types.int_one,
-                        Int::Constant(_) => types.int_zero,
-                        _ => t0,
+                let t = in_ty(1);
+                if high(t) {
+                    return types.int_bool.dual(types);
+                }
+                match &*t {
+                    Type::Int(i) => match (i.min, i.max) {
+                        _ if i.max < 0 || i.min > 0 => *types.int_false,
+                        (0, 0) => *types.int_true,
+                        _ => *types.int_bool,
                     },
+                    Type::Float(f) => {
+                        if f.sz == 0 {
+                            if f.con() == 0.0 {
+                                *types.int_true
+                            } else {
+                                *types.int_false
+                            }
+                        } else {
+                            t
+                        }
+                    }
                     Type::MemPtr(p) => {
                         // top->top, bot->bot, null->1, *void->0, not-null ptr->0, ptr/nil->bot
                         // If input in null then true
                         // If input is not null ptr then false
-                        if t0 == *types.ptr_top {
-                            types.int_top
-                        } else if t0 == *types.ptr_null {
-                            types.int_one
+                        *if t == *types.ptr_null {
+                            types.int_true
                         } else if !p.nil {
-                            types.int_zero
+                            types.int_false
                         } else {
-                            types.int_bot
+                            types.int_bool
                         }
                     }
                     _ => {
                         // Only doing NOT on ints and ptrs
-                        assert!(t0 == types.top || t0 == types.bot);
-                        if t0 == types.top {
-                            t0
-                        } else {
-                            types.bot
-                        }
+                        assert!(t == types.top || t == types.bot);
+                        *types.int_bool
                     }
                 }
             }
             Op::Proj(n) | Op::CProj(n) => {
-                let Some(input) = self.inputs(sea)[0].and_then(|n| n.ty(sea)) else {
-                    return types.bot;
-                };
-                match &*input {
-                    Type::Tuple(types) => types[n.index],
-                    _ => unreachable!("proj node ctrl must always be tuple, if present"),
+                match self.inputs(sea)[0].and_then(|n| n.ty(sea)).as_deref() {
+                    Some(Type::Tuple(types)) => types[n.index],
+                    _ => types.bot,
                 }
             }
-            Op::If(IfOp::Never) => types.int_bot,
+            Op::If(IfOp::Never) => *types.if_both,
             Op::If(IfOp::Cond) => {
                 let s = self.to_if(sea).unwrap();
 
                 // If the If node is not reachable then neither is any following Proj
                 let ctrl_ty = self.inputs(sea)[0].unwrap().ty(sea);
                 if ctrl_ty != Some(types.ctrl) && ctrl_ty != Some(types.bot) {
-                    return types.if_neither;
+                    return *types.if_neither;
                 }
 
                 let t = s.pred(sea).unwrap().ty(sea).unwrap();
 
                 // High types mean NEITHER side is reachable.
                 // Wait until the type falls to decide which way to go.
-                if t == types.top || t == types.int_top {
-                    return types.if_neither;
+                if t == types.top || t == *types.int_top {
+                    return *types.if_neither;
                 }
 
                 // If constant is 0 then false branch is reachable
                 // Else true branch is reachable
-                if let Type::Int(Int::Constant(c)) = &*t {
-                    return if *c == 0 {
+                if t.is_constant(types) {
+                    return *if t.make_init(types) == t {
                         types.if_false
                     } else {
                         types.if_true
                     };
                 }
 
-                // Hunt up the immediate dominator tree.  If we find an identical if
-                // test on either the true or false branch, then this test matches.
-
-                let mut dom = s.idom(sea);
-                let mut prior = self;
-                while let Some(d) = dom {
-                    if let Some(d) = d.to_if(sea) {
-                        if d.pred(sea).unwrap() == s.pred(sea).unwrap() {
-                            return if let Op::Proj(proj) = &sea[prior] {
-                                // Repeated test, dominated on one side.  Test result is the same.
-                                if proj.index == 0 {
-                                    types.if_true
-                                } else {
-                                    types.if_false
-                                }
-                            } else {
-                                // Repeated test not dominated on one side
-                                d.ty(sea).unwrap()
-                            };
-                        }
-                    }
-
-                    prior = *d;
-                    dom = d.idom(sea);
+                // Integers allow non-zero ranges: "1-65535"
+                if t.make_zero(types).meet(t, types) != t {
+                    return *types.if_true;
                 }
-
-                types.if_both
+                *types.if_both
             }
             Op::Phi(_) => {
                 let region = self.inputs(sea)[0].unwrap();
-                if !sea.instanceof_region(Some(region)) {
-                    if region.ty(sea) == Some(types.xctrl) {
-                        types.top
+                if !region.is_region(sea) {
+                    let t = region.ty(sea).unwrap();
+                    if t == types.xctrl {
+                        if self.ty(sea).is_some_and(|t| t.is_mem()) {
+                            *types.mem_top
+                        } else {
+                            types.top
+                        }
                     } else {
-                        self.ty(sea).unwrap()
+                        t
                     }
                 } else if Nodes::in_progress(&sea.ops, &sea.inputs, self) {
                     // During parsing Phis have to be computed type pessimistically.
                     sea[self.to_phi(sea).unwrap()].ty
                 } else {
                     // Set type to local top of the starting type
-                    let mut t = sea
-                        .types
-                        .dual(sea.types.glb(sea[self.to_phi(sea).unwrap()].ty));
+                    let mut t = sea[self.to_phi(sea).unwrap()].ty.glb(types).dual(types);
 
                     for i in 1..self.inputs(sea).len() {
                         // If the region's control input is live, add this as a dependency
@@ -268,7 +335,7 @@ impl<'t> Node {
                         if region.inputs(sea)[i].unwrap().add_dep(self, sea).ty(sea)
                             != Some(types.xctrl)
                         {
-                            t = types.meet(t, self.inputs(sea)[i].unwrap().ty(sea).unwrap())
+                            t = self.inputs(sea)[i].unwrap().ty(sea).unwrap().meet(t, types);
                         }
                     }
                     t
@@ -279,7 +346,7 @@ impl<'t> Node {
                     types.ctrl
                 } else {
                     self.inputs(sea).iter().skip(1).fold(types.xctrl, |t, n| {
-                        types.meet(t, n.unwrap().ty(sea).unwrap())
+                        t.meet(n.unwrap().ty(sea).unwrap(), types)
                     })
                 }
             }
@@ -291,10 +358,58 @@ impl<'t> Node {
                 }
             }
             Op::Stop => types.bot,
-            Op::Cast(t) => types.join(self.inputs(sea)[1].unwrap().ty(sea).unwrap(), *t),
-            Op::Load(l) => l.declared_type,
-            Op::Store(s) => types.get_mem(s.alias),
-            Op::New(t) => **t,
+            Op::Cast(t) => in_ty(1).join(*t, types),
+            Op::Load(_) => {
+                let s = self.to_load(sea).unwrap();
+                if let Some(mem) = s.mem(sea).unwrap().ty(sea).and_then(|t| t.to_mem()) {
+                    // Update declared forward ref to the actual
+                    if sea[s].declared_type.is_fref() {
+                        if let Some(tmp) = mem.data().t.to_mem_ptr() {
+                            if !tmp.is_fref() {
+                                sea[s].declared_type = *tmp;
+                            }
+                        }
+                    }
+                    // No lifting if ptr might null-check
+                    if s.err(sea).is_none() {
+                        return sea[s].declared_type.join(mem.data().t, types);
+                    }
+                }
+                sea[s].declared_type
+            }
+            Op::Store(_) => {
+                let s = self.to_store(sea).unwrap();
+                let mut val = s.val(sea).unwrap().ty(sea).unwrap();
+                let mem = s.mem(sea).unwrap().ty(sea).unwrap().to_mem().unwrap(); // Invariant
+                let mut t = types.bot; // No idea on field contents
+
+                // Same alias, lift val to the declared type and then meet into other fields
+                if mem.data().alias == sea[s].alias {
+                    // Update declared forward ref to the actual
+                    if sea[s].declared_ty.is_fref() {
+                        if let Some(tmp) = val.to_mem_ptr() {
+                            if !tmp.is_fref() {
+                                sea[s].declared_ty = *tmp;
+                            }
+                        }
+                    }
+                    val = val.join(sea[s].declared_ty, types);
+                    t = val.meet(mem.data().t, types);
+                }
+                *types.get_mem(sea[s].alias, t)
+            }
+            Op::New(ptr) => {
+                let fs = ptr.data().to.fields();
+                let mut ts = Vec::with_capacity(fs.len() + 2);
+                ts.push(types.ctrl);
+                ts.push(**ptr);
+                for (i, f) in fs.iter().enumerate() {
+                    let mem = in_ty(i+2).as_mem();
+                    let tfld = in_ty(2 + fs.len() + i).meet(mem.data().t, types);
+                    ts.push(*types.get_mem(f.alias, tfld));
+                }
+                types.get_tuple_from_slice(&ts)
+            }
             Op::AddF => self.compute_binary_float(|a, b| a + b, sea),
             Op::DivF => self.compute_binary_float(|a, b| a / b, sea),
             Op::MulF => self.compute_binary_float(|a, b| a * b, sea),
@@ -313,22 +428,5 @@ impl<'t> Node {
             }
         }
         t1.meet(t2, sea.tys)
-    }
-
-    fn compute_binary_int<F: FnOnce(i64, i64) -> i64>(self, op: F, sea: &Nodes<'t>) -> Ty<'t> {
-        let types = sea.types;
-        let Some(first) = self.inputs(sea)[1].and_then(|n| n.ty(sea)) else {
-            return types.bot;
-        };
-        let Some(second) = self.inputs(sea)[2].and_then(|n| n.ty(sea)) else {
-            return types.bot;
-        };
-
-        match [&*first, &*second] {
-            [Type::Int(Int::Constant(v1)), Type::Int(Int::Constant(v2))] => {
-                types.get_int(op(*v1, *v2))
-            }
-            [_, _] => types.meet(first, second),
-        }
     }
 }

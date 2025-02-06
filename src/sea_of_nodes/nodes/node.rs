@@ -765,6 +765,9 @@ impl Load {
     pub fn ptr(self, sea: &Nodes) -> Option<Node> {
         self.inputs(sea)[2]
     }
+    pub fn off(self, sea: &Nodes) -> Option<Node> {
+        self.inputs(sea)[3]
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -801,6 +804,12 @@ impl Store {
     }
     pub fn ptr(self, sea: &Nodes) -> Option<Node> {
         self.inputs(sea)[2]
+    }
+    pub fn off(self, sea: &Nodes) -> Option<Node> {
+        self.inputs(sea)[3]
+    }
+    pub fn val(self, sea: &Nodes) -> Option<Node> {
+        self.inputs(sea)[4]
     }
 }
 

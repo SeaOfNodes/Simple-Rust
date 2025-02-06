@@ -89,7 +89,7 @@ impl<'s, 't> Parser<'s, 't> {
         let scope = Scope::new(&mut nodes);
         nodes.ty[scope] = Some(types.bot); // in java this is done by the constructor
 
-        nodes.start = Start::new(&[types.ctrl, arg], &mut nodes);
+        nodes.start = Start::new(&[types.ctrl, *types.mem_top, arg], &mut nodes);
 
         let stop = Stop::new(&mut nodes);
 
