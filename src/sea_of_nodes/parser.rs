@@ -173,14 +173,16 @@ impl<'s, 't> Parser<'s, 't> {
                 &mut self.nodes,
             )
             .expect("not in scope");
-        let mem0 = Proj::new(start, 1, Scope::MEM0, &mut self.nodes).peephole(&mut self.nodes);
-        mem.add_def(mem0, &mut self.nodes);
+        mem.add_def(
+            Proj::new(start, 1, Scope::MEM0, &mut self.nodes).peephole(&mut self.nodes),
+            &mut self.nodes,
+        );
         self.scope
             .define(
                 Scope::MEM0,
                 *self.types.mem_top,
                 false,
-                mem0.peephole(&mut self.nodes),
+                mem.peephole(&mut self.nodes),
                 &mut self.nodes,
             )
             .expect("not in scope");
