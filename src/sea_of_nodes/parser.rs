@@ -1811,7 +1811,7 @@ impl<'a> Lexer<'a> {
     fn parse_number<'t>(&mut self, types: &Types<'t>) -> PResult<Ty<'t>> {
         let (flt, snum) = self.is_long_or_double();
         if !flt {
-            if snum.chars().next() == Some('0') {
+            if snum.len() > 1 && snum.chars().next() == Some('0') {
                 Err("Syntax error: integer values cannot start with '0'".to_string())
             } else {
                 snum.parse().map(|i| *types.get_int(i)).map_err(|_| {
