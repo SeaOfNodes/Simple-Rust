@@ -459,7 +459,7 @@ impl Phi {
         for i in 1..self.inputs(sea).len() {
             // If the region's control input is live, add this as a dependency
             // to the control because we can be peeped should it become dead.
-            let region_in_i = region.inputs(sea)[i].unwrap().add_dep(*self, sea);
+            let region_in_i = region.inputs(sea)[i].unwrap().add_dep(self, sea);
             if region_in_i.ty(sea) != Some(sea.types.xctrl) && self.inputs(sea)[i] != Some(*self) {
                 if live.is_none() || live == self.inputs(sea)[i] {
                     live = self.inputs(sea)[i];

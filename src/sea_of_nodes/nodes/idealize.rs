@@ -5,7 +5,7 @@ use crate::sea_of_nodes::nodes::node::{
     Sub, TypedNode,
 };
 use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes, Op};
-use crate::sea_of_nodes::types::Type;
+use crate::sea_of_nodes::types::Ty;
 
 impl Node {
     /// do not peephole directly returned values!
@@ -107,7 +107,7 @@ impl Add {
         // transformation.
         if lhs.inputs(sea)[2]
             .unwrap()
-            .add_dep(*self, sea)
+            .add_dep(self, sea)
             .ty(sea)
             .unwrap()
             .is_constant(sea.tys)
@@ -228,13 +228,10 @@ impl Bool {
 
 impl Phi {
     fn idealize_phi(self, sea: &mut Nodes) -> Option<Node> {
-        let region = self.inputs(sea)[0];
-        if !sea.instanceof_region(region) {
+        let Some(r) = self.region(sea).to_region(sea) else {
             return self.inputs(sea)[1]; // Input has collapse to e.g. starting control.
-        }
-        if Nodes::in_progress(&sea.ops, &sea.inputs, *self)
-            || region.unwrap().inputs(sea).is_empty()
-        {
+        };
+        if Nodes::in_progress(&sea.ops, &sea.inputs, **r) || r.inputs(sea).len() <= 1 {
             return None; // Input is in-progress
         }
 
@@ -248,11 +245,8 @@ impl Phi {
         //   Phi(op(A,B),op(Q,R),op(X,Y)) becomes
         //     op(Phi(A,Q,X), Phi(B,R,Y)).
         let op = self.inputs(sea)[1].expect("not same_inputs");
-        if op.inputs(sea).len() == 3
-            && op.inputs(sea)[0].is_none()
-            && !op.is_cfg(sea)
-            && self.same_op(sea)
-        {
+        if op.inputs(sea).len() == 3 && op.inputs(sea)[0].is_none() && self.same_op(sea) {
+            debug_assert!(!op.is_cfg(sea));
             let n_in = &self.inputs(sea);
 
             let mut lhss = vec![None; n_in.len()];
@@ -277,13 +271,13 @@ impl Phi {
         // If merging Phi(N, cast(N)) - we are losing the cast JOIN effects, so just remove.
         if self.inputs(sea).len() == 3 {
             if let Some(cast) = self.inputs(sea)[1].unwrap().to_cast(sea) {
-                let in_1 = cast.inputs(sea)[1].unwrap().add_dep(*self, sea);
+                let in_1 = cast.inputs(sea)[1].unwrap().add_dep(self, sea);
                 if Some(in_1) == self.inputs(sea)[2] {
                     return self.inputs(sea)[2];
                 }
             }
             if let Some(cast) = self.inputs(sea)[2].unwrap().to_cast(sea) {
-                let in_1 = cast.inputs(sea)[1].unwrap().add_dep(*self, sea);
+                let in_1 = cast.inputs(sea)[1].unwrap().add_dep(self, sea);
                 if Some(in_1) == self.inputs(sea)[1] {
                     return self.inputs(sea)[1];
                 }
@@ -307,13 +301,11 @@ impl Phi {
 
             if nullx != 0 {
                 let val = self.inputs(sea)[3 - nullx].unwrap();
-                let region = self.region(sea);
-                let idom = region.idom(sea).unwrap();
-                if let Some(iff) = idom.to_if(sea) {
-                    if iff.pred(sea).unwrap().add_dep(*self, sea) == val {
+                if let Some(iff) = r.idom(sea).unwrap().add_dep(self, sea).to_if(sea) {
+                    if iff.pred(sea).unwrap().add_dep(self, sea) == val {
                         // Must walk the idom on the null side to make sure we hit False.
-                        let mut idom = region.cfg(nullx, sea).unwrap();
-                        while idom.inputs(sea)[0] != Some(**iff) {
+                        let mut idom = r.cfg(nullx, sea).unwrap();
+                        while !idom.inputs(sea).is_empty() && idom.inputs(sea)[0] != Some(**iff) {
                             idom = idom.idom(sea).unwrap();
                         }
                         if idom.to_cproj(sea).is_some_and(|p| sea[p].index == 1) {
@@ -352,16 +344,21 @@ impl Return {
 
 impl CProj {
     fn idealize_cproj(self, sea: &mut Nodes) -> Option<Node> {
-        let index = sea[self].index;
-        if let Some(iff) = self.inputs(sea)[0]?.to_if(sea) {
-            if let Some(Type::Tuple(ts)) = iff.ty(sea).as_deref() {
-                if ts[1 - index] == sea.types.xctrl {
-                    return iff.inputs(sea)[0]; // We become our input control
-                }
-            }
+        let ctrl = self.cfg(0, sea).unwrap();
+        let idx = sea[self].index;
 
-            // Flip a negating if-test, to remove the not
-            if let Some(not) = iff.inputs(sea)[1]?.add_dep(**self, sea).to_not(sea) {
+        if let Some(tt) = ctrl.ty(sea).and_then(Ty::to_tuple) {
+            if tt.data()[idx] == sea.types.xctrl {
+                return Some(**sea.xctrl); // We are dead
+            }
+            // Only true for IfNodes
+            if ctrl.is_if(sea) && tt.data()[1 - idx] == sea.types.xctrl {
+                return ctrl.inputs(sea)[0]; // We become our input control
+            }
+        }
+        // Flip a negating if-test, to remove the not
+        if let Some(iff) = ctrl.to_if(sea) {
+            if let Some(not) = iff.pred(sea).unwrap().add_dep(self, sea).to_not(sea) {
                 return Some(**CProj::new(
                     If::new(
                         iff.inputs(sea)[0].unwrap(),
@@ -369,13 +366,12 @@ impl CProj {
                         sea,
                     )
                     .peephole(sea),
-                    1 - index,
-                    if index == 0 { "False" } else { "True" },
+                    1 - idx,
+                    if idx == 0 { "False" } else { "True" },
                     sea,
                 ));
             }
         }
-
         None
     }
 }
@@ -464,9 +460,9 @@ impl If {
             let mut prior = *self;
             let mut dom = self.idom(sea);
             while let Some(d) = dom {
-                d.add_dep(**self, sea);
+                d.add_dep(self, sea);
                 if let Some(d) = d.to_if(sea) {
-                    if d.pred(sea).unwrap().add_dep(**self, sea) == pred {
+                    if d.pred(sea).unwrap().add_dep(self, sea) == pred {
                         if let Op::CProj(p) = &sea[prior] {
                             let value = if p.index == 0 {
                                 sea.types.int_one
@@ -557,7 +553,7 @@ impl Load {
     /// Profitable if we find a matching Store on this Phi arm.
     fn profit(self, phi_node: Phi, idx: usize, sea: &mut Nodes) -> bool {
         phi_node.inputs(sea)[idx].is_some_and(|px| {
-            px.add_dep(*self, sea)
+            px.add_dep(self, sea)
                 .to_store(sea)
                 .is_some_and(|px| self.ptr(sea) == px.ptr(sea))
         })
