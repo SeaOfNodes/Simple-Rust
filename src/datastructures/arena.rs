@@ -72,6 +72,9 @@ impl DroplessArena {
     }
 
     pub fn alloc_slice_copy<T: Copy>(&self, slice: &[T]) -> &mut [T] {
+        if slice.is_empty() {
+            return &mut []; // we can't allocate a unique pointer anyway
+        }
         let layout = Layout::for_value(slice);
         let result = self.alloc_layout(layout).cast::<T>();
         unsafe {
