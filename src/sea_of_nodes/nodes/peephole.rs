@@ -1,7 +1,7 @@
 use crate::sea_of_nodes::nodes::node::IfOp;
 use crate::sea_of_nodes::nodes::node::{Constant, XCtrl};
 use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
-use crate::sea_of_nodes::types::{Ty, Type};
+use crate::sea_of_nodes::types::{Field, Ty, Type};
 
 impl<'t> Node {
     /// Try to peephole at this node and return a better replacement Node.
@@ -414,7 +414,128 @@ impl<'t> Node {
             Op::DivF => self.compute_binary_float(|a, b| a / b, sea),
             Op::MulF => self.compute_binary_float(|a, b| a * b, sea),
             Op::SubF => self.compute_binary_float(|a, b| a - b, sea),
-            op => todo!("{op:?}"),
+            Op::And => {
+                let (t1, t2) = (in_ty(1), in_ty(2));
+                if high(t1) || high(t2) {
+                    return *types.int_top;
+                }
+                if let (Some(t1), Some(t2)) = (t1.to_int(), t2.to_int()) {
+                    if let (Some(c1), Some(c2)) = (t1.value(), t2.value()) {
+                        return *types.get_int(c1 & c2);
+                    }
+                    // Sharpen allowed bits if either value is narrowed
+                    let mask = t1.mask(types) & t2.mask(types);
+                    return *if mask < 0 {
+                        types.int_bot
+                    } else {
+                        types.make_int(0, mask)
+                    };
+                }
+                *types.int_bot
+            }
+            Op::Or => {
+                let (t1, t2) = (in_ty(1), in_ty(2));
+                if high(t1) || high(t2) {
+                    return *types.int_top;
+                }
+                if let (Some(t1), Some(t2)) = (t1.to_int(), t2.to_int()) {
+                    if let (Some(c1), Some(c2)) = (t1.value(), t2.value()) {
+                        return *types.get_int(c1 | c2);
+                    }
+                }
+                *types.int_bot
+            }
+            Op::Xor => {
+                let (t1, t2) = (in_ty(1), in_ty(2));
+                if high(t1) || high(t2) {
+                    return *types.int_top;
+                }
+                if let (Some(t1), Some(t2)) = (t1.to_int(), t2.to_int()) {
+                    if let (Some(c1), Some(c2)) = (t1.value(), t2.value()) {
+                        return *types.get_int(c1 ^ c2);
+                    }
+                }
+                *types.int_bot
+            }
+            Op::Sar => {
+                let (t1, t2) = (in_ty(1), in_ty(2));
+                if high(t1) || high(t2) {
+                    return *types.int_top;
+                }
+                if let (Some(t1), Some(t2)) = (t1.to_int(), t2.to_int()) {
+                    if t1 == types.int_zero {
+                        return *t1;
+                    }
+                    if let (Some(c1), Some(c2)) = (t1.value(), t2.value()) {
+                        return *types.get_int(c1 >> c2);
+                    }
+                    if let Some(log) = t2.value() {
+                        return *types.make_int(-1 << (63 - log), (1 << (63 - log)) - 1);
+                    }
+                }
+                *types.int_bot
+            }
+            Op::Shl => {
+                let (t1, t2) = (in_ty(1), in_ty(2));
+                if high(t1) || high(t2) {
+                    return *types.int_top;
+                }
+                if let (Some(t1), Some(t2)) = (t1.to_int(), t2.to_int()) {
+                    if t1 == types.int_zero {
+                        return *t1;
+                    }
+                    if let (Some(c1), Some(c2)) = (t1.value(), t2.value()) {
+                        return *types.get_int(c1 << c2);
+                    }
+                }
+                *types.int_bot
+            }
+            Op::Shr => {
+                let (t1, t2) = (in_ty(1), in_ty(2));
+                if high(t1) || high(t2) {
+                    return *types.int_top;
+                }
+                if let (Some(t1), Some(t2)) = (t1.to_int(), t2.to_int()) {
+                    if t1 == types.int_zero {
+                        return *t1;
+                    }
+                    if let (Some(c1), Some(c2)) = (t1.value(), t2.value()) {
+                        return *types.get_int((c1 as u64 >> c2 as u64) as i64);
+                    }
+                }
+                *types.int_bot
+            }
+            Op::Cfg => unreachable!(),
+            Op::ReadOnly => {
+                let t = in_ty(1);
+                t.to_mem_ptr().map(|t| t.make_ro(types)).unwrap_or(t)
+            }
+            Op::RoundF32 => {
+                let t = in_ty(1);
+                t.to_float()
+                    .and_then(|t| t.value().map(|v| *types.get_float(v as f32 as f64)))
+                    .unwrap_or(t)
+            }
+            Op::ToFloat => *in_ty(1)
+                .to_int()
+                .and_then(|t| t.value().map(|v| types.get_float(v as f64)))
+                .unwrap_or(types.float_bot),
+            Op::Struct(s) => match s.data().fields {
+                None => *types.struct_bot,
+                Some(fs) => {
+                    let new_fs = fs
+                        .iter()
+                        .enumerate()
+                        .map(|(i, f)| Field {
+                            ty: self.inputs(sea)[i]
+                                .map(|i| i.ty(sea).unwrap())
+                                .unwrap_or(types.top),
+                            ..*f
+                        })
+                        .collect::<Vec<_>>();
+                    *types.get_struct(s.name(), &new_fs)
+                }
+            },
         }
     }
 

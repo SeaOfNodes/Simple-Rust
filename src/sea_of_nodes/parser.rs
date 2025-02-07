@@ -725,7 +725,7 @@ impl<'s, 't> Parser<'s, 't> {
     fn lift_expr(&mut self, mut expr: Node, mut t: Ty<'t>, xfinal: bool) -> PResult<Node> {
         assert!(!expr
             .ty(&self.nodes)
-            .is_some_and(|t| t.to_mem_ptr().is_none_or(|t| !t.is_fref())));
+            .is_some_and(|t| t.to_mem_ptr().is_some_and(|t| t.is_fref())));
         // Final is deep on ptrs
         if xfinal {
             if let Some(tmp) = t.to_mem_ptr() {
