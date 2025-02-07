@@ -195,25 +195,19 @@ impl Mul {
 impl Bool {
     fn idealize_bool(self, sea: &mut Nodes) -> Option<Node> {
         let op = sea[self];
-        if self.inputs(sea)[1]? == self.inputs(sea)[2]? {
-            let value = if op.compute(3, 3) {
-                sea.types.int_one
-            } else {
-                sea.types.int_zero
-            };
+        if self.inputs(sea)[1] == self.inputs(sea)[2] {
+            let value = sea.types.get_bool(!matches!(op, BoolOp::LT | BoolOp::LTF));
             return Some(*Constant::new(*value, sea));
         }
 
         // Equals pushes constant to the right; 5==X becomes X==5.
-        if op == BoolOp::EQ {
+        if op == BoolOp::EQ || op == BoolOp::EQF {
             let lhs = self.inputs(sea)[1].unwrap();
             let rhs = self.inputs(sea)[2].unwrap();
 
             if !rhs.is_constant(sea) {
                 // con==noncon becomes noncon==con
-                if lhs.is_constant(sea) {
-                    return Some(*Bool::new(rhs, lhs, op, sea));
-                } else if lhs.index() > rhs.index() {
+                if lhs.is_constant(sea) || lhs.index() > rhs.index() {
                     // Equals sorts by NID otherwise: non.high == non.low becomes non.low == non.high
                     return Some(*Bool::new(rhs, lhs, op, sea));
                 }
@@ -228,7 +222,7 @@ impl Bool {
         // Do we have ((x * (phi cons)) * con) ?
         // Do we have ((x * (phi cons)) * (phi cons)) ?
         // Push constant up through the phi: x * (phi con0*con0 con1*con1...)
-        sea.phi_con(*self, op == BoolOp::EQ)
+        sea.phi_con(*self, op == BoolOp::EQ || op == BoolOp::EQF)
     }
 }
 
@@ -681,12 +675,15 @@ impl<'t> Nodes<'t> {
         lo.index() > hi.index()
     }
 
-    // Rotation is only valid for associative ops, e.g. Add, Mul, And, Or.
+    // Rotation is only valid for associative ops, e.g. Add, Mul, And, Or, Xor.
     // Do we have ((phi cons)|(x + (phi cons)) + con|(phi cons)) ?
     // Push constant up through the phi: x + (phi con0+con0 con1+con1...)
     fn phi_con(&mut self, op: Node, rotate: bool) -> Option<Node> {
         let lhs = op.inputs(self)[1]?;
         let rhs = op.inputs(self)[2]?;
+        if rhs.ty(self) == Some(*self.types.int_top) {
+            return None;
+        }
 
         // LHS is either a Phi of constants, or another op with Phi of constants
         let mut lphi = self.pcon(Some(lhs), op);

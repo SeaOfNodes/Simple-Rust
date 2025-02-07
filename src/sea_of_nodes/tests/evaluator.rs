@@ -234,7 +234,7 @@ impl<'a, 't> Evaluator<'a, 't> {
                     let b = self.val(self.sea.inputs[node][2].unwrap());
                     Object::Long(if a == b { 1 } else { 0 })
                 }
-                op => self.binary(node, |a, b| op.compute(a, b) as i64),
+                _ => todo!("exec bool op"),
             },
             TypedNode::Div(n) => Object::Long(self.div(n)),
             TypedNode::Minus(_) => {

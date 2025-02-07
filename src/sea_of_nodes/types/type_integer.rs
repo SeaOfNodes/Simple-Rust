@@ -21,6 +21,10 @@ impl<'t> TyInt<'t> {
         (d.min == d.max).then_some(d.min)
     }
 
+    pub fn is_constant(self) -> bool {
+        self.value().is_some()
+    }
+
     /// AND-mask of forced zeros.  e.g. unsigned types will return their mask;
     /// u8 will return 0xFF.  But also a range of 16-18 (0x10-0x12) will return
     /// 0x13 - no value in the range {16,17,18} will allow bit 0x04 to be set.

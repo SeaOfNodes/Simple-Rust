@@ -331,6 +331,9 @@ impl<'t> Op<'t> {
                 BoolOp::EQ => "EQ",
                 BoolOp::LE => "LE",
                 BoolOp::LT => "LT",
+                BoolOp::EQF => "EQF",
+                BoolOp::LEF => "LEF",
+                BoolOp::LTF => "LTF",
             },
             Op::CProj(p) => p.label,
             Op::Cast(t) => return Owned(format!("({})", t.str())),
@@ -463,6 +466,9 @@ impl<'t> Op<'t> {
             Op::Shr => 39,
             Op::Struct(_) => 40,
             Op::ToFloat => 41,
+            Op::Bool(BoolOp::EQF) => 42,
+            Op::Bool(BoolOp::LTF) => 43,
+            Op::Bool(BoolOp::LEF) => 44,
             Op::Cfg => unreachable!(),
         }
     }
@@ -607,21 +613,16 @@ pub enum BoolOp {
     EQ,
     LT,
     LE,
+    EQF,
+    LTF,
+    LEF,
 }
 impl BoolOp {
     pub(crate) fn str(&self) -> &'static str {
         match self {
-            BoolOp::EQ => "==",
-            BoolOp::LT => "<",
-            BoolOp::LE => "<=",
-        }
-    }
-
-    pub(crate) fn compute(&self, x: i64, y: i64) -> bool {
-        match self {
-            BoolOp::EQ => x == y,
-            BoolOp::LT => x < y,
-            BoolOp::LE => x <= y,
+            BoolOp::EQ | BoolOp::EQF => "==",
+            BoolOp::LT | BoolOp::LTF => "<",
+            BoolOp::LE | BoolOp::LEF => "<=",
         }
     }
 }

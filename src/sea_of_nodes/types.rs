@@ -178,6 +178,14 @@ impl<'a> Types<'a> {
         }
     }
 
+    pub fn get_bool(&self, value: bool) -> TyInt<'a> {
+        if value {
+            self.int_true
+        } else {
+            self.int_false
+        }
+    }
+
     pub fn get_int(&self, value: i64) -> TyInt<'a> {
         self.interner.get_int(value, value)
     }

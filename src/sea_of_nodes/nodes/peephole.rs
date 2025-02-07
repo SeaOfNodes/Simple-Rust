@@ -1,6 +1,6 @@
 use crate::sea_of_nodes::nodes::node::IfOp;
 use crate::sea_of_nodes::nodes::node::{Constant, XCtrl};
-use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
+use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes, Op};
 use crate::sea_of_nodes::types::{Field, Ty, Type};
 
 impl<'t> Node {
@@ -215,16 +215,52 @@ impl<'t> Node {
                 }
             }
             Op::Scope(_) | Op::ScopeMin => *types.mem_bot,
-            Op::Bool(_) => {
+            Op::Bool(op) => {
                 let (t1, t2) = (in_ty(1), in_ty(2));
                 if high(t1) || high(t2) {
                     return types.int_bool.dual(types);
                 }
                 if let (Some(t1), Some(t2)) = (t1.to_int(), t2.to_int()) {
-                    todo!("{t1}{t2}")
+                    return *match op {
+                        BoolOp::EQ => {
+                            if t1 == t2 && t1.is_constant() {
+                                types.int_true
+                            } else if t1.max() < t2.min() || t1.min() > t2.max() {
+                                types.int_false
+                            } else {
+                                types.int_bool
+                            }
+                        }
+                        BoolOp::LT => {
+                            if t1.max() < t2.min() {
+                                types.int_true
+                            } else if t1.min() >= t2.max() {
+                                types.int_false
+                            } else {
+                                types.int_bool
+                            }
+                        }
+                        BoolOp::LE => {
+                            if t1.max() <= t2.min() {
+                                types.int_true
+                            } else if t1.min() > t2.max() {
+                                types.int_false
+                            } else {
+                                types.int_bool
+                            }
+                        }
+                        _ => unreachable!(),
+                    };
                 }
                 if let (Some(t1), Some(t2)) = (t1.to_float(), t2.to_float()) {
-                    todo!("{t1}{t2}")
+                    if let (Some(c1), Some(c2)) = (t1.value(), t2.value()) {
+                        return *types.get_bool(match op {
+                            BoolOp::EQF => c1 == c2,
+                            BoolOp::LTF => c1 < c2,
+                            BoolOp::LEF => c1 <= c2,
+                            _ => unreachable!(),
+                        });
+                    }
                 }
                 *types.int_bool
             }
