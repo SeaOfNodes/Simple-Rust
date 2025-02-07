@@ -683,7 +683,6 @@ impl<'s, 't> Parser<'s, 't> {
         let name = self.lexer.match_id();
         // Just a plain expression, no assignment.
         // Distinguish `var==expr` from `var=expr`
-
         let Some(name) = name else {
             self.set_pos(old);
             return self.parse_expression();
@@ -772,7 +771,7 @@ impl<'s, 't> Parser<'s, 't> {
 
         // now parse var['=' asgnexpr] in a loop
         self.parse_declaration(t)?;
-        while self.match_(";") {
+        while self.match_(",") {
             self.parse_declaration(t)?;
         }
         self.require(";")
@@ -1776,11 +1775,12 @@ impl<'a> Lexer<'a> {
 
     fn match_opx(&mut self, c: [u8; 2]) -> bool {
         self.skip_whitespace();
-        if self.remaining.as_bytes().starts_with(&c) {
-            self.remaining = &self.remaining[2..];
-            true
-        } else {
+        let r = self.remaining.as_bytes();
+        if r.len() < 2 || r[0] != c[0] || r[1] == c[1] {
             false
+        } else {
+            self.remaining = &self.remaining[1..];
+            true
         }
     }
 
