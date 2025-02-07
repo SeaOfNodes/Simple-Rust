@@ -731,7 +731,9 @@ impl Loop {
 }
 impl Cast {
     pub fn new<'t>(ty: Ty<'t>, ctrl: Node, i: Node, sea: &mut Nodes<'t>) -> Self {
-        Self::create(ty, vec![Some(ctrl), Some(i)], sea)
+        let this = Self::create(ty, vec![Some(ctrl), Some(i)], sea);
+        this.set_type(this.compute(sea), sea);
+        this
     }
 }
 
