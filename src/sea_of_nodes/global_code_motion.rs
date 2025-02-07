@@ -160,13 +160,10 @@ fn sched_late(stop: Stop, sea: &mut Nodes) {
 
 impl Cfg {
     pub(crate) fn block_head(self, sea: &Nodes) -> bool {
-        match self.downcast(&sea.ops) {
-            TypedNode::Start(_)
-            | TypedNode::CProj(_)
-            | TypedNode::Region(_)
-            | TypedNode::Stop(_) => true,
-            _ => false,
-        }
+        matches!(
+            self.downcast(&sea.ops),
+            TypedNode::Start(_) | TypedNode::CProj(_) | TypedNode::Region(_) | TypedNode::Stop(_)
+        )
     }
 }
 

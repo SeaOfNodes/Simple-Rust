@@ -459,23 +459,18 @@ impl If {
         // Hunt up the immediate dominator tree.  If we find an identical if
         // test on either the true or false branch, that side wins.
         let pred = self.pred(sea).unwrap();
-        if !pred.ty(sea)?.is_high_or_constant(sea.tys) {
+        if !pred.ty(sea).unwrap().is_high_or_constant(sea.tys) {
             let mut prior = *self;
             let mut dom = self.idom(sea);
             while let Some(d) = dom {
-                d.add_dep(self, sea);
-                if let Some(d) = d.to_if(sea) {
+                if let Some(d) = d.add_dep(self, sea).to_if(sea) {
                     if d.pred(sea).unwrap().add_dep(self, sea) == pred {
-                        if let Op::CProj(p) = &sea[prior] {
-                            let value = if p.index == 0 {
-                                sea.types.int_one
-                            } else {
-                                sea.types.int_zero
-                            };
-                            let new_constant = Constant::new(*value, sea).peephole(sea);
-                            self.set_def(1, new_constant, sea);
+                        if let Some(prior) = prior.to_cproj(sea) {
+                            let c = Constant::new(*sea.types.get_bool(sea[prior].index == 0), sea);
+                            self.set_def(1, c.peephole(sea), sea);
                             return Some(**self);
                         }
+                        if let Op::CProj(p) = &sea[prior] {}
                     }
                 }
                 prior = d;

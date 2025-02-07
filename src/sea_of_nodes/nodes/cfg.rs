@@ -1,7 +1,5 @@
-use crate::datastructures::id_set::IdSet;
 use crate::sea_of_nodes::nodes::node::{Load, TypedNode};
 use crate::sea_of_nodes::nodes::{Cfg, Node, Nodes, Op};
-use std::collections::HashSet;
 
 /// Control Flow Graph Nodes
 ///
@@ -40,8 +38,7 @@ impl Cfg {
         let d = match sea[*self] {
             Op::Start(_) => return 0, // uncached
             Op::Stop | Op::Region => (0..self.inputs(sea).len())
-                .map(|i| self.cfg(i, sea).map(|d| d.idepth(sea)))
-                .flatten()
+                .filter_map(|i| self.cfg(i, sea).map(|d| d.idepth(sea)))
                 .max()
                 .unwrap(),
             _ => self.idom(sea).unwrap().idepth(sea),
@@ -139,38 +136,5 @@ impl Cfg {
             }
         }
         sea.cfg[self].loop_depth
-    }
-
-    pub fn walk_unreach(
-        self,
-        visit: &mut IdSet<Node>,
-        unreach: &mut HashSet<Cfg>,
-        sea: &mut Nodes,
-    ) {
-        if visit.get(*self) {
-            return;
-        }
-        visit.add(*self);
-
-        match self.downcast(&sea.ops) {
-            TypedNode::If(_) => {
-                for proj in &sea.outputs[self] {
-                    let proj = proj.to_cproj(sea).unwrap().to_cfg();
-                    if sea.cfg[proj].loop_depth == 0 {
-                        unreach.insert(proj);
-                    }
-                }
-                self.cfg(0, sea).unwrap().walk_unreach(visit, unreach, sea);
-            }
-            TypedNode::Region(_) | TypedNode::Loop(_) => {
-                for i in 1..self.inputs(sea).len() {
-                    self.cfg(i, sea).unwrap().walk_unreach(visit, unreach, sea);
-                }
-            }
-            TypedNode::Start(_) => {}
-            _ => self.cfg(0, sea).unwrap().walk_unreach(visit, unreach, sea),
-        }
-
-        unreach.remove(&self); // Since we reached here... Node was not unreachable
     }
 }
