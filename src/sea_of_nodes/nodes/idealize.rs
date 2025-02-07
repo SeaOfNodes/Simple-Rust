@@ -1,9 +1,9 @@
 use crate::datastructures::id::Id;
-use crate::sea_of_nodes::nodes::node::IfOp;
 use crate::sea_of_nodes::nodes::node::{
     Add, Bool, CProj, Cast, Constant, Div, If, Load, Minus, Mul, Not, Phi, Return, Stop, Store,
     Sub, TypedNode,
 };
+use crate::sea_of_nodes::nodes::node::{IfOp, Region};
 use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes, Op};
 use crate::sea_of_nodes::types::Ty;
 
@@ -20,7 +20,8 @@ impl Node {
             TypedNode::Return(n) => n.idealize_return(sea),
             TypedNode::Proj(_) => None,
             TypedNode::CProj(n) => n.idealize_cproj(sea),
-            TypedNode::Region(_) | TypedNode::Loop(_) => self.idealize_region(sea),
+            TypedNode::Region(n) => n.idealize_region(sea),
+            TypedNode::Loop(n) => n.idealize_region(sea), // super
             TypedNode::If(n) => n.idealize_if(sea),
             TypedNode::Cast(n) => n.idealize_cast(sea),
             TypedNode::Load(n) => n.idealize_load(sea),
@@ -376,9 +377,9 @@ impl CProj {
     }
 }
 
-impl Node {
+impl Region {
     fn idealize_region(self, sea: &mut Nodes) -> Option<Node> {
-        if Nodes::in_progress(&sea.ops, &sea.inputs, self) {
+        if Nodes::in_progress(&sea.ops, &sea.inputs, **self) {
             return None;
         }
 
@@ -416,7 +417,7 @@ impl Node {
                     Some(**sea.xctrl)
                 } else {
                     self.del_def(path, sea);
-                    Some(self)
+                    Some(**self)
                 };
             }
         }
@@ -429,10 +430,12 @@ impl Node {
         // If a CFG diamond with no merging, delete: "if( pred ) {} else {};"
         if !self.has_phi(sea) {
             // No Phi users, just a control user
-            if let Some(p1) = self.inputs(sea)[1].and_then(|n| n.to_proj(sea)) {
-                if let Some(p2) = self.inputs(sea)[2].and_then(|n| n.to_proj(sea)) {
-                    if p1.inputs(sea)[0] == p2.inputs(sea)[0] {
-                        if let Some(iff) = p1.inputs(sea)[0].and_then(|n| n.to_if(sea)) {
+            if let Some(p1) = self.inputs(sea)[1].and_then(|n| n.to_cproj(sea)) {
+                if let Some(p2) = self.inputs(sea)[2].and_then(|n| n.to_cproj(sea)) {
+                    if p1.inputs(sea)[0].unwrap().add_dep(self, sea)
+                        == p2.inputs(sea)[0].unwrap().add_dep(self, sea)
+                    {
+                        if let Some(iff) = p1.inputs(sea)[0].unwrap().to_if(sea) {
                             return iff.inputs(sea)[0];
                         }
                     }
