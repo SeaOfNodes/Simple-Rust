@@ -1,7 +1,7 @@
 use crate::datastructures::id::Id;
 use crate::sea_of_nodes::nodes::node::{
-    Add, Bool, CProj, Cast, Constant, Div, If, Load, Minus, Mul, Not, Phi, Return, Stop, Store,
-    Sub, TypedNode,
+    Add, Bool, CProj, Cast, Constant, Div, If, Load, Minus, Mul, Not, Phi, ReadOnly, Return, Stop,
+    Store, Sub, TypedNode,
 };
 use crate::sea_of_nodes::nodes::node::{IfOp, Region};
 use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes};
@@ -28,6 +28,7 @@ impl Node {
             TypedNode::Store(n) => n.idealize_store(sea),
             TypedNode::Minus(n) => n.idealize_minus(sea),
             TypedNode::Div(n) => n.idealize_div(sea),
+            TypedNode::ReadOnly(n) => n.idealize_read_only(sea),
             TypedNode::Constant(_)
             | TypedNode::XCtrl(_)
             | TypedNode::Start(_)
@@ -619,6 +620,18 @@ impl Div {
         // Div of 1.
         if Some(*sea.tys.int_one) == self.inputs(sea)[2].and_then(|n| n.ty(sea)) {
             return self.inputs(sea)[1];
+        }
+        None
+    }
+}
+
+impl ReadOnly {
+    fn idealize_read_only(self, sea: &mut Nodes) -> Option<Node> {
+        let in1 = self.inputs(sea)[1].unwrap();
+        if let Some(tmp) = in1.ty(sea).and_then(Ty::to_mem_ptr) {
+            if tmp.is_final() {
+                return Some(in1);
+            }
         }
         None
     }
