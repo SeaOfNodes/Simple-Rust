@@ -5,8 +5,12 @@ use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes};
 use crate::sea_of_nodes::tests::scheduler;
 use crate::sea_of_nodes::tests::scheduler::{Block, BlockId};
 use crate::sea_of_nodes::types::{TyStruct, Type};
+use std::collections::HashMap;
+use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::ops::{Add, BitAnd, BitOr, BitXor, Mul, Neg, Shl, Shr, Sub};
+
+type ObjId = usize;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Object {
@@ -14,7 +18,7 @@ pub enum Object {
     Null,
     Memory,
     Double(f64),
-    Obj(usize),
+    Obj(ObjId),
 }
 
 impl From<i64> for Object {
@@ -68,29 +72,166 @@ pub struct PrintableObject<'o, 't> {
     pub heap: &'o Heap<'t>,
 }
 
+fn init(this: ObjId, objs: &mut HashMap<ObjId, i32>, heap: &Heap) {
+    if let Some(&oid) = objs.get(&this) {
+        if oid != 0 {
+            objs.insert(this, 0);
+            return;
+        }
+    }
+    objs.insert(this, -1);
+    for obj in &heap.objs[this].fields {
+        if let Object::Obj(obj) = obj {
+            init(*obj, objs, heap);
+        }
+    }
+}
+
+fn p1(
+    sb: &mut Formatter,
+    objs: &mut HashMap<ObjId, i32>,
+    id: i32,
+    indentation: &str,
+    step: &str,
+    sep: &str,
+    obj: Object,
+    heap: &Heap,
+) -> Result<i32, fmt::Error> {
+    if let Object::Obj(obj) = obj {
+        p2(sb, obj, objs, id, indentation, step, sep, heap)
+    } else {
+        write!(sb, "{}", PrintableObject { object: obj, heap })?;
+        Ok(id)
+    }
+}
+fn p2(
+    f: &mut Formatter,
+    this: ObjId,
+    objs: &mut HashMap<ObjId, i32>,
+    mut id: i32,
+    indentation: &str,
+    step: &str,
+    sep: &str,
+    heap: &Heap,
+) -> Result<i32, fmt::Error> {
+    let mut cid = *objs.get(&this).unwrap();
+    if cid > 0 {
+        write!(f, "obj@{cid}")?;
+        return Ok(id);
+    }
+
+    let struct_ = heap.objs[this].ty;
+    let fields = heap.objs[this].fields.as_slice();
+
+    if struct_.name() == "[u8]" {
+        write!(f, "\"")?;
+
+        let mut bytes = Vec::new();
+        for &v in &fields[struct_.fields().len() - 1..] {
+            let n = match v {
+                Object::Long(l) => l as u8,
+                Object::Null => 0,
+                Object::Double(d) => d as i32 as u8,
+                _ => unreachable!(),
+            };
+            if n >= 0x20 || n < 0x80 {
+                if n == 0x22 || n == 0x5C {
+                    bytes.push(b'\\');
+                }
+                bytes.push(n);
+            } else {
+                bytes.push(b'\\');
+                bytes.push(b'x');
+                bytes.push(b"0123456789abcdef"[n as usize >> 4]);
+                bytes.push(b"0123456789abcdef"[n as usize & 0xF]);
+            }
+        }
+        f.write_str(std::str::from_utf8(&bytes).unwrap())?;
+        write!(f, "\"")?;
+        return Ok(id);
+    }
+    write!(f, "Obj<{}>", struct_.name())?;
+    if cid == 0 {
+        cid = id;
+        id += 1;
+        objs.insert(this, cid);
+        write!(f, "@{cid}")?;
+    }
+    write!(f, "{{")?;
+    if struct_.fields().len() == 0 {
+        debug_assert!(!struct_.is_ary());
+        write!(f, "}}")?;
+        return Ok(id);
+    }
+    let next_indent = format!("{indentation}{step}");
+    let e = struct_.fields().len() - 1;
+    for i in 0..e {
+        write!(f, "{next_indent}{}=", struct_.fields()[i].fname)?;
+        id = p1(f, objs, id, &next_indent, step, sep, fields[i], heap)?;
+        write!(f, "{sep}")?;
+    }
+    write!(f, "{next_indent}{}=", struct_.fields()[e].fname)?;
+    if struct_.is_ary() {
+        write!(f, "[")?;
+        if fields.len() > e {
+            let inner_indent = format!("{next_indent}{step}");
+            write!(f, "{inner_indent}")?;
+            id = p1(f, objs, id, &next_indent, step, sep, fields[e], heap)?;
+            for i in e + 1..fields.len() {
+                write!(f, "{sep}{inner_indent}")?;
+                id = p1(f, objs, id, &next_indent, step, sep, fields[i], heap)?;
+            }
+            write!(f, "{next_indent}")?;
+        }
+        write!(f, "]")?;
+    } else {
+        id = p1(f, objs, id, &next_indent, step, sep, fields[e], heap)?;
+    }
+    write!(f, "{indentation}}}")?;
+    Ok(id)
+}
+fn p3(
+    f: &mut Formatter,
+    this: ObjId,
+    indentation: &str,
+    step: &str,
+    sep: &str,
+    heap: &Heap,
+) -> fmt::Result {
+    let mut objs = HashMap::new();
+    init(this, &mut objs, heap);
+    p2(f, this, &mut objs, 1, indentation, step, sep, heap)?;
+    Ok(())
+}
+
+fn obj_to_string(f: &mut Formatter, this: ObjId, heap: &Heap) -> fmt::Result {
+    let struct_ = heap.objs[this].ty;
+    let fields = heap.objs[this].fields.as_slice();
+
+    if struct_.name() == "[u8]" {
+        let mut bytes = Vec::new();
+        for &v in &fields[struct_.fields().len() - 1..] {
+            let n = match v {
+                Object::Long(l) => l as u8,
+                Object::Null => 0,
+                Object::Double(d) => d as i32 as u8,
+                _ => unreachable!(),
+            };
+            bytes.push(n);
+        }
+        f.write_str(std::str::from_utf8(&bytes).unwrap())?;
+    }
+    p3(f, this, "", "", ",", heap)
+}
+
 impl<'a, 't> Display for PrintableObject<'a, 't> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self.object {
             Object::Long(l) => l.fmt(f),
             Object::Double(d) => d.fmt(f),
             Object::Null => "null".fmt(f),
             Object::Memory => "memory".fmt(f),
-            Object::Obj(obj) => {
-                let obj = &self.heap.objs[obj];
-                writeln!(f, "Obj<{}> {{", obj.ty.name())?;
-                for (field, &val) in obj.ty.fields().iter().zip(&obj.fields) {
-                    writeln!(
-                        f,
-                        "  {}={}",
-                        field.fname,
-                        Self {
-                            object: val,
-                            ..*self
-                        }
-                    )?;
-                }
-                write!(f, "}}")
-            }
+            Object::Obj(obj) => obj_to_string(f, obj, self.heap),
         }
     }
 }
