@@ -1,11 +1,11 @@
 use crate::datastructures::id::Id;
 use crate::sea_of_nodes::nodes::node::{
-    Add, Bool, CProj, Cast, Constant, Div, If, Load, Minus, Mul, Not, Phi, ReadOnly, Return, Stop,
-    Store, Sub, TypedNode,
+    Add, Bool, CProj, Cast, Constant, Div, If, Load, Minus, MinusF, Mul, Not, Phi, ReadOnly,
+    Return, RoundF32, Sar, Shl, Shr, Stop, Store, Sub, TypedNode,
 };
 use crate::sea_of_nodes::nodes::node::{IfOp, Region};
 use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes};
-use crate::sea_of_nodes::types::Ty;
+use crate::sea_of_nodes::types::{Ty, TyInt};
 
 impl Node {
     /// do not peephole directly returned values!
@@ -27,8 +27,13 @@ impl Node {
             TypedNode::Load(n) => n.idealize_load(sea),
             TypedNode::Store(n) => n.idealize_store(sea),
             TypedNode::Minus(n) => n.idealize_minus(sea),
+            TypedNode::MinusF(n) => n.idealize_minusf(sea),
             TypedNode::Div(n) => n.idealize_div(sea),
             TypedNode::ReadOnly(n) => n.idealize_read_only(sea),
+            TypedNode::RoundF32(n) => n.idealize_round_f32(sea),
+            TypedNode::Shl(n) => n.idealize_shl(sea),
+            TypedNode::Shr(n) => n.idealize_shr(sea),
+            TypedNode::Sar(n) => n.idealize_sar(sea),
             TypedNode::Constant(_)
             | TypedNode::XCtrl(_)
             | TypedNode::Start(_)
@@ -36,7 +41,9 @@ impl Node {
             | TypedNode::ScopeMin(_)
             | TypedNode::Struct(_)
             | TypedNode::New(_)
+            | TypedNode::ToFloat(_)
             | TypedNode::Not(_) => None,
+            TypedNode::Cfg(_) => unreachable!(),
             n => todo!("{n:?}"),
         }
     }
@@ -614,6 +621,15 @@ impl Minus {
         None
     }
 }
+impl MinusF {
+    fn idealize_minusf(self, sea: &mut Nodes) -> Option<Node> {
+        // -(-x) is x
+        if let Some(m) = self.inputs(sea)[1]?.to_minus(sea) {
+            return m.inputs(sea)[1];
+        }
+        None
+    }
+}
 
 impl Div {
     fn idealize_div(self, sea: &mut Nodes) -> Option<Node> {
@@ -633,6 +649,91 @@ impl ReadOnly {
                 return Some(in1);
             }
         }
+        None
+    }
+}
+
+impl RoundF32 {
+    fn idealize_round_f32(self, sea: &mut Nodes) -> Option<Node> {
+        let lhs = self.inputs(sea)[1].unwrap();
+
+        // RoundF32 of float
+        if let Some(t) = lhs.ty(sea).and_then(Ty::to_float) {
+            if t.sz() == 32 {
+                return Some(lhs);
+            }
+        }
+        None
+    }
+}
+
+impl Shl {
+    fn idealize_shl(self, sea: &mut Nodes) -> Option<Node> {
+        let lhs = self.inputs(sea)[1].unwrap();
+        let rhs = self.inputs(sea)[1].unwrap();
+
+        if let Some(shl) = rhs.ty(sea).and_then(Ty::to_int) {
+            if let Some(i) = shl.value() {
+                // Shl of 0.
+                if i & 63 == 0 {
+                    return Some(lhs);
+                }
+                // (x + c) << i  =>  (x << i) + (c << i)
+                if let Some(add) = lhs.to_add(sea) {
+                    if let Some(c) = add.add_dep(self, sea).inputs(sea)[2]
+                        .unwrap()
+                        .ty(sea)
+                        .and_then(Ty::to_int)
+                    {
+                        if let Some(c) = c.value() {
+                            if c != 0 {
+                                let sum = c << i;
+                                if i32::try_from(sum).is_ok() {
+                                    return Some(*Add::new(
+                                        Shl::new(add.inputs(sea)[1].unwrap(), Some(rhs), sea)
+                                            .peephole(sea),
+                                        Constant::new(*sea.types.get_int(sum), sea).peephole(sea),
+                                        sea,
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // TODO: x << 3 << (y ? 1 : 2) ==> x << (y ? 4 : 5)
+        None
+    }
+}
+
+impl Shr {
+    fn idealize_shr(self, sea: &mut Nodes) -> Option<Node> {
+        let lhs = self.inputs(sea)[1].unwrap();
+        let rhs = self.inputs(sea)[1].unwrap();
+
+        // Shr of 0.
+        if let Some(shr) = rhs.ty(sea).and_then(Ty::to_int).and_then(TyInt::value) {
+            if shr & 63 == 0 {
+                return Some(lhs);
+            }
+        }
+        // TODO: x >>> 3 >>> (y ? 1 : 2) ==> x >>> (y ? 4 : 5)
+        None
+    }
+}
+impl Sar {
+    fn idealize_sar(self, sea: &mut Nodes) -> Option<Node> {
+        let lhs = self.inputs(sea)[1].unwrap();
+        let rhs = self.inputs(sea)[1].unwrap();
+
+        // Sar of 0.
+        if let Some(shr) = rhs.ty(sea).and_then(Ty::to_int).and_then(TyInt::value) {
+            if shr & 63 == 0 {
+                return Some(lhs);
+            }
+        }
+        // TODO: x >> 3 >> (y ? 1 : 2) ==> x >> (y ? 4 : 5)
         None
     }
 }
