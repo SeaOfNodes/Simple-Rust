@@ -86,7 +86,7 @@ impl<'t> Node {
     pub(crate) fn set_type(self, ty: Ty<'t>, sea: &mut Nodes<'t>) -> Option<Ty<'t>> {
         let old = self.ty(sea);
         if let Some(old) = old {
-            debug_assert!(sea.types.isa(ty, old));
+            debug_assert!(sea.types.isa(ty, old), "{ty} isn't a {old}");
         }
         if old == Some(ty) {
             return old;

@@ -33,6 +33,7 @@ impl Node {
             | TypedNode::Start(_)
             | TypedNode::Scope(_)
             | TypedNode::ScopeMin(_)
+            | TypedNode::Struct(_)
             | TypedNode::New(_)
             | TypedNode::Not(_) => None,
             n => todo!("{n:?}"),
@@ -470,7 +471,6 @@ impl If {
                             self.set_def(1, c.peephole(sea), sea);
                             return Some(**self);
                         }
-                        if let Op::CProj(p) = &sea[prior] {}
                     }
                 }
                 prior = d;

@@ -1300,7 +1300,7 @@ impl<'s, 't> Parser<'s, 't> {
         }
         let size = self.int_con(tmp.data().to.offset(fs.len(), self.types));
         self.altmp.clear();
-        self.altmp.copy_from_slice(&init.inputs(&self.nodes)[idx..]);
+        self.altmp.extend_from_slice(&init.inputs(&self.nodes)[idx..]);
         let ptr = self.new_struct(tmp.data().to, *size);
         if has_constructor {
             self.scope.pop(&mut self.nodes);

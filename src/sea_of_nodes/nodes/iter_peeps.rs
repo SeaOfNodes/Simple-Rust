@@ -52,7 +52,9 @@ impl IterPeeps {
         }
     }
     pub fn add(&mut self, node: Node) {
-        self.work.push(node);
+        if node != Node::DUMMY {
+            self.work.push(node);
+        }
     }
 }
 
