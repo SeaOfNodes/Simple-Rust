@@ -45,6 +45,14 @@ pub struct ResultObject<'t> {
     pub object: Object,
 }
 
+impl<'t> Obj<'t> {
+    pub fn new(ty: TyStruct<'t>, fields: Vec<Object>, heap: &mut Heap<'t>) -> Object {
+        let object = Object::Obj(heap.objs.len());
+        heap.objs.push(Obj { ty, fields });
+        object
+    }
+}
+
 impl<'t> Display for ResultObject<'t> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         PrintableObject {
@@ -87,7 +95,7 @@ impl<'a, 't> Display for PrintableObject<'a, 't> {
     }
 }
 
-fn get_field_index(s: TyStruct, name: &str) -> usize {
+fn get_field_index(s: TyStruct, name: &str, _off: i64) -> usize {
     s.fields()
         .iter()
         .position(|f| f.fname == name)
@@ -170,27 +178,91 @@ impl<'a, 't> Evaluator<'a, 't> {
         }
     }
 
+    fn off_to_idx(&self, mut off: i64, t: TyStruct<'t>) -> i64 {
+        off -= t.ary_base(self.sea.types);
+        let scale = t.ary_scale(self.sea.types);
+        let mask = (1 << scale) - 1;
+        assert_eq!(off & mask, 0);
+        off >> scale
+    }
+
     fn alloc(&mut self, alloc: New) -> Object {
-        let ty = self.sea[alloc].to_mem_ptr().unwrap().data().to;
-        let object = Object::Obj(self.heap.objs.len());
-        self.heap.objs.push(Obj {
-            ty,
-            fields: vec![Object::Null; ty.fields().len()],
-        });
-        object
+        let ty = self.sea[alloc].data().to;
+        let mut body;
+        if ty.is_ary() {
+            let Object::Long(sz) = self.val(alloc.inputs(self.sea)[1].unwrap()) else {
+                unreachable!()
+            };
+            let n = self.off_to_idx(sz, ty);
+            if n < 0 {
+                panic!("NegativeArraySizeException({n})")
+            }
+            let elem = ty.fields()[1].ty;
+            let init = if elem.is_int() {
+                Object::Long(0)
+            } else if elem.is_float() {
+                Object::Double(0.0)
+            } else {
+                assert!(elem.is_mem_ptr());
+                Object::Null
+            };
+            body = vec![init; n as usize + 1]; // Array body
+
+            // Length value
+            body[0] = self
+                .vall(alloc.inputs(self.sea)[2 + 2].unwrap())
+                .try_into()
+                .unwrap();
+        } else {
+            let num = ty.fields().len();
+            body = (0..num)
+                .map(|i| self.val(alloc.inputs(self.sea)[2 + i + num].unwrap()))
+                .collect();
+        }
+        let mut mems = vec![Object::Null; ty.fields().len() + 2];
+        // mems[0] is control
+        mems[1] = Obj::new(ty, body, &mut self.heap); // the ref
+                                                      // mems[2+...] are memory aliases
+
+        // unlike java we create an obj
+        Obj::new(self.sea.types.struct_top, mems, &mut self.heap)
     }
 
     fn load(&self, load: Load) -> Object {
-        let from = self.valo(load.inputs(&self.sea)[2].unwrap());
-        let idx = get_field_index(from.ty, self.sea[load].name);
-        from.fields[idx]
+        let from = self.valo(load.ptr(&self.sea).unwrap());
+        let off = self.vall(load.off(&self.sea).unwrap());
+        let idx = get_field_index(from.ty, load.to_mem_name(self.sea).unwrap(), off);
+        if idx == from.ty.fields().len() - 1 && from.ty.is_ary() {
+            let len = from.fields.len() - from.ty.fields().len() + 1;
+            let i = self.off_to_idx(off, from.ty);
+            if i < 0 || i as usize >= len {
+                panic!("Array index out of bounds {i} < {len}")
+            }
+            from.fields[i as usize + from.ty.fields().len() - 1]
+        } else {
+            from.fields[idx]
+        }
     }
 
     fn store(&mut self, store: Store) -> Object {
-        let to = store.inputs(&self.sea)[2].unwrap();
-        let val = self.val(store.inputs(&self.sea)[3].unwrap());
-        let idx = get_field_index(self.valo(to).ty, self.sea[store].name);
-        self.valo_mut(to).fields[idx] = val;
+        let ptr = store.ptr(&self.sea).unwrap();
+        let to = self.valo(ptr);
+        let off = self.vall(store.off(&self.sea).unwrap());
+        let val = self.val(store.val(&self.sea).unwrap());
+        let idx = get_field_index(to.ty, store.to_mem_name(self.sea).unwrap(), off);
+
+        if idx == to.ty.fields().len() - 1 && to.ty.is_ary() {
+            let len = to.fields.len() - to.ty.fields().len() + 1;
+            let i = self.off_to_idx(off, to.ty);
+            if i < 0 || i as usize >= len {
+                panic!("Array index out of bounds {i} < {len}")
+            }
+            let to = self.valo_mut(ptr);
+            to.fields[i as usize + to.ty.fields().len() - 1] = val;
+        } else {
+            let to = self.valo_mut(ptr);
+            to.fields[idx] = val;
+        }
         Object::Null
     }
 
@@ -224,7 +296,7 @@ impl<'a, 't> Evaluator<'a, 't> {
         }
     }
 
-    fn valo(&self, node: Node) -> &Obj {
+    fn valo(&self, node: Node) -> &Obj<'t> {
         match self.val(node) {
             Object::Obj(o) => &self.heap.objs[o],
             v => unreachable!("Not a long {v:?}"),
@@ -315,17 +387,17 @@ impl<'a, 't> Evaluator<'a, 't> {
 
     /// Run the graph until either a return is found or the number of loop iterations are done.
     pub fn evaluate(&mut self, parameter: i64, mut loops: usize) -> EResult {
-        self.values[self.start] = Object::Obj(self.heap.objs.len());
-        self.heap.objs.push(Obj {
-            ty: self.sea.types.struct_bot, // dummy
-            fields: {
+        self.values[self.start] = Obj::new(
+            self.sea.types.struct_bot,
+            {
                 let types = self.sea[self.start].args;
                 let mut f = vec![Object::Null; types.data().len()];
                 f[1] = Object::Memory;
                 f[2] = Object::Long(parameter);
                 f
             },
-        });
+            &mut self.heap,
+        );
 
         let mut i = 0;
         let mut block = self.start_block;
