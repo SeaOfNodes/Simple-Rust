@@ -119,9 +119,9 @@ impl<'t> Node {
             Op::Return => {
                 let ctrl = self.inputs(sea)[0].unwrap().ty(sea).unwrap();
                 let expr = self.inputs(sea)[1].unwrap().ty(sea).unwrap();
-                types.get_tuple_from_array([ctrl, expr])
+                *types.get_tuple_from_array([ctrl, expr])
             }
-            Op::Start(s) => s.args,
+            Op::Start(s) => *s.args,
             Op::Add => {
                 let (t1, t2) = (in_ty(1), in_ty(2));
                 if high(t1) || high(t2) {
@@ -444,7 +444,7 @@ impl<'t> Node {
                     let tfld = in_ty(2 + fs.len() + i).meet(mem.data().t, types);
                     ts.push(*types.get_mem(f.alias, tfld));
                 }
-                types.get_tuple_from_slice(&ts)
+                *types.get_tuple_from_slice(&ts)
             }
             Op::AddF => self.compute_binary_float(|a, b| a + b, sea),
             Op::DivF => self.compute_binary_float(|a, b| a / b, sea),

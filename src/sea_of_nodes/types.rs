@@ -202,14 +202,13 @@ impl<'a> Types<'a> {
         self.interner.get_float(sz, constant)
     }
 
-    pub fn get_tuple_from_slice(&self, types: &[Ty<'a>]) -> Ty<'a> {
-        let types: &'a [Ty<'a>] = self.interner.arena.alloc_slice_copy(types);
-        self.interner.intern(Type::Tuple(types))
+    pub fn get_tuple_from_slice(&self, types: &[Ty<'a>]) -> TyTuple<'a> {
+        self.interner
+            .get_tuple(self.interner.arena.alloc_slice_copy(types))
     }
 
-    pub fn get_tuple_from_array<const N: usize>(&self, types: [Ty<'a>; N]) -> Ty<'a> {
-        let types: &'a [Ty<'a>] = self.interner.arena.alloc(types);
-        self.interner.intern(Type::Tuple(types))
+    pub fn get_tuple_from_array<const N: usize>(&self, types: [Ty<'a>; N]) -> TyTuple<'a> {
+        self.interner.get_tuple(self.interner.arena.alloc(types))
     }
 
     pub fn get_str(&self, name: &str) -> &'a str {

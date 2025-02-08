@@ -9,7 +9,7 @@ use Cow::*;
 use crate::datastructures::id::Id;
 use crate::datastructures::id_vec::IdVec;
 use crate::sea_of_nodes::nodes::{Nodes, OpVec, ScopeOp};
-use crate::sea_of_nodes::types::{Ty, TyMemPtr, TyStruct};
+use crate::sea_of_nodes::types::{Ty, TyMemPtr, TyStruct, TyTuple};
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub struct Node(pub(super) NonZeroU32);
@@ -476,7 +476,7 @@ impl<'t> Op<'t> {
 
 #[derive(Clone, Debug)]
 pub struct StartOp<'t> {
-    pub args: Ty<'t>,
+    pub args: TyTuple<'t>,
     pub alias_starts: HashMap<&'t str, u32>,
 }
 
@@ -493,7 +493,7 @@ impl Start {
             vec![],
             sea,
         );
-        sea.ty[this] = Some(args);
+        sea.ty[this] = Some(*args);
         this
     }
 }

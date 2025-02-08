@@ -228,7 +228,7 @@ impl<'t> Types<'t> {
             *struct_test,
             *self.struct_bot,
             //
-            self.get_tuple_from_array([*self.int_bot, *ptr_test]),
+            *self.get_tuple_from_array([*self.int_bot, *ptr_test]),
         ];
         let t2 = ts.iter().map(|t| self.dual(*t)).collect::<Vec<_>>();
         ts.extend(t2);

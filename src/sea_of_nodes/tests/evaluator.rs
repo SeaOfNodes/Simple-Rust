@@ -1,11 +1,12 @@
 use crate::datastructures::id_set::IdSet;
 use crate::datastructures::id_vec::IdVec;
-use crate::sea_of_nodes::nodes::node::{Constant, Div, Load, New, Start, Store, TypedNode};
+use crate::sea_of_nodes::nodes::node::{Constant, Div, DivF, Load, New, Start, Store, TypedNode};
 use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes};
 use crate::sea_of_nodes::tests::scheduler;
 use crate::sea_of_nodes::tests::scheduler::{Block, BlockId};
 use crate::sea_of_nodes::types::{TyStruct, Type};
 use std::fmt::{Display, Formatter};
+use std::ops::{Add, BitAnd, BitOr, BitXor, Mul, Neg, Shl, Shr, Sub};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Object {
@@ -14,6 +15,17 @@ pub enum Object {
     Memory,
     Double(f64),
     Obj(usize),
+}
+
+impl From<i64> for Object {
+    fn from(value: i64) -> Self {
+        Object::Long(value)
+    }
+}
+impl From<f64> for Object {
+    fn from(value: f64) -> Self {
+        Object::Double(value)
+    }
 }
 
 #[derive(Debug)]
@@ -149,6 +161,14 @@ impl<'a, 't> Evaluator<'a, 't> {
             self.vall(self.sea.inputs[div][1].unwrap()) / in2
         }
     }
+    fn divf(&self, div: DivF) -> f64 {
+        let in2 = self.vald(self.sea.inputs[div][2].unwrap());
+        if in2 == 0.0 {
+            0.0
+        } else {
+            self.vald(self.sea.inputs[div][1].unwrap()) / in2
+        }
+    }
 
     fn alloc(&mut self, alloc: New) -> Object {
         let ty = self.sea[alloc].to_mem_ptr().unwrap().data().to;
@@ -191,7 +211,16 @@ impl<'a, 't> Evaluator<'a, 't> {
     fn vall(&self, node: Node) -> i64 {
         match self.val(node) {
             Object::Long(l) => l,
+            Object::Double(l) => l as i64,
             v => unreachable!("Not a long {v:?}"),
+        }
+    }
+
+    fn vald(&self, node: Node) -> f64 {
+        match self.val(node) {
+            Object::Long(l) => l as f64,
+            Object::Double(l) => l,
+            v => unreachable!("Not a double {v:?}"),
         }
     }
 
@@ -218,29 +247,40 @@ impl<'a, 't> Evaluator<'a, 't> {
         }
     }
 
-    fn binary<F: FnOnce(i64, i64) -> i64>(&self, node: Node, op: F) -> Object {
-        let a = self.vall(self.sea.inputs[node][1].unwrap());
-        let b = self.vall(self.sea.inputs[node][2].unwrap());
-        Object::Long(op(a, b))
+    fn binary<T: Into<Object>, F: FnOnce(Node, Node) -> T>(&self, node: Node, op: F) -> Object {
+        let a = self.sea.inputs[node][1].unwrap();
+        let b = self.sea.inputs[node][2].unwrap();
+        op(a, b).into()
+    }
+    fn binaryl<T: Into<Object>, F: FnOnce(i64, i64) -> T>(&self, node: Node, op: F) -> Object {
+        self.binary(node, |a, b| op(self.vall(a), self.vall(b)))
+    }
+    fn binaryd<T: Into<Object>, F: FnOnce(f64, f64) -> T>(&self, node: Node, op: F) -> Object {
+        self.binary(node, |a, b| op(self.vald(a), self.vald(b)))
     }
 
     fn exec(&mut self, node: Node) -> Object {
         match node.downcast(&self.sea.ops) {
             TypedNode::Constant(n) => self.cons(n),
-            TypedNode::Add(_) => self.binary(node, i64::wrapping_add),
+            TypedNode::Add(_) => self.binaryl(node, i64::wrapping_add),
+            TypedNode::AddF(_) => self.binaryd(node, f64::add),
             TypedNode::Bool(b) => match self.sea[b] {
-                BoolOp::EQ => {
-                    let a = self.val(self.sea.inputs[node][1].unwrap());
-                    let b = self.val(self.sea.inputs[node][2].unwrap());
-                    Object::Long(if a == b { 1 } else { 0 })
-                }
-                _ => todo!("exec bool op"),
+                BoolOp::EQ => self.binary(node, |a, b| (a == b) as i64),
+                BoolOp::LE => self.binaryl(node, |a, b| (a <= b) as i64),
+                BoolOp::LT => self.binaryl(node, |a, b| (a < b) as i64),
+                BoolOp::EQF => self.binaryd(node, |a, b| (a == b) as i64),
+                BoolOp::LEF => self.binaryd(node, |a, b| (a <= b) as i64),
+                BoolOp::LTF => self.binaryd(node, |a, b| (a < b) as i64),
             },
-            TypedNode::Div(n) => Object::Long(self.div(n)),
-            TypedNode::Minus(_) => {
-                Object::Long(self.vall(node.inputs(&self.sea)[1].unwrap()).wrapping_neg())
-            }
-            TypedNode::Mul(_) => self.binary(node, i64::wrapping_mul),
+            TypedNode::Div(n) => self.div(n).into(),
+            TypedNode::DivF(n) => self.divf(n).into(),
+            TypedNode::Minus(_) => self
+                .vall(node.inputs(&self.sea)[1].unwrap())
+                .wrapping_neg()
+                .into(),
+            TypedNode::MinusF(_) => self.vald(node.inputs(&self.sea)[1].unwrap()).neg().into(),
+            TypedNode::Mul(_) => self.binaryl(node, i64::wrapping_mul),
+            TypedNode::MulF(_) => self.binaryd(node, f64::mul),
             TypedNode::Not(_) => Object::Long(
                 if self.is_true(self.val(node.inputs(&self.sea)[1].unwrap())) {
                     0
@@ -248,8 +288,16 @@ impl<'a, 't> Evaluator<'a, 't> {
                     1
                 },
             ),
-            TypedNode::Sub(_) => self.binary(node, i64::wrapping_sub),
+            TypedNode::Sub(_) => self.binaryl(node, i64::wrapping_sub),
+            TypedNode::SubF(_) => self.binaryd(node, f64::sub),
+            TypedNode::Shl(_) => self.binaryl(node, i64::shl),
+            TypedNode::Shr(_) => self.binaryl(node, |a, b| (a as u64 >> b as u64) as i64),
+            TypedNode::Sar(_) => self.binaryl(node, i64::shr),
+            TypedNode::And(_) => self.binaryl(node, i64::bitand),
+            TypedNode::Or(_) => self.binaryl(node, i64::bitor),
+            TypedNode::Xor(_) => self.binaryl(node, i64::bitxor),
             TypedNode::Cast(_) => self.val(node.inputs(&self.sea)[1].unwrap()),
+            TypedNode::ToFloat(_) => (self.vall(node.inputs(&self.sea)[1].unwrap()) as f64).into(),
             TypedNode::Load(n) => self.load(n),
             TypedNode::Store(n) => self.store(n),
             TypedNode::New(n) => self.alloc(n),
@@ -259,6 +307,8 @@ impl<'a, 't> Evaluator<'a, 't> {
             TypedNode::Proj(n) => {
                 self.valo(n.inputs(&self.sea)[0].unwrap()).fields[self.sea[n].index]
             }
+            TypedNode::ScopeMin(_) => Object::Null,
+            TypedNode::ReadOnly(n) => self.val(n.inputs(&self.sea)[1].unwrap()),
             n => unreachable!("Unexpected node {n:?}"),
         }
     }
@@ -269,12 +319,10 @@ impl<'a, 't> Evaluator<'a, 't> {
         self.heap.objs.push(Obj {
             ty: self.sea.types.struct_bot, // dummy
             fields: {
-                let Type::Tuple(types) = &*self.sea[self.start].args else {
-                    unreachable!();
-                };
-                let mut f = vec![Object::Memory; types.len()];
-                f[0] = Object::Null;
-                f[1] = Object::Long(parameter);
+                let types = self.sea[self.start].args;
+                let mut f = vec![Object::Null; types.data().len()];
+                f[1] = Object::Memory;
+                f[2] = Object::Long(parameter);
                 f
             },
         });

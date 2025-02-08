@@ -205,7 +205,7 @@ impl<'t> Ty<'t> {
                 if t1.len() != t2.len() {
                     tys.bot
                 } else {
-                    tys.get_tuple_from_slice(
+                    *tys.get_tuple_from_slice(
                         &t1.iter()
                             .zip(t2.iter())
                             .map(|(x, y)| x.meet(*y, tys))
@@ -259,7 +259,7 @@ impl<'t> Ty<'t> {
             }
             Type::Int(i) => *tys.make_int(i.max, i.min),
             Type::Tuple(types) => {
-                tys.get_tuple_from_slice(&types.iter().map(|t| t.dual(tys)).collect::<Vec<_>>())
+                *tys.get_tuple_from_slice(&types.iter().map(|t| t.dual(tys)).collect::<Vec<_>>())
             }
             Type::Struct(_) => *self.as_struct().dual(tys),
             Type::MemPtr(p) => *tys.get_mem_ptr(p.to.dual(tys), !p.nil),
@@ -292,7 +292,7 @@ impl<'t> Ty<'t> {
             Type::Float(_) => *tys.float_bot,
             Type::Tuple(types) => {
                 let types = types.iter().map(|ty| ty.glb(tys)).collect::<Vec<_>>();
-                tys.get_tuple_from_slice(&types)
+                *tys.get_tuple_from_slice(&types)
             }
             Type::Struct(_) => *self.as_struct().glb(tys),
             Type::MemPtr(MemPtr { to, .. }) => *tys.get_mem_ptr(to.glb(tys), true),
