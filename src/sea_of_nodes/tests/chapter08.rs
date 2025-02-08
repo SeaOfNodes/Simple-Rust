@@ -297,6 +297,6 @@ return a;
     assert_eq!(parser.print(stop), "return (Phi(Loop,1,Add)+1);");
     assert!(matches!(
         parser.nodes.ret_ctrl(stop),
-        Op::CProj(ProjOp { index: 5, .. })
+        Op::CProj(ProjOp { index: 1, .. })
     ));
 }
