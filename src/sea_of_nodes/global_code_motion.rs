@@ -1,7 +1,15 @@
 use crate::datastructures::id::Id;
 use crate::datastructures::id_set::IdSet;
-use crate::sea_of_nodes::nodes::node::{CProj, If, IfOp, Load, Loop, Return, Stop, TypedNode};
+use crate::sea_of_nodes::nodes::node::{IfOp, Load, Stop, TypedNode};
 use crate::sea_of_nodes::nodes::{Cfg, Node, Nodes, WorkList};
+
+impl Stop {
+    pub fn gcm(self, sea: &mut Nodes) {
+        sea.start.build_loop_tree(self, sea);
+        // TODO show here?
+        build_cfg(self, sea);
+    }
+}
 
 /// Arrange that the existing isCFG() Nodes form a valid CFG.  The
 /// Node.use(0) is always a block tail (either IfNode or head of the
@@ -10,44 +18,6 @@ pub fn build_cfg(stop: Stop, sea: &mut Nodes) {
     sched_early(sea);
     sea.scheduled = true;
     sched_late(stop, sea);
-}
-
-impl Loop {
-    /// If this is an unreachable loop, it may not have an exit.  If it does not
-    /// (i.e., infinite loop), force an exit to make it reachable.
-    fn force_exit(self, stop: Stop, sea: &mut Nodes) {
-        // Walk the backedge, then immediate dominator tree util we hit this
-        // Loop again.  If we ever hit a CProj from an If (as opposed to
-        // directly on the If) we found our exit.
-        let mut x = self.back(sea);
-        while x != self.to_cfg() {
-            if let Some(exit) = x.to_cproj(sea) {
-                if let Some(iff) = exit.inputs(sea)[0].unwrap().to_if(sea) {
-                    let other = iff.cproj(1 - sea[exit].index, sea).unwrap();
-                    if other.loop_depth(sea) < self.loop_depth(sea) {
-                        return;
-                    }
-                }
-            }
-            x = x.idom(sea).unwrap()
-        }
-
-        // Found a no-exit loop.  Insert an exit
-        let iff = If::new(*self.back(sea), None, sea);
-        for i in 0..sea.outputs[self].len() {
-            let use_ = sea.outputs[self][i];
-            if use_ != Node::DUMMY {
-                if let Some(phi) = use_.to_phi(sea) {
-                    iff.add_def(*phi, sea);
-                }
-            }
-        }
-
-        let t = CProj::new(**iff, 0, "True", sea);
-        let f = CProj::new(**iff, 1, "False", sea);
-        self.set_def(2, f.to_node(), sea);
-        stop.add_def(**Return::new(**t, *sea.zero, None, sea), sea);
-    }
 }
 
 /// Visit all nodes in CFG Reverse Post-Order, essentially defs before uses
@@ -170,7 +140,7 @@ impl Cfg {
 fn breadth(stop: Stop, ns: &mut Vec<Option<Node>>, late: &mut Vec<Option<Cfg>>, sea: &mut Nodes) {
     // Things on the worklist have some (but perhaps not all) uses done.
     let mut work = WorkList::with_seed(123);
-    work.push(*stop);
+    work.push(**stop);
 
     'outer: while let Some(n) = work.pop() {
         debug_assert_eq!(late[n.index()], None, "No double visit");

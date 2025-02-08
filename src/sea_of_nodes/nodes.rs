@@ -3,7 +3,7 @@ use std::num::NonZeroU32;
 
 use crate::datastructures::id_set::IdSet;
 use crate::datastructures::id_vec::IdVec;
-use crate::sea_of_nodes::nodes::cfg::CfgData;
+use crate::sea_of_nodes::nodes::cfg::{CfgData, LoopTree, LoopTreeData};
 use crate::sea_of_nodes::nodes::gvn::GvnEntry;
 use crate::sea_of_nodes::nodes::node::{CProj, ToFloat};
 use crate::sea_of_nodes::types::{Ty, Types};
@@ -112,6 +112,8 @@ pub struct Nodes<'t> {
     /// differs from java: this doesn't live in the parser, because function
     /// in scope.rs had to access it to resolve types
     pub name_to_type: HashMap<&'t str, Ty<'t>>,
+
+    pub loop_tree: IdVec<LoopTree, LoopTreeData>,
 }
 
 pub type NodeCreation<'t> = (Op<'t>, Vec<Option<Node>>);
@@ -141,6 +143,7 @@ impl<'t> Nodes<'t> {
             hash: IdVec::new(vec![None]),
             scheduled: false,
             name_to_type: HashMap::new(),
+            loop_tree: IdVec::new(vec![LoopTreeData::DUMMY]),
         }
     }
     pub fn len(&self) -> usize {

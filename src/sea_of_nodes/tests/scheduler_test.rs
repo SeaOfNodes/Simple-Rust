@@ -28,7 +28,7 @@ return v0;
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    let mut eval = Evaluator::new(*stop, &parser.nodes);
+    let mut eval = Evaluator::new(**stop, &parser.nodes);
 
     let result = eval.evaluate(0, 10);
     assert_obj(&eval.heap, result, "S", &[Object::Long(0)]);
@@ -57,7 +57,7 @@ return i;
     );
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
-    let mut eval = Evaluator::new(*stop, &parser.nodes);
+    let mut eval = Evaluator::new(**stop, &parser.nodes);
     assert_eq!(eval.evaluate(0, 10), EResult::Value(Object::Long(2)));
     assert_eq!(eval.evaluate(0, 10), EResult::Value(Object::Long(2)));
 }

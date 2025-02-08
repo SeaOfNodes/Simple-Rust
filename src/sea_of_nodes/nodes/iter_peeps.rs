@@ -90,7 +90,7 @@ impl Node {
 impl<'t> Nodes<'t> {
     /// Iterate peepholes to a fixed point
     pub fn iterate(&mut self, stop: Stop) {
-        debug_assert!(self.progress_on_list(*stop));
+        debug_assert!(self.progress_on_list(**stop));
         while let Some(n) = self.iter_peeps.work.pop() {
             if n.is_dead(self) {
                 continue;
@@ -130,7 +130,7 @@ impl<'t> Nodes<'t> {
 
                 // If there are distant neighbors, move to worklist
                 n.move_deps_to_worklist(self);
-                debug_assert!(self.progress_on_list(*stop)); // Very expensive assert
+                debug_assert!(self.progress_on_list(**stop)); // Very expensive assert
             }
             if n.is_unused(self) && !n.is_stop(self) {
                 n.kill(self); // just plain dead
@@ -139,7 +139,7 @@ impl<'t> Nodes<'t> {
     }
 
     pub fn type_check(&mut self, stop: Stop) -> Result<(), String> {
-        match self.walk_non_reentrant(*stop, |sea, n| n.err(sea)) {
+        match self.walk_non_reentrant(**stop, |sea, n| n.err(sea)) {
             Some(err) => Err(err),
             None => Ok(()),
         }

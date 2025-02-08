@@ -4,7 +4,7 @@ use crate::sea_of_nodes::nodes::node::{
     Sub, TypedNode,
 };
 use crate::sea_of_nodes::nodes::node::{IfOp, Region};
-use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes, Op};
+use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes};
 use crate::sea_of_nodes::types::Ty;
 
 impl Node {
@@ -329,7 +329,7 @@ impl Stop {
         while i < self.inputs(sea).len() {
             if self.inputs(sea)[i].unwrap().ty(sea) == Some(sea.types.xctrl) {
                 self.del_def(i, sea);
-                result = Some(*self);
+                result = Some(**self);
             } else {
                 i += 1;
             }

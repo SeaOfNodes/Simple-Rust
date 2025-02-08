@@ -225,7 +225,7 @@ impl<'s, 't> Parser<'s, 't> {
             ))
         } else {
             let p = self.stop.peephole(&mut self.nodes);
-            assert_eq!(*self.stop, p);
+            assert_eq!(**self.stop, p);
             Ok(self.stop)
         }
     }
@@ -235,7 +235,10 @@ impl<'s, 't> Parser<'s, 't> {
     }
 
     pub fn type_check(&mut self, stop: Stop) -> Result<(), String> {
-        self.nodes.type_check(stop)
+        let r = self.nodes.type_check(stop)?;
+        // TODO move this
+        stop.gcm(&mut self.nodes);
+        Ok(r)
     }
 
     /// <pre>
@@ -1300,7 +1303,8 @@ impl<'s, 't> Parser<'s, 't> {
         }
         let size = self.int_con(tmp.data().to.offset(fs.len(), self.types));
         self.altmp.clear();
-        self.altmp.extend_from_slice(&init.inputs(&self.nodes)[idx..]);
+        self.altmp
+            .extend_from_slice(&init.inputs(&self.nodes)[idx..]);
         let ptr = self.new_struct(tmp.data().to, *size);
         if has_constructor {
             self.scope.pop(&mut self.nodes);

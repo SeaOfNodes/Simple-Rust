@@ -63,7 +63,7 @@ pub fn generate_dot_output(
     source: &str,
     separate_control_cluster: bool,
 ) -> Result<String, fmt::Error> {
-    let all = find_all(sea, &[Some(*stop), scope.map(|s| s.to_node())]);
+    let all = find_all(sea, &[Some(**stop), scope.map(|s| s.to_node())]);
 
     let mut sb = String::new();
     writeln!(sb, "digraph \"{}\" {{", source.replace("\"", "\\\""))?;

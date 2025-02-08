@@ -310,7 +310,7 @@ define_ids!(<'t>
     Shl                  : Node     { to_shl       is_shl       };
     Shr                  : Node     { to_shr       is_shr       };
     Start(StartOp<'t>)   : Loop     { to_start     is_start     };
-    Stop                 : Node     { to_stop      is_stop      };
+    Stop                 : Cfg      { to_stop      is_stop      };
     Store(StoreOp<'t>)   : Node     { to_store     is_store     };
     Struct(TyStruct<'t>) : Node     { to_struct    is_struct    };
     Sub                  : Node     { to_sub       is_sub       };
@@ -718,6 +718,8 @@ impl Stop {
     }
 }
 impl Loop {
+    pub const DUMMY: Loop = Loop(Region(Cfg(Node::DUMMY)));
+
     pub fn new(entry: Node, sea: &mut Nodes) -> Self {
         Self::create(vec![None, Some(entry), None], sea)
     }
