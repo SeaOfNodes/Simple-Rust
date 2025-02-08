@@ -590,6 +590,7 @@ impl<'s, 't> Parser<'s, 't> {
         if do_rhs {
             false_scope = self.scope;
         }
+        pred.unkeep(&mut self.nodes);
 
         // Check for `if(pred) int x=17;`
         if self.nodes.inputs[true_scope].len() != n_defs

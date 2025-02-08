@@ -162,8 +162,8 @@ impl<'t> Nodes<'t> {
         let changed = self.walk_non_reentrant(stop, |sea: &mut Self, n| {
             let mut m = n;
             // Types must be forwards, even if on worklist
-            if sea.types.isa(n.compute(sea), n.ty(sea).unwrap())
-                && (!n.is_keep(sea) || n.index() <= 5)
+            if n.compute(sea).isa(n.ty(sea).unwrap(), sea.types)
+                && (!n.is_keep(sea) || n.index() <= 6)
             {
                 if sea.iter_peeps.work.on(n) {
                     return None;
