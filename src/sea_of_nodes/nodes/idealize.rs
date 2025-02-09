@@ -38,6 +38,9 @@ impl Node {
             TypedNode::DivF(n) => n.idealize_divf(sea),
             TypedNode::MulF(n) => n.idealize_mulf(sea),
             TypedNode::SubF(n) => n.idealize_subf(sea),
+            TypedNode::And(n) => n.idealize_logical(-1, sea),
+            TypedNode::Or(n) => n.idealize_logical(0, sea),
+            TypedNode::Xor(n) => n.idealize_logical(0, sea),
             TypedNode::Constant(_)
             | TypedNode::XCtrl(_)
             | TypedNode::Start(_)
@@ -48,7 +51,6 @@ impl Node {
             | TypedNode::ToFloat(_)
             | TypedNode::Not(_) => None,
             TypedNode::Cfg(_) => unreachable!(),
-            n => todo!("{n:?}"),
         }
     }
 }
@@ -925,10 +927,10 @@ impl AddF {
 }
 impl DivF {
     fn idealize_divf(self, sea: &mut Nodes) -> Option<Node> {
-        let t2 = self.inputs(sea)[2].unwrap().ty(sea);
+        let t2 = self.inputs(sea)[2].unwrap().ty(sea).unwrap();
 
         // Add of 0.
-        if t2.and_then(Ty::to_float).and_then(TyFloat::value) == Some(1.0) {
+        if t2.to_float().and_then(TyFloat::value) == Some(1.0) {
             return self.inputs(sea)[1];
         }
         None
@@ -939,18 +941,17 @@ impl MulF {
     fn idealize_mulf(self, sea: &mut Nodes) -> Option<Node> {
         let lhs = self.inputs(sea)[1].unwrap();
         let rhs = self.inputs(sea)[2].unwrap();
-        let t1 = lhs.ty(sea);
-        let t2 = rhs.ty(sea);
+        let t1 = lhs.ty(sea).unwrap();
+        let t2 = rhs.ty(sea).unwrap();
 
         // Mul of 1.  We do not check for (1*x) because this will already
         // canonicalize to (x*1)
-        if t2.and_then(Ty::to_float).and_then(TyFloat::value) == Some(1.0) {
+        if t2.to_float().and_then(TyFloat::value) == Some(1.0) {
             return Some(lhs);
         }
 
         // Move constants to RHS: con*arg becomes arg*con
-        if t1.is_some_and(|t| t.is_constant(sea.tys)) && !t2.is_some_and(|t| t.is_constant(sea.tys))
-        {
+        if t1.is_constant(sea.tys) && !t2.is_constant(sea.tys) {
             return Some(self.swap_12(sea));
         }
         None
@@ -964,6 +965,31 @@ impl SubF {
             return self.inputs(sea)[1];
         }
         None
+    }
+}
+
+impl Node {
+    fn idealize_logical(self, identity: i64, sea: &mut Nodes) -> Option<Node> {
+        let lhs = self.inputs(sea)[1].unwrap();
+        let rhs = self.inputs(sea)[2].unwrap();
+        let t1 = lhs.ty(sea).unwrap();
+        let t2 = rhs.ty(sea).unwrap();
+
+        // And of -1.  We do not check for (-1&x) because this will already
+        // canonicalize to (x&-1)
+        if t2.to_int().and_then(TyInt::value) == Some(identity) {
+            return Some(lhs);
+        }
+
+        // Move constants to RHS: con*arg becomes arg*con
+        if t1.is_constant(sea.tys) && !t2.is_constant(sea.tys) {
+            return Some(self.swap_12(sea));
+        }
+
+        // Do we have ((x & (phi cons)) & con) ?
+        // Do we have ((x & (phi cons)) & (phi cons)) ?
+        // Push constant up through the phi: x & (phi con0&con0 con1&con1...)
+        sea.phi_con(self, true)
     }
 }
 
