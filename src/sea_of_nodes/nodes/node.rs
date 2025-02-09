@@ -323,6 +323,13 @@ define_ids!(<'t>
 impl<'t> Op<'t> {
     /// Easy reading label for debugger
     pub fn label(&self) -> Cow<str> {
+        fn mlabel(name: &str) -> &str {
+            match name {
+                "[]" => "ary",
+                "#" => "len",
+                _ => name,
+            }
+        }
         Borrowed(match self {
             Op::Add => "Add",
             Op::AddF => "AddF",
@@ -343,16 +350,16 @@ impl<'t> Op<'t> {
             Op::DivF => "DivF",
             Op::If(IfOp::Cond) => "If",
             Op::If(IfOp::Never) => "Never",
-            Op::Load(_) => "Load",
+            Op::Load(l) => return Owned(format!("ld_{}", mlabel(l.name))),
             Op::Loop => "Loop",
             Op::Minus => "Minus",
             Op::MinusF => "MinusF",
             Op::Mul => "Mul",
             Op::MulF => "MulF",
-            Op::New(_) => "new",
+            Op::New(_) => return Owned(format!("new_{}", self.glabel())),
             Op::Not => "Not",
             Op::Or => "Or",
-            Op::Phi(p) => return Owned(format!("Phi_{}", p.label)),
+            Op::Phi(p) => return Owned(format!("Phi_{}", mlabel(p.label))),
             Op::Proj(p) => p.label,
             Op::ReadOnly => "ReadOnly",
             Op::Region { .. } => "Region",
@@ -365,7 +372,7 @@ impl<'t> Op<'t> {
             Op::Shr => "Shr",
             Op::Start { .. } => "Start",
             Op::Stop => "Stop",
-            Op::Store(_) => "Store",
+            Op::Store(s) => return Owned(format!("st_{}", mlabel(s.name))),
             Op::Struct(s) => return s.str(),
             Op::Sub => "Sub",
             Op::SubF => "SubF",
@@ -391,9 +398,16 @@ impl<'t> Op<'t> {
             Op::Not => Borrowed("!"),
             Op::Phi(p) => Owned(format!("&phi;_{}", p.label)),
             Op::Cast(t) => Owned(format!("({})", t.str())),
-            Op::New(_) => Borrowed("new"),
-            Op::Load(_) => Borrowed("Load"),
-            Op::Store(_) => Borrowed("Store"),
+            Op::New(ptr) => {
+                let obj = ptr.data().to;
+                if obj.is_ary() {
+                    Owned(format!("ary_{}", obj.fields()[1].ty.str()))
+                } else {
+                    obj.str()
+                }
+            }
+            Op::Load(l) => Owned(format!(".{}", l.name)),
+            Op::Store(s) => Owned(format!(".{}=", s.name)),
             Op::RoundF32 => Borrowed("(f32)"),
             Op::ToFloat => Borrowed("(flt)"),
             Op::Sar => Borrowed(">>"),

@@ -28,7 +28,7 @@ impl<'t> Type<'t> {
     }
 
     /// This is used by error messages, and is a shorted print.
-    pub fn str(&self) -> Cow<str> {
+    pub fn str(&self) -> Cow<'t, str> {
         use Cow::*;
         Borrowed(match self {
             Type::Bot => "Bot",
@@ -118,8 +118,8 @@ impl<'t> Display for Type<'t> {
                 if let Some(fs) = s.fields {
                     write!(f, " {{")?;
                     for field in fs {
-                        write!(f, " {} ", field.ty)?;
-                        if field.final_field {
+                        write!(f, "{} ", field.ty)?;
+                        if !field.final_field {
                             write!(f, "!")?;
                         }
                         write!(f, "{}; ", field.fname)?;
