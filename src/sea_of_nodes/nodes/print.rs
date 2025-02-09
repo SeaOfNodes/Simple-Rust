@@ -91,7 +91,7 @@ impl Display for PrintNodes2<'_, '_, '_> {
             Op::Minus | Op::MinusF => write!(f, "(-{})", input(1)),
             Op::RoundF32 => write!(f, "((f32){})", input(1)),
             Op::ToFloat => write!(f, "(flt){}", input(1)),
-            Op::ReadOnly => write!(f, "((const){})", input(1)),
+            Op::ReadOnly => write!(f, "(const){}", input(1)),
             Op::Scope(_) => {
                 //         sb.append("Scope[ ");
                 //         int j=1;
@@ -148,7 +148,19 @@ impl Display for PrintNodes2<'_, '_, '_> {
                 }
                 write!(f, "]")
             }
-            Op::Struct(_) => todo!(),
+            Op::Struct(s) => {
+                write!(f, "{}", s.name())?;
+                for (i, &inp) in inputs.iter().enumerate() {
+                    if i == 0 {
+                        write!(f, " {{")?;
+                    } else {
+                        write!(f, "; ")?;
+                    }
+                    let t = inp.map(|i| i.ty(sea).unwrap()).unwrap_or(sea.tys.bot);
+                    write!(f, "{}:{t}", s.fields()[i].fname)?;
+                }
+                write!(f, "}}")
+            }
             Op::Not => write!(f, "(!{})", input(1)),
             Op::Proj(proj) | Op::CProj(proj) => write!(f, "{}", proj.label),
             Op::If(op) => match op {
