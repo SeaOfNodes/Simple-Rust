@@ -478,7 +478,7 @@ impl<'a, 't> Evaluator<'a, 't> {
             TypedNode::Add(_) => self.binaryl(node, i64::wrapping_add),
             TypedNode::AddF(_) => self.binaryd(node, f64::add),
             TypedNode::Bool(b) => match self.sea[b] {
-                BoolOp::EQ => self.binary(node, |a, b| (a == b) as i64),
+                BoolOp::EQ => self.binary(node, |a, b| (self.val(a) == self.val(b)) as i64),
                 BoolOp::LE => self.binaryl(node, |a, b| (a <= b) as i64),
                 BoolOp::LT => self.binaryl(node, |a, b| (a < b) as i64),
                 BoolOp::EQF => self.binaryd(node, |a, b| (a == b) as i64),
