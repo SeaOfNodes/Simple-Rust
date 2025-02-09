@@ -278,6 +278,7 @@ impl Node {
     fn del_def(self, index: usize, sea: &mut Nodes) {
         self.unlock(sea);
         let old_def = self.inputs(sea)[index];
+        sea.inputs[self].swap_remove(index);
         if let Some(old_def) = old_def {
             old_def.del_use(self, sea);
             if old_def.is_unused(sea) {
@@ -285,7 +286,6 @@ impl Node {
             }
             old_def.move_deps_to_worklist(sea);
         }
-        sea.inputs[self].swap_remove(index);
     }
 
     pub fn add_use(self, use_: Node, sea: &mut Nodes) {
