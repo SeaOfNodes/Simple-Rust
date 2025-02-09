@@ -695,23 +695,70 @@ impl Store {
     fn idealize_store(self, sea: &mut Nodes) -> Option<Node> {
         // Simple store-after-store on same address.  Should pick up the
         // required init-store being stomped by a first user store.
-        let mem = self.mem(sea)?;
-        let ptr = self.ptr(sea)?;
-
-        if let Some(mem) = mem.to_store(sea) {
+        if let Some(st) = self.mem(sea).and_then(|m| m.to_store(sea)) {
             // Must check same object
-            if ptr == mem.ptr(sea)? {
+            // And same offset (could be "same alias" but this handles arrays to same index)
+            if self.ptr(sea) == st.ptr(sea) && self.off(sea) == st.off(sea) {
                 // No bother if weird dead pointers
-                if ptr.ty(sea).is_some_and(|t| t.is_mem_ptr()) {
+                if self.ptr(sea).unwrap().ty(sea).is_some_and(Ty::is_mem_ptr) {
                     // Must have exactly one use of "this" or you get weird
                     // non-serializable memory effects in the worse case.
-                    if mem.check_no_use_beyond(*self, sea) {
+                    if self.check_only_use(*st, sea) {
                         debug_assert_eq!(
-                            sea[self].name, sea[mem].name,
+                            sea[self].name, sea[st].name,
                             "Equiv class aliasing is perfect"
                         );
-                        self.set_def(1, mem.mem(sea), sea);
+                        self.set_def(1, st.mem(sea), sea);
                         return Some(*self);
+                    }
+                }
+            }
+        }
+
+        // Simple store-after-new on same address.  Should pick up the
+        // an init-store being stomped by a first user store.
+        if let Some(st) = self.mem(sea).and_then(|m| m.to_proj(sea)) {
+            if let Some(nnn) = st.inputs(sea)[0].and_then(|n| n.to_new(sea)) {
+                if let Some(ptr) = self.ptr(sea).and_then(|m| m.to_proj(sea)) {
+                    if ptr.inputs(sea)[0] == Some(*nnn) {
+                        // No bother if weird dead pointers
+                        if let Some(tmp) = ptr.ty(sea).and_then(Ty::to_mem_ptr) {
+                            // Cannot fold a store of a single element over the array body initializer value
+                            if !(tmp.data().to.is_ary()
+                                && tmp.data().to.fields()[1].alias == sea[self].alias)
+                            {
+                                // Very sad strong cutout: val has to be legal to hoist to a New
+                                // input, which means it cannot depend on the New.  Many many
+                                // things are legal here but difficult to check without doing a
+                                // full dominator check.  Example failure:
+                                // "struct C { C? c; }; C self = new C { c=self; }"
+                                if self
+                                    .val(sea)
+                                    .unwrap()
+                                    .ty(sea)
+                                    .unwrap()
+                                    .is_high_or_constant(sea.tys)
+                                {
+                                    // Must have exactly one use of "this" or you get weird
+                                    // non-serializable memory effects in the worse case.
+                                    if self.check_only_use(*st, sea) {
+                                        // Folding away a broken store
+                                        if self.err(sea).is_none() {
+                                            nnn.set_def(
+                                                nnn.find_alias(sea[self].alias, sea),
+                                                self.val(sea),
+                                                sea,
+                                            );
+                                            // Must retype the NewNode
+                                            sea.ty[nnn] = Some(nnn.compute(sea));
+                                            let mem = self.mem(sea).unwrap();
+                                            sea.ty[mem] = Some(mem.compute(sea));
+                                            return Some(*st);
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -719,18 +766,18 @@ impl Store {
         None
     }
 
-    // Check that `this` has no uses beyond `that`
-    fn check_no_use_beyond(self, that: Node, sea: &mut Nodes) -> bool {
-        let n_outs = sea.outputs[self].len();
+    // Check that `mem` has no uses except `self`
+    fn check_only_use(self, mem: Node, sea: &mut Nodes) -> bool {
+        let n_outs = sea.outputs[mem].len();
         if n_outs == 1 {
             return true;
         }
         // Add deps on the other uses (can be e.g. ScopeNode mid-parse) so that
         // when the other uses go away we can retry.
         for i in 0..n_outs {
-            let use_ = sea.outputs[self][i];
-            if use_ != that {
-                use_.add_dep(that, sea);
+            let use_ = sea.outputs[mem][i];
+            if use_ != *self {
+                use_.add_dep(self, sea);
             }
         }
         false
