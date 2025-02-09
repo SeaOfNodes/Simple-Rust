@@ -363,7 +363,7 @@ impl<'t> Node {
                     sea[self.to_phi(sea).unwrap()].ty
                 } else {
                     // Set type to local top of the starting type
-                    let mut t = sea[self.to_phi(sea).unwrap()].ty.glb(types).dual(types);
+                    let mut t = sea[self.to_phi(sea).unwrap()].ty.lub(sea.types);
 
                     for i in 1..self.inputs(sea).len() {
                         // If the region's control input is live, add this as a dependency
