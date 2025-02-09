@@ -862,6 +862,7 @@ impl<'s, 't> Parser<'s, 't> {
             self.alias += 1;
         }
         let ts = self.types.get_struct(type_name, &fs);
+        self.nodes[s] = ts;
         self.nodes
             .name_to_type
             .insert(type_name, *self.types.get_mem_ptr(ts, false));
