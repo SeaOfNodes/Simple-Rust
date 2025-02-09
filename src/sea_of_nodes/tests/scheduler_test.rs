@@ -19,8 +19,8 @@ fn test_store_in_if() {
         "\
 struct S {
     int f;
-}
-S v0=new S;
+};
+S !v0=new S;
 if(arg) v0.f=1;
 return v0;
 ",
@@ -45,8 +45,8 @@ fn test_store_in_if_2() {
         "\
 struct S {
     int f;
-}
-S v=new S;
+};
+S !v=new S;
 v.f = 2;
 int i=new S.f;
 i=v.f;
