@@ -505,20 +505,19 @@ impl<'s, 't> Parser<'s, 't> {
     fn skip_asgn(&mut self) -> PResult<()> {
         let mut paren = 0;
         loop {
-            // Next X char handles skipping complex comments
-            let pos = self.lexer.remaining;
-            match self.lexer.next_x_char() {
+            self.lexer.skip_whitespace();
+            match self.lexer.peek() {
                 None => return Err("TODO: not yet implemented".to_string()),
                 Some(')') => {
                     paren -= 1;
                     if paren < 0 {
-                        self.set_pos(pos); // Leave the `)` behind
                         return Ok(());
                     }
                 }
                 Some('(') => paren += 1,
                 _ => {}
             }
+            self.lexer.next_char(); // skip over char
         }
     }
 
