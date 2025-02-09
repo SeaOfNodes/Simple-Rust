@@ -833,6 +833,12 @@ impl New {
     pub fn new<'t>(ptr: TyMemPtr<'t>, inputs: Vec<Option<Node>>, sea: &mut Nodes<'t>) -> Self {
         Self::create(ptr, inputs, sea)
     }
+
+    /// Find matching alias input
+    pub fn find_alias(self, alias: u32, sea: &Nodes) -> usize {
+        let obj = sea[self].data().to;
+        2 + obj.find_alias(alias).unwrap() + obj.fields().len()
+    }
 }
 
 impl ReadOnly {

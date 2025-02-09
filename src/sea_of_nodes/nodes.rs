@@ -388,17 +388,21 @@ impl Node {
         true
     }
 
+    /// Find a projection by index
+    pub fn proj(self, index: usize, sea: &Nodes) -> Option<Proj> {
+        sea.outputs[self]
+            .iter()
+            .filter(|&&o| o != Node::DUMMY)
+            .filter_map(|o| o.to_proj(sea))
+            .find(|&p| sea[p].index == index)
+    }
+
     pub fn cproj(self, index: usize, sea: &mut Nodes) -> Option<CProj> {
-        for &out in &sea.outputs[self] {
-            if out != Self::DUMMY {
-                if let Some(prj) = out.to_cproj(sea) {
-                    if sea[prj].index == index {
-                        return Some(prj);
-                    }
-                }
-            }
-        }
-        None
+        sea.outputs[self]
+            .iter()
+            .filter(|&&o| o != Node::DUMMY)
+            .filter_map(|o| o.to_cproj(sea))
+            .find(|&p| sea[p].index == index)
     }
     /// Semantic change to the graph (so NOT a peephole), used by the Parser.
     /// If any input is a float, flip to a float-flavored opcode and widen any

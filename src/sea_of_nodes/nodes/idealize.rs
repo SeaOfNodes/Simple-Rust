@@ -496,15 +496,78 @@ impl Cast {
 
 impl Load {
     fn idealize_load(self, sea: &mut Nodes) -> Option<Node> {
-        let mem = self.mem(sea)?;
-        let ptr = self.ptr(sea)?;
+        let mut ptr = self.ptr(sea);
 
         // Simple Load-after-Store on same address.
-        if let Some(mem) = mem.to_store(sea) {
+        if let Some(st) = self.mem(sea).and_then(|m| m.to_store(sea)) {
             // Must check same object
-            if ptr == mem.ptr(sea)? {
-                debug_assert_eq!(sea[mem].name, sea[self].name); // Equiv class aliasing is perfect
-                return mem.inputs(sea)[3]; // store value
+            if ptr == st.ptr(sea) && self.off(sea) == st.off(sea) {
+                debug_assert_eq!(
+                    sea[self].name, sea[st].name,
+                    "Equiv class aliasing is perfect"
+                );
+                return st.val(sea);
+            }
+        }
+
+        // Simple Load-after-New on same address.
+        if let Some(p) = self.mem(sea).and_then(|m| m.to_proj(sea)) {
+            if let Some(nnn) = p.inputs(sea)[0].and_then(|i| i.to_new(sea)) {
+                // Must check same object
+                if ptr == nnn.proj(1, sea).map(|p| p.to_node()) {
+                    return nnn.inputs(sea)[nnn.find_alias(sea[self].alias, sea)];
+                    // Load from New init
+                }
+            }
+        }
+
+        // Load-after-Store on same address, but bypassing provably unrelated
+        // stores.  This is a more complex superset of the above two peeps.
+        // "Provably unrelated" is really weak.
+        if let Some(ro) = ptr.and_then(|p| p.to_ronly(sea)) {
+            ptr = ro.inputs(sea)[1];
+        }
+        let mut mem = self.mem(sea);
+        loop {
+            match mem.unwrap().downcast(&sea.ops) {
+                TypedNode::Store(st) => {
+                    if ptr == st.ptr(sea) && self.off(sea) == st.off(sea) {
+                        return Some(self.cast_ro(st.val(sea).unwrap(), sea)); // Proved equal
+                    }
+                    // Can we prove unequal?  Offsets do not overlap?
+                    let off_ty = self.off(sea).unwrap().ty(sea).unwrap();
+                    if !off_ty
+                        .join(st.off(sea).unwrap().ty(sea).unwrap(), sea.tys)
+                        .is_high(sea.tys)
+                        && !Self::never_alias(ptr.unwrap(), st.ptr(sea).unwrap(), sea)
+                    {
+                        break; // Cannot tell, stop trying
+                    }
+                    // Pointers cannot overlap
+                    mem = st.mem(sea); // Proved never equal
+                }
+                TypedNode::Phi(_) => break,      // Assume related
+                TypedNode::Constant(_) => break, // Assume shortly dead
+                TypedNode::Proj(mproj) => {
+                    if let Some(nnn1) = mproj.inputs(sea)[0].and_then(|i| i.to_new(sea)) {
+                        if let Some(pproj) = ptr.and_then(|p| p.to_proj(sea)) {
+                            if pproj.inputs(sea)[0] == mproj.inputs(sea)[0] {
+                                // return castRO(nnn1.in(nnn1.findAlias(_alias))); // Load from New init
+                            }
+                        }
+                        if !ptr.and_then(|p| p.to_proj(sea)).is_some_and(|pproj| {
+                            pproj.inputs(sea)[0].is_some_and(|i| i.is_new(sea))
+                        }) {
+                            break; // Cannot tell, ptr not related to New
+                        }
+                        mem = nnn1.inputs(sea)[sea[self].alias as usize]; // Bypass unrelated New
+                    } else if mproj.inputs(sea)[0].is_some_and(|i| i.is_start(sea)) {
+                        break;
+                    } else {
+                        todo!()
+                    }
+                }
+                _ => todo!(),
             }
         }
 
@@ -515,54 +578,116 @@ impl Load {
         //   if( pred ) ptr.x = e0;         val = pred ? e0
         //   else       ptr.x = e1;                    : e1;
         //   val = ptr.x;                   ptr.x = val;
-        if let Some(mem) = mem.to_phi(sea) {
-            if mem.inputs(sea)[0]?.ty(sea) == Some(sea.types.ctrl) && mem.inputs(sea).len() == 3 {
+        if let Some(memphi) = self.mem(sea).and_then(|m| m.to_phi(sea)) {
+            if memphi.region(sea).ty(sea) == Some(sea.tys.ctrl) && memphi.inputs(sea).len() == 3 &&
+                // Offset can be hoisted
+                self.off(sea).is_some_and(|o| o.is_constant(sea)) &&
+                // Pointer can be hoisted
+                Self::hoist_ptr(ptr.unwrap(), memphi, sea)
+            {
                 // Profit on RHS/Loop backedge
-                if self.profit(mem, 2, sea) ||
+                if self.profit(memphi, 2, sea) ||
                     // Else must not be a loop to count profit on LHS.
-                    (!mem.inputs(sea)[0].unwrap().is_loop(sea) && self.profit(mem, 1, sea))
+                    (!memphi.region(sea).is_loop(sea) && self.profit(memphi, 1, sea))
                 {
-                    let name = sea[self].name;
-                    let alias = sea[self].alias;
-                    let declared_ty = sea[self].declared_type;
-
-                    let ld1 = Load::new(
-                        name,
-                        alias,
-                        declared_ty,
-                        [mem.inputs(sea)[1].unwrap(), ptr, todo!()],
-                        sea,
-                    )
-                    .peephole(sea);
-                    let ld2 = Load::new(
-                        name,
-                        alias,
-                        declared_ty,
-                        [mem.inputs(sea)[2].unwrap(), ptr, todo!()],
-                        sea,
-                    )
-                    .peephole(sea);
-
+                    let ld1 = self.ld(1, sea);
+                    let ld2 = self.ld(2, sea);
+                    let op = &sea[self];
                     return Some(*Phi::new(
-                        name,
-                        self.ty(sea).unwrap(),
-                        vec![mem.inputs(sea)[0], Some(ld1), Some(ld2)],
+                        op.name,
+                        op.declared_type,
+                        vec![Some(*memphi.region(sea)), Some(ld1), Some(ld2)],
                         sea,
                     ));
                 }
             }
         }
-
         None
     }
 
+    fn ld(self, idx: usize, sea: &mut Nodes) -> Node {
+        let mem = self.mem(sea).unwrap();
+        let ptr = self.ptr(sea).unwrap();
+        let off = self.off(sea).unwrap();
+        let op = &sea[self];
+        Load::new(
+            op.name,
+            op.alias,
+            op.declared_type,
+            [
+                mem.inputs(sea)[idx].unwrap(),
+                if ptr.inputs(sea)[0] == mem.inputs(sea)[0] {
+                    ptr.inputs(sea)[idx].unwrap()
+                } else {
+                    ptr
+                },
+                off,
+            ],
+            sea,
+        )
+        .peephole(sea)
+    }
+
+    fn never_alias(ptr1: Node, ptr2: Node, sea: &mut Nodes) -> bool {
+        let p1i0 = ptr1.inputs(sea)[0].unwrap();
+        let p2i0 = ptr2.inputs(sea)[0].unwrap();
+        p1i0 != p2i0 &&
+            // Unrelated allocations
+            ptr1.is_proj(sea) && p1i0.is_new(sea) &&
+            ptr2.is_proj(sea) && p2i0.is_new(sea)
+    }
+
+    fn hoist_ptr(ptr: Node, memphi: Phi, sea: &mut Nodes) -> bool {
+        // Can I hoist ptr above the Region?
+        let Some(r) = memphi.region(sea).to_region(sea) else {
+            return false; // Dead or dying Region/Phi
+        };
+
+        // If ptr from same Region, then yes, just use hoisted split pointers
+        if ptr.to_phi(sea).is_some_and(|p| p.region(sea) == *r) {
+            return true;
+        }
+
+        // No, so can we lift this ptr?
+        if let Some(cptr) = ptr.inputs(sea)[0].and_then(|n| n.to_cfg(sea)) {
+            // Pointer is controlled high
+            // TODO: Really needs to be the LCA of all inputs is high
+            return cptr.idepth(sea) <= r.idepth(sea);
+        }
+        // Dunno without a longer walk
+        false
+    }
+
     /// Profitable if we find a matching Store on this Phi arm.
-    fn profit(self, phi_node: Phi, idx: usize, sea: &mut Nodes) -> bool {
-        phi_node.inputs(sea)[idx].is_some_and(|px| {
-            px.add_dep(self, sea)
-                .to_store(sea)
-                .is_some_and(|px| self.ptr(sea) == px.ptr(sea))
-        })
+    fn profit(self, phi: Phi, idx: usize, sea: &mut Nodes) -> bool {
+        let Some(px) = phi.inputs(sea)[idx] else {
+            return false;
+        };
+        if px
+            .ty(sea)
+            .and_then(Ty::to_mem)
+            .is_some_and(|m| m.data().t.is_high_or_constant(sea.tys))
+        {
+            px.add_dep(self, sea);
+            return true;
+        }
+        if px
+            .to_store(sea)
+            .is_some_and(|s| self.ptr(sea) == s.ptr(sea) && self.off(sea) == s.off(sea))
+        {
+            px.add_dep(self, sea);
+            return true;
+        }
+        false
+    }
+
+    /// Read-Only is a deep property, and cannot be cast-away
+    fn cast_ro(self, rez: Node, sea: &mut Nodes) -> Node {
+        if self.ptr(sea).unwrap().ty(sea).unwrap().is_final() && !rez.ty(sea).unwrap().is_final() {
+            ReadOnly::new(rez, sea).peephole(sea)
+        } else {
+            rez
+        }
     }
 }
 
