@@ -98,7 +98,7 @@ impl<'t> Display for Type<'t> {
                 (-32, 0.0) => "F32Top",
                 (32, 0.0) => "F32Bot",
                 (64, 0.0) => "FltBot",
-                (_, c) => return write!(f, "{}", c),
+                (_, c) => return write!(f, "{:?}", c),
             },
             Type::Int(_) => return f.write_str(self.str().as_ref()),
             Type::Tuple(types) => {

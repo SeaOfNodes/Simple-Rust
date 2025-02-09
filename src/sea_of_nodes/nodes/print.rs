@@ -90,7 +90,7 @@ impl Display for PrintNodes2<'_, '_, '_> {
             n @ Op::Start { .. } => write!(f, "{}", n.label()),
             Op::Minus | Op::MinusF => write!(f, "(-{})", input(1)),
             Op::RoundF32 => write!(f, "((f32){})", input(1)),
-            Op::ToFloat => write!(f, "((flt){})", input(1)),
+            Op::ToFloat => write!(f, "(flt){}", input(1)),
             Op::ReadOnly => write!(f, "((const){})", input(1)),
             Op::Scope(_) => {
                 //         sb.append("Scope[ ");
