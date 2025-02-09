@@ -132,7 +132,7 @@ impl Display for PrintNodes2<'_, '_, '_> {
                 write!(f, "]")
             }
             Op::ScopeMin => {
-                write!(f, "Mem[")?;
+                write!(f, "MEM[")?;
                 for j in 2..inputs.len() {
                     write!(f, " {j}:")?;
                     let mut n = inputs[j];
@@ -191,7 +191,7 @@ impl Display for PrintNodes2<'_, '_, '_> {
             }
             Op::New(t) => write!(f, "new {}", t.data().to.str()),
             Op::Load(l) => write!(f, ".{}", l.name),
-            Op::Store(s) => write!(f, ".{}={};", s.name, input(3)),
+            Op::Store(s) => write!(f, ".{}={};", s.name, input(4)),
             Op::Cfg => unreachable!(),
         }
     }

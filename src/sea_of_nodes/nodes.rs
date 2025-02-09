@@ -206,10 +206,10 @@ impl Node {
             sea[s].guards.clear();
         }
         self.unlock(sea);
-        debug_assert!(self.is_unused(sea));
-        for _ in 0..self.inputs(sea).len() {
-            // Set all inputs to null, recursively killing unused Nodes
-            let old_def = sea.inputs[self].pop().unwrap();
+        self.move_deps_to_worklist(sea);
+        debug_assert!(self.is_unused(sea), "Has no uses, so it is dead");
+        // Set all inputs to null, recursively killing unused Nodes
+        while let Some(old_def) = sea.inputs[self].pop() {
             if let Some(old_def) = old_def {
                 sea.iter_peeps.add(old_def); // Revisit neighbor because removed use
                 old_def.del_use(self, sea);
@@ -224,13 +224,16 @@ impl Node {
     }
 
     /// Replace 'this' with nnn in the graph, making 'this' go dead
-    pub fn subsume(self, that: Node, sea: &mut Nodes) {
-        assert_ne!(self, that);
+    pub fn subsume(self, nnn: Node, sea: &mut Nodes) {
+        assert_ne!(self, nnn);
         while let Some(n) = sea.outputs[self].pop() {
             n.unlock(sea);
             let idx = n.inputs(sea).iter().position(|&x| x == Some(self)).unwrap();
-            sea.inputs[n][idx] = Some(that);
-            that.add_use(n, sea);
+            sea.inputs[n][idx] = Some(nnn);
+            nnn.add_use(n, sea);
+            for &o in &sea.outputs[n] {
+                sea.iter_peeps.add(o);
+            }
         }
         self.kill(sea);
     }

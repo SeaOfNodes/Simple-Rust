@@ -504,7 +504,7 @@ impl Start {
                 args,
                 alias_starts: HashMap::new(),
             },
-            vec![],
+            vec![None, None, None],
             sea,
         );
         sea.ty[this] = Some(*args);

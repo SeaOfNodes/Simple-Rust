@@ -1347,9 +1347,12 @@ impl<'s, 't> Parser<'s, 't> {
         let scale = ary.ary_scale(self.types);
 
         let con_base = self.int_con(base);
-        let con_scale = self.int_con(scale);
-
-        let shl = Shl::new(len.keep(&mut self.nodes), Some(*con_scale), &mut self.nodes).peep(self);
+        let shl = Shl::new(
+            len.keep(&mut self.nodes),
+            Some(*self.int_con(scale)),
+            &mut self.nodes,
+        )
+        .peep(self);
         let size = Add::new(*con_base, shl, &mut self.nodes).peep(self);
         self.altmp.clear();
         self.altmp.push(Some(len.unkeep(&mut self.nodes)));
@@ -1462,9 +1465,9 @@ impl<'s, 't> Parser<'s, 't> {
             Add::new(*b, offset.peep(self), &mut self.nodes).peep(self)
         } else {
             // Struct field offsets are hardwired
-            self.int_con(base.offset(fidx, self.types))
-                .keep(&mut self.nodes)
-        };
+            *self.int_con(base.offset(fidx, self.types))
+        }
+        .keep(&mut self.nodes);
 
         // Disambiguate "obj.fld==x" boolean test from "obj.fld=x" field assignment
         if self.match_opx(*b"==") {
