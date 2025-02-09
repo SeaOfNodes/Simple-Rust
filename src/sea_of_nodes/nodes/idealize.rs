@@ -1,11 +1,11 @@
 use crate::datastructures::id::Id;
 use crate::sea_of_nodes::nodes::node::{
-    Add, Bool, CProj, Cast, Constant, Div, If, Load, Minus, MinusF, Mul, Not, Phi, ReadOnly,
-    Return, RoundF32, Sar, Shl, Shr, Stop, Store, Sub, TypedNode,
+    Add, AddF, Bool, CProj, Cast, Constant, Div, DivF, If, Load, Minus, MinusF, Mul, MulF, Not,
+    Phi, ReadOnly, Return, RoundF32, Sar, Shl, Shr, Stop, Store, Sub, SubF, TypedNode,
 };
 use crate::sea_of_nodes::nodes::node::{IfOp, Region};
 use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes};
-use crate::sea_of_nodes::types::{Ty, TyInt};
+use crate::sea_of_nodes::types::{Ty, TyFloat, TyInt};
 
 impl Node {
     /// do not peephole directly returned values!
@@ -34,6 +34,10 @@ impl Node {
             TypedNode::Shl(n) => n.idealize_shl(sea),
             TypedNode::Shr(n) => n.idealize_shr(sea),
             TypedNode::Sar(n) => n.idealize_sar(sea),
+            TypedNode::AddF(n) => n.idealize_addf(sea),
+            TypedNode::DivF(n) => n.idealize_divf(sea),
+            TypedNode::MulF(n) => n.idealize_mulf(sea),
+            TypedNode::SubF(n) => n.idealize_subf(sea),
             TypedNode::Constant(_)
             | TypedNode::XCtrl(_)
             | TypedNode::Start(_)
@@ -906,6 +910,59 @@ impl Sar {
             }
         }
         // TODO: x >> 3 >> (y ? 1 : 2) ==> x >> (y ? 4 : 5)
+        None
+    }
+}
+
+impl AddF {
+    fn idealize_addf(self, sea: &mut Nodes) -> Option<Node> {
+        // Add of 0.
+        if self.inputs(sea)[2].unwrap().ty(sea) == Some(*sea.tys.float_zero) {
+            return self.inputs(sea)[1];
+        }
+        None
+    }
+}
+impl DivF {
+    fn idealize_divf(self, sea: &mut Nodes) -> Option<Node> {
+        let t2 = self.inputs(sea)[2].unwrap().ty(sea);
+
+        // Add of 0.
+        if t2.and_then(Ty::to_float).and_then(TyFloat::value) == Some(1.0) {
+            return self.inputs(sea)[1];
+        }
+        None
+    }
+}
+
+impl MulF {
+    fn idealize_mulf(self, sea: &mut Nodes) -> Option<Node> {
+        let lhs = self.inputs(sea)[1].unwrap();
+        let rhs = self.inputs(sea)[2].unwrap();
+        let t1 = lhs.ty(sea);
+        let t2 = rhs.ty(sea);
+
+        // Mul of 1.  We do not check for (1*x) because this will already
+        // canonicalize to (x*1)
+        if t2.and_then(Ty::to_float).and_then(TyFloat::value) == Some(1.0) {
+            return Some(lhs);
+        }
+
+        // Move constants to RHS: con*arg becomes arg*con
+        if t1.is_some_and(|t| t.is_constant(sea.tys)) && !t2.is_some_and(|t| t.is_constant(sea.tys))
+        {
+            return Some(self.swap_12(sea));
+        }
+        None
+    }
+}
+
+impl SubF {
+    fn idealize_subf(self, sea: &mut Nodes) -> Option<Node> {
+        // Sub of 0.
+        if self.inputs(sea)[2].unwrap().ty(sea) == Some(*sea.tys.float_zero) {
+            return self.inputs(sea)[1];
+        }
         None
     }
 }
