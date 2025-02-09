@@ -5,7 +5,7 @@ use crate::datastructures::id_set::IdSet;
 use crate::datastructures::id_vec::IdVec;
 use crate::sea_of_nodes::nodes::cfg::{CfgData, LoopTree, LoopTreeData};
 use crate::sea_of_nodes::nodes::gvn::GvnEntry;
-use crate::sea_of_nodes::nodes::node::{CProj, ToFloat};
+use crate::sea_of_nodes::nodes::node::{CProj, ToFloat, TypedNode};
 use crate::sea_of_nodes::types::{Ty, Types};
 use iter_peeps::IterPeeps;
 pub use iter_peeps::WorkList;
@@ -326,13 +326,61 @@ impl Node {
     }
 
     pub fn err(self, sea: &Nodes) -> Option<String> {
-        if let Some(memop) = self.to_mem_name(sea) {
-            let ptr = self.inputs(sea)[2]?.ty(sea)?;
-            if ptr == sea.types.bot || ptr.to_mem_ptr().is_some_and(|t| t.data().nil) {
-                return Some(format!("Might be null accessing '{memop}'"));
+        let binary_ints = |op: &str| {
+            for i in [1, 2] {
+                if let Some(in_ty) = self.inputs(sea)[i].and_then(|i| i.ty(sea)) {
+                    if !in_ty.is_int() {
+                        return Some(format!("Cannot '{op}' {in_ty}"));
+                    }
+                } else {
+                    return Some(format!("Cannot '{op}' null"));
+                }
             }
+            None
+        };
+        let memop = |ptr: Option<Ty>, name: &str| {
+            // Already an error, but better error messages come from elsewhere
+            if ptr == Some(sea.tys.bot) {
+                return None;
+            }
+            // Better be a not-nil TMP
+            if ptr
+                .and_then(|p| p.to_mem_ptr())
+                .is_some_and(|tmp| !tmp.data().nil)
+            {
+                return None;
+            }
+            Some(format!("Might be null accessing '{name}'"))
+        };
+        match self.downcast(&sea.ops) {
+            TypedNode::And(_) => binary_ints("&"),
+            TypedNode::Or(_) => binary_ints("|"),
+            TypedNode::Xor(_) => binary_ints("^"),
+            TypedNode::Sar(_) => binary_ints(">>"),
+            TypedNode::Shl(_) => binary_ints("<<"),
+            TypedNode::Load(n) => memop(n.ptr(sea).unwrap().ty(sea), sea[n].name),
+            TypedNode::Store(n) => {
+                let ptr = n.ptr(sea).unwrap().ty(sea);
+                let name = sea[n].name;
+                memop(ptr, name).or_else(|| {
+                    let tmp = ptr.unwrap().as_mem_ptr();
+                    if tmp.data().to.field(name).unwrap().final_field {
+                        Some(format!("Cannot modify final field '{name}'"))
+                    } else {
+                        let t = n.val(sea).unwrap().ty(sea).unwrap();
+                        if sea[n].init || t.isa(sea[n].declared_ty, sea.tys) {
+                            None
+                        } else {
+                            Some(format!(
+                                "Cannot store {t} into field {} {name}",
+                                sea[n].declared_ty
+                            ))
+                        }
+                    }
+                })
+            }
+            _ => None,
         }
-        None
     }
 
     pub fn unique_input(self, sea: &Nodes) -> Option<Node> {

@@ -20,6 +20,11 @@ impl<'t> TyStruct<'t> {
         self.fields().iter().position(|f| f.fname == fname)
     }
 
+    pub fn field(self, fname: &str) -> Option<&Field<'t>> {
+        let index = self.find(fname)?;
+        Some(&self.fields()[index])
+    }
+
     pub fn find_alias(self, alias: u32) -> Option<usize> {
         self.fields().iter().position(|f| f.alias == alias)
     }
