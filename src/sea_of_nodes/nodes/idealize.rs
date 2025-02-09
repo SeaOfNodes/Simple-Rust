@@ -558,7 +558,13 @@ impl Load {
                     if let Some(nnn1) = mproj.inputs(sea)[0].and_then(|i| i.to_new(sea)) {
                         if let Some(pproj) = ptr.and_then(|p| p.to_proj(sea)) {
                             if pproj.inputs(sea)[0] == mproj.inputs(sea)[0] {
-                                // return castRO(nnn1.in(nnn1.findAlias(_alias))); // Load from New init
+                                return Some(
+                                    self.cast_ro(
+                                        nnn1.inputs(sea)[nnn1.find_alias(sea[self].alias, sea)]
+                                            .unwrap(),
+                                        sea,
+                                    ),
+                                ); // Load from New init
                             }
                         }
                         if !ptr.and_then(|p| p.to_proj(sea)).is_some_and(|pproj| {
