@@ -655,7 +655,7 @@ impl Load {
         }
 
         // No, so can we lift this ptr?
-        if let Some(cptr) = ptr.inputs(sea)[0].and_then(|n| n.to_cfg(sea)) {
+        if let Some(cptr) = ptr.cfg0_opt(sea) {
             // Pointer is controlled high
             // TODO: Really needs to be the LCA of all inputs is high
             return cptr.idepth(sea) <= r.idepth(sea);

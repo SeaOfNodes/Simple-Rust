@@ -356,7 +356,7 @@ fn pretty_print_scheduled(
         for &n in ds.keys() {
             let mut cfg = n.to_cfg(sea);
             if cfg.is_none() || !cfg.unwrap().block_head(sea) {
-                cfg = n.inputs(sea)[0].unwrap().to_cfg(sea);
+                cfg = Some(n.cfg0(sea));
             }
             let cfg = cfg.unwrap();
             if blk.is_none() || sea.cfg[cfg].idepth < sea.cfg[blk.unwrap()].idepth {

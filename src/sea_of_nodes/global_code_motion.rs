@@ -67,11 +67,7 @@ fn _rpo_cfg(n: Node, visit: &mut IdSet<Node>, rpo: &mut Vec<Cfg>, sea: &Nodes) {
 impl Node {
     // Pinned in the schedule
     fn is_pinned(self, sea: &Nodes) -> bool {
-        match self.downcast(&sea.ops) {
-            TypedNode::Constant(_) => self == *sea.zero,
-            TypedNode::Cast(_) | TypedNode::Phi(_) | TypedNode::Proj(_) => true,
-            _ => self.is_cfg(sea),
-        }
+        self.is_cast(sea) || self.is_phi(sea) || self.is_proj(sea)
     }
 }
 
@@ -266,8 +262,19 @@ fn better(lca: Cfg, best: Cfg, sea: &mut Nodes) -> bool {
 }
 
 impl Node {
-    fn cfg0(self, sea: &Nodes) -> Cfg {
-        self.inputs(sea)[0].unwrap().to_cfg(sea).unwrap()
+    pub fn cfg0_opt(self, sea: &Nodes) -> Option<Cfg> {
+        match self.downcast(&sea.ops) {
+            TypedNode::Start(s) => Some(***s),
+            TypedNode::Proj(_) => self.inputs(sea)[0].unwrap().cfg0_opt(sea),
+            _ => self.inputs(sea)[0].and_then(|n| n.to_cfg(sea)),
+        }
+    }
+    pub fn cfg0(self, sea: &Nodes) -> Cfg {
+        match self.downcast(&sea.ops) {
+            TypedNode::Start(s) => ***s,
+            TypedNode::Proj(_) => self.inputs(sea)[0].unwrap().cfg0(sea),
+            _ => self.inputs(sea)[0].unwrap().to_cfg(sea).unwrap(),
+        }
     }
 }
 

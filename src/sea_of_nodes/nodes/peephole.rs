@@ -44,8 +44,8 @@ impl<'t> Node {
         let ty = self.compute(sea);
         let old = self.set_type(ty, sea);
 
-        // System.out.printf("%-3d %-8s %s->%s%n", this._nid, this.label(), old, compute());
-        // println!("{:<3} {:<8} {}->{}", self, &sea[self].label(), old.map(|t| t.to_string()).unwrap_or("null".to_string()), ty);
+        // System.out.printf("%-3d %-8s %s->%s    %s%n", _nid, label(), old, _type, print());
+        // println!("{:<3} {:<8} {}->{}    {}", self, &sea[self].label(), old.map(|t| t.to_string()).unwrap_or("null".to_string()), ty, self.print(sea));
 
         // Replace constant computations from non-constants with a constant node
         if !self.is_constant(sea) && !self.is_xctrl(sea) && ty.is_high_or_constant(sea.tys) {
