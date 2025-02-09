@@ -228,7 +228,7 @@ impl<'a, 't> Display for PrintableObject<'a, 't> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self.object {
             Object::Long(l) => l.fmt(f),
-            Object::Double(d) => d.fmt(f),
+            Object::Double(d) => fmt::Debug::fmt(&d, f), // 1.0 instead of 1
             Object::Null => "null".fmt(f),
             Object::Memory => "memory".fmt(f),
             Object::Obj(obj) => obj_to_string(f, obj, self.heap),
