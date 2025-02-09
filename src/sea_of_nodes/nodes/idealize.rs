@@ -635,12 +635,12 @@ impl Load {
     }
 
     fn never_alias(ptr1: Node, ptr2: Node, sea: &mut Nodes) -> bool {
-        let p1i0 = ptr1.inputs(sea)[0].unwrap();
-        let p2i0 = ptr2.inputs(sea)[0].unwrap();
+        let p1i0 = ptr1.inputs(sea)[0];
+        let p2i0 = ptr2.inputs(sea)[0];
         p1i0 != p2i0 &&
             // Unrelated allocations
-            ptr1.is_proj(sea) && p1i0.is_new(sea) &&
-            ptr2.is_proj(sea) && p2i0.is_new(sea)
+            ptr1.is_proj(sea) && p1i0.is_some_and(|i| i.is_new(sea)) &&
+            ptr2.is_proj(sea) && p2i0.is_some_and(|i| i.is_new(sea))
     }
 
     fn hoist_ptr(ptr: Node, memphi: Phi, sea: &mut Nodes) -> bool {
