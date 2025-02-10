@@ -501,7 +501,7 @@ impl If {
 }
 impl Cast {
     fn idealize_cast(self, sea: &mut Nodes) -> Option<Node> {
-        self.inputs(sea)[1].filter(|&n| n.ty(sea).is_some_and(|t| sea.types.isa(t, sea[self])))
+        self.inputs(sea)[1].filter(|&n| n.ty(sea).is_some_and(|t| t.isa(sea[self], sea.tys)))
     }
 }
 

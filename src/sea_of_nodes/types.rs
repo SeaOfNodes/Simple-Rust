@@ -263,31 +263,6 @@ impl<'a> Types<'a> {
     pub fn get_mem(&self, alias: u32, ty: Ty<'a>) -> TyMem<'a> {
         self.interner.get_mem(alias, ty)
     }
-
-    // TODO remove these functions
-    pub fn meet(&self, a: Ty<'a>, b: Ty<'a>) -> Ty<'a> {
-        a.meet(b, self)
-    }
-
-    /// True if this "isa" t; e.g. 17 isa TypeInteger.BOT
-    pub fn isa(&self, this: Ty<'a>, that: Ty<'a>) -> bool {
-        this.isa(that, self)
-    }
-
-    /// Our lattice is defined with a MEET and a DUAL.
-    /// JOIN is dual of meet of both duals.
-    pub fn join(&self, this: Ty<'a>, that: Ty<'a>) -> Ty<'a> {
-        this.join(that, self)
-    }
-
-    pub fn dual(&self, ty: Ty<'a>) -> Ty<'a> {
-        ty.dual(self)
-    }
-
-    /// compute greatest lower bound in the lattice
-    pub fn glb(&self, ty: Ty<'a>) -> Ty<'a> {
-        ty.glb(self)
-    }
 }
 
 struct Interner<'a> {

@@ -35,9 +35,7 @@ impl Scope {
 
     fn var_lazy_glb<'t>(self, var_idx: usize, sea: &mut Nodes<'t>) -> Ty<'t> {
         let t = self.var_ty(var_idx, sea);
-        t.to_mem_ptr()
-            .map(|m| *m)
-            .unwrap_or_else(|| sea.types.glb(t))
+        t.to_mem_ptr().map(|m| *m).unwrap_or_else(|| t.glb(sea.tys))
     }
 }
 
@@ -491,7 +489,7 @@ impl Scope {
         // This is a zero/null test.
         // Compute the positive test type.
         let tnz = pred.ty(sea).unwrap().non_zero(sea.types);
-        let tcast = sea.types.join(tnz, pred.ty(sea).unwrap());
+        let tcast = tnz.join(pred.ty(sea).unwrap(), sea.tys);
         if tcast != pred.ty(sea).unwrap() {
             let cast = Cast::new(tnz, ctrl, pred.keep(sea), sea)
                 .peephole(sea)
@@ -505,7 +503,7 @@ impl Scope {
         if let Some(not) = pred.to_not(sea) {
             let npred = not.inputs(sea)[1].unwrap();
             let tzero = npred.ty(sea).unwrap().make_zero(sea.types);
-            let tzcast = sea.types.join(tzero, npred.ty(sea).unwrap());
+            let tzcast = tzero.join(npred.ty(sea).unwrap(), sea.tys);
             if tzcast != npred.ty(sea).unwrap() {
                 let cast = Cast::new(tzero, ctrl, npred.keep(sea), sea)
                     .peephole(sea)

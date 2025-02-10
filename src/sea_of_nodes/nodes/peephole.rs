@@ -63,7 +63,7 @@ impl<'t> Node {
             // might have different types.  Because of monotonicity, both
             // types are valid.  To preserve monotonicity, the resulting
             // shared Node has to have the best of both types.
-            replacement.set_type(sea.types.join(replacement.ty(sea).unwrap(), ty), sea);
+            replacement.set_type(replacement.ty(sea).unwrap().join(ty, sea.tys), sea);
             self.dead_code_elimination(replacement, sea);
             return Some(replacement);
         }
@@ -86,7 +86,7 @@ impl<'t> Node {
     pub(crate) fn set_type(self, ty: Ty<'t>, sea: &mut Nodes<'t>) -> Option<Ty<'t>> {
         let old = self.ty(sea);
         if let Some(old) = old {
-            debug_assert!(sea.types.isa(ty, old), "{ty} isn't a {old}");
+            debug_assert!(ty.isa(old, sea.tys), "{ty} isn't a {old}");
         }
         if old == Some(ty) {
             return old;

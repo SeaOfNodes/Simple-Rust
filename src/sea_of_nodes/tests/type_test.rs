@@ -42,9 +42,9 @@ fn test_type_ad_hoc() {
             },
         ],
     );
-    assert_eq!(*s1, types.glb(*s1));
-    assert_ne!(*s1, types.dual(*s1));
-    assert_eq!(s1.make_ro(&types), types.glb(types.dual(*s1)));
+    assert_eq!(s1, s1.glb(&types));
+    assert_ne!(s1, s1.dual(&types));
+    assert_eq!(s1.make_ro(&types), *s1.dual(&types).glb(&types));
 
     let m1 = types.get_mem(1, *types.int_zero);
     let m2 = types.get_mem(2, *types.int_u16);
@@ -78,32 +78,32 @@ fn test_type_ad_hoc() {
     assert!(matches!(**ptr2nil, Type::MemPtr(MemPtr {to, nil: true}) if to == s2));
 
     assert_ne!(ptr1, ptr2);
-    assert_ne!(*ptr1, types.glb(*ptr1));
-    assert_eq!(*ptr1nil, types.glb(*ptr1));
+    assert_ne!(*ptr1, ptr1.glb(&types));
+    assert_eq!(*ptr1nil, ptr1.glb(&types));
 
-    assert_eq!(*ptr1, types.dual(types.dual(*ptr1)));
+    assert_eq!(*ptr1, ptr1.dual(&types).dual(&types));
     assert_eq!(
         ptr1.glb(&types).make_ro(&types),
-        types.glb(types.dual(*ptr1))
+        ptr1.dual(&types).glb(&types)
     );
     assert_eq!(
         *types.get_mem_ptr(types.struct_bot, true),
-        types.meet(*ptr1, *ptr2nil)
+        ptr1.meet(*ptr2nil, &types)
     );
-    assert_eq!(types.glb(*ptr1), types.meet(*ptr1, *types.ptr_null));
+    assert_eq!(ptr1.glb(&types), ptr1.meet(*types.ptr_null, &types));
 
     let top = types.ptr_top;
     let bot = types.get_mem_ptr(types.struct_bot, true);
     let ptr = types.get_mem_ptr(types.struct_bot, false);
     let null = types.ptr_null;
 
-    assert_eq!(*bot, types.meet(*ptr, *null));
-    assert_eq!(*ptr, types.meet(*ptr1, *ptr2));
-    assert_eq!(*top, types.join(*null, *ptr1));
-    assert_eq!(*top, types.join(*ptr, *null));
+    assert_eq!(*bot, ptr.meet(*null, &types));
+    assert_eq!(*ptr, ptr1.meet(*ptr2, &types));
+    assert_eq!(*top, null.join(*ptr1, &types));
+    assert_eq!(*top, ptr.join(*null, &types));
 
-    let _ptr1_dual = types.dual(*ptr1);
-    let _nullable_ptr1_dual = types.dual(*ptr1nil);
+    let _ptr1_dual = ptr1.dual(&types);
+    let _nullable_ptr1_dual = ptr1nil.dual(&types);
 }
 
 // Test theoretical properties.
@@ -138,11 +138,11 @@ fn test_lattice_theory() {
     // Confirm symmetry.  If A isa B, then A.join(C) isa B.join(C)
     for &t0 in &ts {
         for &t1 in &ts {
-            if types.isa(t0, t1) {
+            if t0.isa(t1, &types) {
                 for &t2 in &ts {
-                    let t02 = types.join(t0, t2);
-                    let t12 = types.join(t1, t2);
-                    let mt = types.meet(t02, t12);
+                    let t02 = t0.join(t2, &types);
+                    let t12 = t1.join(t2, &types);
+                    let mt = t02.meet(t12, &types);
                     assert_same(mt, t12);
                 }
             }
@@ -170,8 +170,8 @@ impl<'t> Types<'t> {
             return;
         }
         // if( t0.is_simple() && !t1.is_simple() ) return; // By design, flipped the only allowed order
-        let mta = self.meet(t0, t1);
-        let mtb = self.meet(t1, t0); // Reverse args and try again
+        let mta = t0.meet(t1, self);
+        let mtb = t1.meet(t0, self); // Reverse args and try again
         assert_same(mta, mtb);
     }
 
@@ -193,10 +193,10 @@ impl<'t> Types<'t> {
     }
 
     fn assoc(&self, t0: Ty<'t>, t1: Ty<'t>, t2: Ty<'t>) {
-        let t01 = self.meet(t0, t1);
-        let t12 = self.meet(t1, t2);
-        let t01_2 = self.meet(t01, t2);
-        let t0_12 = self.meet(t0, t12);
+        let t01 = t0.meet(t1, self);
+        let t12 = t1.meet(t2, self);
+        let t01_2 = t01.meet(t2, self);
+        let t0_12 = t0.meet(t12, self);
         assert_same(t01_2, t0_12);
     }
 
@@ -230,7 +230,7 @@ impl<'t> Types<'t> {
             //
             *self.get_tuple_from_array([*self.int_bot, *ptr_test]),
         ];
-        let t2 = ts.iter().map(|t| self.dual(*t)).collect::<Vec<_>>();
+        let t2 = ts.iter().map(|t| t.dual(self)).collect::<Vec<_>>();
         ts.extend(t2);
         ts
     }

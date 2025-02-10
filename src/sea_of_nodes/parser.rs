@@ -625,10 +625,10 @@ impl<'s, 't> Parser<'s, 't> {
         } else {
             Phi::new(
                 "",
-                self.types.meet(
-                    lhs.unwrap().ty(&self.nodes).unwrap(),
-                    rhs.unwrap().ty(&self.nodes).unwrap(),
-                ),
+                lhs.unwrap()
+                    .ty(&self.nodes)
+                    .unwrap()
+                    .meet(rhs.unwrap().ty(&self.nodes).unwrap(), self.types),
                 vec![Some(r), Some(lhs.unwrap().unkeep(&mut self.nodes)), rhs],
                 &mut self.nodes,
             )
