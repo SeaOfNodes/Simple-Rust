@@ -6,4 +6,4 @@ Rust implementation of https://github.com/SeaOfNodes/Simple
 
 This is still a **work in progress** and the code is not very readable.
 
-The code is currently equivalent to chapter11 of the Java implementation (commit 49c3e09e).
+The code is currently equivalent to `chapter17` of the Java implementation at commit `8d9cd9a0`.
