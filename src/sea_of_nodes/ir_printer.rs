@@ -186,10 +186,7 @@ fn print_line_llvm(nodes: &Nodes, n: Node, sb: &mut String) -> fmt::Result {
 
 impl Node {
     pub fn is_multi_head(self, sea: &Nodes) -> bool {
-        matches!(
-            &sea[self],
-            Op::If(_) | Op::Region { .. } | Op::Loop | Op::Start { .. }
-        )
+        self.is_if(sea) || self.is_region(sea) || self.is_start(sea)
     }
 
     pub fn is_multi_tail(self, sea: &Nodes) -> bool {
@@ -225,7 +222,7 @@ fn post_ord(
             if use_ != Node::DUMMY
                 && use_.is_cfg(sea)
                 && sea.outputs[use_].len() >= 1
-                && !matches!(sea[sea.outputs[use_][0]], Op::Loop)
+                && !sea.outputs[use_][0].is_loop(sea)
             {
                 post_ord(use_, rpos, visit, bfs, sea);
             }

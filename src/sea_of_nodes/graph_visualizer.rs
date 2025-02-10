@@ -1,7 +1,7 @@
 use crate::datastructures::id::Id;
 use crate::sea_of_nodes::nodes::node::{Scope, Stop};
 use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
-use crate::sea_of_nodes::types::Type;
+use crate::sea_of_nodes::types::Ty;
 use fmt::Write;
 use std::collections::HashSet;
 use std::fmt;
@@ -104,11 +104,7 @@ fn nodes_by_cluster(
     }
 
     for &n in all.iter() {
-        if matches!(
-            &sea[n],
-            Op::Proj(_) | Op::CProj(_) | Op::Scope(_) | Op::ScopeMin
-        ) || n == **sea.xctrl
-        {
+        if n.is_proj(sea) || n.is_cproj(sea) || n.is_scope_min(sea) || n == **sea.xctrl {
             continue;
         }
         if separate_control_cluster && do_ctrl && !n.is_cfg(sea) {
@@ -183,7 +179,7 @@ fn nodes_by_cluster(
         } else {
             if n.is_cfg(sea) {
                 write!(sb, "shape=box style=filled fillcolor=yellow ")?;
-            } else if matches!(&sea[n], Op::Phi(_)) {
+            } else if n.is_phi(sea) {
                 write!(sb, "style=filled fillcolor=lightyellow ")?;
             }
             write!(sb, "label=\"{lab}\" ")?;
@@ -272,8 +268,8 @@ fn make_port_name(scope_name: &str, var_name: &str) -> String {
 impl Node {
     fn is_mem(self, sea: &Nodes) -> bool {
         match &sea[self] {
-            Op::Phi(p) => matches!(*p.ty, Type::Mem(_)),
-            Op::Proj(_) => matches!(self.ty(sea).as_deref(), Some(Type::Mem(_))),
+            Op::Phi(p) => p.ty.is_mem(),
+            Op::Proj(_) => self.ty(sea).is_some_and(Ty::is_mem),
             Op::Store(_) => true,
             _ => false,
         }
@@ -283,17 +279,18 @@ impl Node {
 fn node_edges(sb: &mut String, sea: &Nodes, all: &HashSet<Node>) -> fmt::Result {
     writeln!(sb, "\tedge [ fontname=Helvetica, fontsize=8 ];")?;
     for &n in all.iter() {
-        if matches!(
-            &sea[n],
-            Op::Constant(_) | Op::Proj(_) | Op::CProj(_) | Op::Scope(_)
-        ) || n == **sea.xctrl
+        if n.is_constant(sea)
+            || n.is_proj(sea)
+            || n.is_cproj(sea)
+            || n.is_scope(sea)
+            || n == **sea.xctrl
         {
             continue;
         }
         for (i, def) in sea.inputs[n].iter().enumerate() {
             let Some(def) = *def else { continue };
 
-            if let (Op::Phi(_), Op::Region { .. } | Op::Loop) = (&sea[n], &sea[def]) {
+            if n.is_phi(sea) && def.is_region(sea) {
                 writeln!(
                     sb,
                     "\t{} -> {} [style=dotted taillabel={i}];",
@@ -315,13 +312,7 @@ fn node_edges(sb: &mut String, sea: &Nodes, all: &HashSet<Node>) -> fmt::Result 
                 write!(sb, " color=blue")?;
             }
 
-            if matches!(sea[n], Op::Constant(_)) && matches!(sea[def], Op::Start { .. }) {
-                write!(sb, " style=dotted")?;
-            } else if def.is_cfg(sea) {
-                write!(sb, " color=red")?;
-            }
-
-            if i == 2 && matches!(&sea[n], Op::Phi(_) | Op::Loop) {
+            if i == 2 && (n.is_phi(sea) || n.is_loop(sea)) {
                 write!(sb, " constraint=false")?;
             }
 
