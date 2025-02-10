@@ -239,7 +239,7 @@ impl Scheduler {
                 for out in &sea.outputs[mem] {
                     if let Some(p) = out.to_phi(sea) {
                         let r = p.inputs(sea)[0].unwrap();
-                        for i in 0..p.inputs(sea).len() {
+                        for i in 1..p.inputs(sea).len() {
                             if p.inputs(sea)[i] == Some(mem) {
                                 self.optional_refine_placement(
                                     next,
@@ -485,7 +485,7 @@ impl Scheduler {
 
         // Handle store nodes and increase load with an anti-dep to the store.
         while let Some(node) = mem.pop() {
-            for &out in &sea.outputs[node] {
+            for &out in &sea.outputs[node.inputs(sea)[1].unwrap()] {
                 if out.is_load(sea) {
                     if let Some(d) = self.data.get_mut(&out) {
                         d.users += 1;
