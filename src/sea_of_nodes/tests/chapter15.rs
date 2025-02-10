@@ -442,12 +442,49 @@ return is[1];
 
 #[test]
 fn test_bad_3() {
-    test_error_iterate(
+    let arena = DroplessArena::new();
+    let types = Types::new(&arena);
+    let mut parser = Parser::new(
         "\
 int[] is = new int[arg];
 return is[1];
 ",
-        "-1",
+        &types,
+    );
+    let stop = parser.parse().unwrap();
+    parser.iterate(stop);
+    parser.type_check(stop).unwrap();
+
+    assert_eq!(parser.print(stop), "return 0;");
+    assert_eq!(
+        Object::Long(0),
+        evaluate(&parser.nodes, stop, Some(4), None).object
+    );
+
+    // TODO find a better solution that is actually safe
+    use std::panic;
+    let sea = &parser.nodes;
+    // TODO java only passes this test, becasue it doens't actually throw
+    // assert_eq!(
+    //     "ArrayIndexOutOfBoundsException(Array index 1 out of bounds for array length 0)",
+    //     panic::catch_unwind(panic::AssertUnwindSafe(move || evaluate(sea, stop, Some(0), None)))
+    //         .unwrap_err()
+    //         .downcast::<String>()
+    //         .unwrap()
+    //         .as_str()
+    // );
+    assert_eq!(
+        "NegativeArraySizeException(-1)",
+        panic::catch_unwind(panic::AssertUnwindSafe(move || evaluate(
+            sea,
+            stop,
+            Some(-1),
+            None
+        )))
+        .unwrap_err()
+        .downcast::<String>()
+        .unwrap()
+        .as_str()
     );
 }
 
