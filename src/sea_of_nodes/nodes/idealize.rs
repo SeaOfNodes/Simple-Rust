@@ -854,7 +854,7 @@ impl RoundF32 {
 impl Shl {
     fn idealize_shl(self, sea: &mut Nodes) -> Option<Node> {
         let lhs = self.inputs(sea)[1].unwrap();
-        let rhs = self.inputs(sea)[1].unwrap();
+        let rhs = self.inputs(sea)[2].unwrap();
 
         if let Some(shl) = rhs.ty(sea).and_then(Ty::to_int) {
             if let Some(i) = shl.value() {
@@ -894,7 +894,7 @@ impl Shl {
 impl Shr {
     fn idealize_shr(self, sea: &mut Nodes) -> Option<Node> {
         let lhs = self.inputs(sea)[1].unwrap();
-        let rhs = self.inputs(sea)[1].unwrap();
+        let rhs = self.inputs(sea)[2].unwrap();
 
         // Shr of 0.
         if let Some(shr) = rhs.ty(sea).and_then(Ty::to_int).and_then(TyInt::value) {
@@ -909,7 +909,7 @@ impl Shr {
 impl Sar {
     fn idealize_sar(self, sea: &mut Nodes) -> Option<Node> {
         let lhs = self.inputs(sea)[1].unwrap();
-        let rhs = self.inputs(sea)[1].unwrap();
+        let rhs = self.inputs(sea)[2].unwrap();
 
         // Sar of 0.
         if let Some(shr) = rhs.ty(sea).and_then(Ty::to_int).and_then(TyInt::value) {
