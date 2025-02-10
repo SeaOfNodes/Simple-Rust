@@ -293,7 +293,7 @@ impl Node {
     }
 
     pub fn del_use(self, use_: Node, sea: &mut Nodes) {
-        if let Some(pos) = sea.outputs[self].iter().rposition(|n| *n == use_) {
+        if let Some(pos) = sea.outputs[self].iter().position(|n| *n == use_) {
             sea.outputs[self].swap_remove(pos);
         }
     }
