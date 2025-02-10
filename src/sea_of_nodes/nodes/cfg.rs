@@ -52,6 +52,17 @@ impl LoopTreeData {
     };
 }
 
+impl LoopTree {
+    fn depth(self, data: &mut IdVec<LoopTree, LoopTreeData>) -> u32 {
+        if data[self].depth == 0 {
+            if let Some(par) = data[self].par {
+                data[self].depth = par.depth(data) + 1;
+            }
+        }
+        data[self].depth
+    }
+}
+
 impl Cfg {
     pub fn cfg(self, idx: usize, sea: &Nodes) -> Option<Cfg> {
         self.inputs(sea)[idx].map(|n| n.to_cfg(sea).unwrap())
@@ -119,10 +130,10 @@ impl Cfg {
         lhs
     }
 
-    pub fn loop_depth(self, sea: &Nodes) -> u32 {
+    pub fn loop_depth(self, sea: &mut Nodes) -> u32 {
         sea.cfg[self]
             .ltree
-            .map(|l| sea.loop_tree[l].depth)
+            .map(|l| l.depth(&mut sea.loop_tree))
             .unwrap_or(0)
     }
 }
