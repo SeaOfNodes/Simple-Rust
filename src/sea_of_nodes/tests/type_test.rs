@@ -1,5 +1,5 @@
 use crate::datastructures::arena::DroplessArena;
-use crate::sea_of_nodes::types::{Field, MemPtr, Ty, Type, Types};
+use crate::sea_of_nodes::types::{Field, MemPtr, Ty, TyStruct, Type, Types};
 use std::ptr;
 
 // Test basic properties and GLB
@@ -153,7 +153,14 @@ fn test_lattice_theory() {
 /// Test cyclic types and meets
 #[test]
 fn test_cyclic_0() {
-    todo!("this and gather")
+    let arena = DroplessArena::new();
+    let types = Types::new(&arena);
+
+    let (_, _, s1, _) = TyStruct::test_data(&types);
+
+    let d0 = s1.dual(&types);
+    let d1 = d0.dual(&types);
+    assert_same(*s1, *d1);
 }
 
 fn assert_same<'t>(a: Ty<'t>, b: Ty<'t>) {
@@ -210,6 +217,7 @@ impl<'t> Types<'t> {
                 final_field: false,
             }],
         );
+        let (_, _, s1, s2) = TyStruct::test_data(self);
         let ptr_test = self.get_mem_ptr(struct_test, false);
         let mut ts = vec![
             self.bot,
@@ -227,6 +235,8 @@ impl<'t> Types<'t> {
             //
             *struct_test,
             *self.struct_bot,
+            *s1,
+            *s2,
             //
             *self.get_tuple_from_array([*self.int_bot, *ptr_test]),
         ];

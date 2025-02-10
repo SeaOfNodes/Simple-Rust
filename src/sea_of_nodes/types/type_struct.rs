@@ -175,4 +175,46 @@ impl<'t> TyStruct<'t> {
             self
         }
     }
+
+    pub(crate) fn test_data(
+        tys: &Types<'t>,
+    ) -> (TyStruct<'t>, TyStruct<'t>, TyStruct<'t>, TyStruct<'t>) {
+        let s1f = tys.make_struct_fref("S1");
+        let s2f = tys.make_struct_fref("S2");
+        let s1 = tys.get_struct(
+            "S1",
+            &[
+                Field {
+                    fname: "a",
+                    ty: *tys.int_bot,
+                    alias: u32::MAX,
+                    final_field: false,
+                },
+                Field {
+                    fname: "s2",
+                    ty: *tys.get_mem_ptr(s2f, false),
+                    alias: u32::MAX - 1,
+                    final_field: false,
+                },
+            ],
+        );
+        let s2 = tys.get_struct(
+            "S2",
+            &[
+                Field {
+                    fname: "b",
+                    ty: *tys.float_bot,
+                    alias: u32::MAX - 2,
+                    final_field: false,
+                },
+                Field {
+                    fname: "s1",
+                    ty: *tys.get_mem_ptr(s1f, false),
+                    alias: u32::MAX - 3,
+                    final_field: false,
+                },
+            ],
+        );
+        (s1f, s2f, s1, s2)
+    }
 }
