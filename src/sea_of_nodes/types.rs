@@ -288,14 +288,6 @@ impl<'a> Types<'a> {
     pub fn glb(&self, ty: Ty<'a>) -> Ty<'a> {
         ty.glb(self)
     }
-
-    pub fn make_init(&self, t: Ty<'a>) -> Option<Ty<'a>> {
-        match *t {
-            Type::Int(_) => Some(*self.int_zero),
-            Type::MemPtr(_) => Some(*self.ptr_null),
-            _ => None,
-        }
-    }
 }
 
 struct Interner<'a> {

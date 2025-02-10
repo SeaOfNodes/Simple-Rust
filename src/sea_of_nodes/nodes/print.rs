@@ -58,7 +58,7 @@ impl Display for PrintNodes2<'_, '_, '_> {
         let sea = self.sea;
         let inputs = &sea.inputs[node];
 
-        if self.visited.borrow().get(node) && !matches!(&sea[node], Op::Constant(_)) {
+        if self.visited.borrow().get(node) && !node.is_constant(sea) {
             return write!(f, "{}", sea[node].label());
         }
         self.visited.borrow_mut().add(node);
@@ -203,7 +203,11 @@ impl Display for PrintNodes2<'_, '_, '_> {
             }
             Op::New(t) => write!(f, "new {}", t.data().to.str()),
             Op::Load(l) => write!(f, ".{}", l.name),
-            Op::Store(s) => write!(f, ".{}={};", s.name, input(4)),
+            // Op::Store(s) => write!(f, ".{}={};", s.name, input(4)),
+            Op::Store(s) => match inputs[4] {
+                None => write!(f, ".{}=null;", s.name),
+                Some(val) => write!(f, ".{}={};", s.name, val.print(sea)),
+            },
             Op::Cfg => unreachable!(),
         }
     }

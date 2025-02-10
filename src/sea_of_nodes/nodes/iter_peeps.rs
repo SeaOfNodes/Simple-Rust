@@ -37,7 +37,7 @@ use crate::datastructures::id::Id;
 use crate::datastructures::id_set::IdSet;
 use crate::datastructures::random::Random;
 use crate::sea_of_nodes::nodes::node::Stop;
-use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
+use crate::sea_of_nodes::nodes::{Node, Nodes};
 
 pub struct IterPeeps {
     work: WorkList,
@@ -103,26 +103,25 @@ impl<'t> Nodes<'t> {
 
                 // peepholeOpt can return brand-new nodes, needing an initial type set
                 if self.ty[x].is_none() {
-                    let ty = x.compute(self);
-                    x.set_type(ty, self);
+                    x.set_type(x.compute(self), self);
                 }
 
                 // Changes require neighbors onto the worklist
-                if x != n || !(matches!(&self[x], Op::Constant(_))) {
+                if x != n || !x.is_constant(self) {
                     // All outputs of n (changing node) not x (prior existing node).
                     for &z in &self.outputs[n] {
-                        self.iter_peeps.add(z);
+                        self.iter_peeps.work.push(z);
                     }
 
                     // Everybody gets a free "go again" in case they didn't get
                     // made in their final form.
-                    self.iter_peeps.add(x);
+                    self.iter_peeps.work.push(x);
 
                     // If the result is not self, revisit all inputs (because
                     // there's a new user), and replace in the graph.
                     if x != n {
                         for &z in self.inputs[n].iter().flatten() {
-                            self.iter_peeps.add(z);
+                            self.iter_peeps.work.push(z);
                         }
                         n.subsume(x, self);
                     }

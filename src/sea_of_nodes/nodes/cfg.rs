@@ -17,8 +17,8 @@ pub struct CfgData {
     pub idepth: u32,
     /// Anti-dependence field support
     pub anti: Option<Load>,
-    pub ltree: Option<LoopTree>,
-    pub pre: u32,
+    ltree: Option<LoopTree>,
+    pre: u32,
 }
 impl CfgData {
     pub fn new() -> Self {

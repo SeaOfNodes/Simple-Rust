@@ -100,7 +100,7 @@ fn _sched_early(n: Option<Node>, visit: &mut IdSet<Node>, sea: &mut Nodes) {
         }
         for i in 1..n.inputs(sea).len() {
             let cfg0 = n.inputs(sea)[i].unwrap().cfg0(sea);
-            if sea.cfg[cfg0].idepth > sea.cfg[early].idepth {
+            if cfg0.idepth(sea) > early.idepth(sea) {
                 early = cfg0; // Latest/deepest input
             }
         }
@@ -126,10 +126,7 @@ fn sched_late(stop: Stop, sea: &mut Nodes) {
 
 impl Cfg {
     pub(crate) fn block_head(self, sea: &Nodes) -> bool {
-        matches!(
-            self.downcast(&sea.ops),
-            TypedNode::Start(_) | TypedNode::CProj(_) | TypedNode::Region(_) | TypedNode::Stop(_)
-        )
+        self.is_cproj(sea) || self.is_region(sea) || self.is_start(sea) || self.is_stop(sea)
     }
 }
 

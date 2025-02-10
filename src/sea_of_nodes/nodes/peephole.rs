@@ -44,8 +44,8 @@ impl<'t> Node {
         let ty = self.compute(sea);
         let old = self.set_type(ty, sea);
 
-        // System.out.printf("%-3d %-8s %s->%s    %s%n", _nid, label(), old, _type, print());
-        // println!("{:<3} {:<8} {}->{}    {}", self, &sea[self].label(), old.map(|t| t.to_string()).unwrap_or("null".to_string()), ty, self.print(sea));
+        // System.out.printf("%-3d %-8s %s->%s    %s %s%n", _nid, label(), old, _type, print(), outs().stream().map(o -> o == null ? 0 : o._nid).toList());
+        //println!( "{:<3} {:<8} {}->{}    {} {:?}", self, &sea[self].label(), old.map(|t| t.to_string()).unwrap_or("null".to_string()), ty, self.print(sea), sea.outputs[self] .iter() .map(|o| if *o == Node::DUMMY { 0 } else { crate::datastructures::id::Id::index(o) }) .collect::<Vec<usize>>(), );
 
         // Replace constant computations from non-constants with a constant node
         if !self.is_constant(sea) && !self.is_xctrl(sea) && ty.is_high_or_constant(sea.tys) {

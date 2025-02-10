@@ -818,16 +818,18 @@ impl Store {
         init: bool,
         sea: &mut Nodes<'t>,
     ) -> Self {
-        Self::create(
+        let this = Self::create(
             StoreOp {
                 name,
                 alias,
                 declared_ty: glb,
                 init,
             },
-            vec![None, Some(mem), Some(ptr), Some(off), Some(value)],
+            vec![None, Some(mem), Some(ptr), Some(off)],
             sea,
-        )
+        );
+        this.add_def(value, sea);
+        this
     }
 
     pub fn mem(self, sea: &Nodes) -> Option<Node> {

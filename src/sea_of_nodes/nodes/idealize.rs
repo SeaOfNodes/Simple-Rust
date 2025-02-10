@@ -307,17 +307,22 @@ impl Phi {
             let mut nullx = 0;
 
             let t1 = self.inputs(sea)[1].unwrap().ty(sea).unwrap();
-            if Some(t1) == sea.types.make_init(t1) {
+            if t1 == t1.make_init(sea.tys) {
                 nullx = 1;
             }
             let t2 = self.inputs(sea)[2].unwrap().ty(sea).unwrap();
-            if Some(t2) == sea.types.make_init(t2) {
+            if t2 == t2.make_init(sea.tys) {
                 nullx = 2;
             }
 
             if nullx != 0 {
                 let val = self.inputs(sea)[3 - nullx].unwrap();
-                if let Some(iff) = r.idom(sea).unwrap().add_dep(self, sea).to_if(sea) {
+                if let Some(iff) = r
+                    .idom_dep(Some(*self), sea)
+                    .unwrap()
+                    .add_dep(self, sea)
+                    .to_if(sea)
+                {
                     if iff.pred(sea).unwrap().add_dep(self, sea) == val {
                         // Must walk the idom on the null side to make sure we hit False.
                         let mut idom = r.cfg(nullx, sea).unwrap();
