@@ -221,7 +221,7 @@ fn obj_to_string(f: &mut Formatter, this: ObjId, heap: &Heap) -> fmt::Result {
             };
             bytes.push(n);
         }
-        f.write_str(std::str::from_utf8(&bytes).unwrap())?;
+        return f.write_str(std::str::from_utf8(&bytes).unwrap());
     }
     p3(f, this, "", "", ",", heap)
 }
