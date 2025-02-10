@@ -871,7 +871,7 @@ impl Shl {
                     {
                         if let Some(c) = c.value() {
                             if c != 0 {
-                                let sum = c << i;
+                                let sum = Self::op(c, i);
                                 if i32::try_from(sum).is_ok() {
                                     return Some(*Add::new(
                                         Shl::new(add.inputs(sea)[1].unwrap(), Some(rhs), sea)

@@ -1,6 +1,6 @@
 use crate::datastructures::id_set::IdSet;
 use crate::datastructures::id_vec::IdVec;
-use crate::sea_of_nodes::nodes::node::{Constant, Div, DivF, Load, New, Start, Store, TypedNode};
+use crate::sea_of_nodes::nodes::node::{Constant, Div, DivF, Load, New, Sar, Shl, Shr, Start, Store, TypedNode};
 use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes};
 use crate::sea_of_nodes::tests::scheduler;
 use crate::sea_of_nodes::tests::scheduler::{Block, BlockId};
@@ -8,7 +8,7 @@ use crate::sea_of_nodes::types::{TyStruct, Type};
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Display, Formatter};
-use std::ops::{Add, BitAnd, BitOr, BitXor, Mul, Neg, Shl, Shr, Sub};
+use std::ops::{Add, BitAnd, BitOr, BitXor, Mul, Neg, Sub};
 
 type ObjId = usize;
 
@@ -503,9 +503,9 @@ impl<'a, 't> Evaluator<'a, 't> {
             ),
             TypedNode::Sub(_) => self.binaryl(node, i64::wrapping_sub),
             TypedNode::SubF(_) => self.binaryd(node, f64::sub),
-            TypedNode::Shl(_) => self.binaryl(node, i64::shl),
-            TypedNode::Shr(_) => self.binaryl(node, |a, b| (a as u64 >> b as u64) as i64),
-            TypedNode::Sar(_) => self.binaryl(node, i64::shr),
+            TypedNode::Shl(_) => self.binaryl(node, Shl::op),
+            TypedNode::Shr(_) => self.binaryl(node, Shr::op),
+            TypedNode::Sar(_) => self.binaryl(node, Sar::op),
             TypedNode::And(_) => self.binaryl(node, i64::bitand),
             TypedNode::Or(_) => self.binaryl(node, i64::bitor),
             TypedNode::Xor(_) => self.binaryl(node, i64::bitxor),

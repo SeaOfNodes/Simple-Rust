@@ -565,15 +565,27 @@ impl Shl {
     pub fn new(left: Node, right: Option<Node>, sea: &mut Nodes) -> Self {
         Self::create(vec![None, Some(left), right], sea)
     }
+
+    pub fn op(a: i64, b: i64) -> i64 {
+        a.wrapping_shl(b as u32)
+    }
 }
 impl Shr {
     pub fn new(left: Node, right: Option<Node>, sea: &mut Nodes) -> Self {
         Self::create(vec![None, Some(left), right], sea)
     }
+
+    pub fn op(a: i64, b: i64) -> i64 {
+        (a as u64).wrapping_shr(b as u32) as i64
+    }
 }
 impl Sar {
     pub fn new(left: Node, right: Option<Node>, sea: &mut Nodes) -> Self {
         Self::create(vec![None, Some(left), right], sea)
+    }
+
+    pub fn op(a: i64, b: i64) -> i64 {
+        a.wrapping_shr(b as u32)
     }
 }
 

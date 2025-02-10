@@ -1,5 +1,5 @@
-use crate::sea_of_nodes::nodes::node::IfOp;
-use crate::sea_of_nodes::nodes::node::{Constant, XCtrl};
+use crate::sea_of_nodes::nodes::node::{Constant, Shl, Shr, XCtrl};
+use crate::sea_of_nodes::nodes::node::{IfOp, Sar};
 use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes, Op};
 use crate::sea_of_nodes::types::{Field, Ty, Type};
 
@@ -503,10 +503,11 @@ impl<'t> Node {
                         return *t1;
                     }
                     if let (Some(c1), Some(c2)) = (t1.value(), t2.value()) {
-                        return *types.get_int(c1 >> c2);
+                        return *types.get_int(Sar::op(c1, c2));
                     }
                     if let Some(log) = t2.value() {
-                        return *types.make_int(-1 << (63 - log), (1 << (63 - log)) - 1);
+                        let s = (63 - log) & 63;
+                        return *types.make_int(-1 << s, (1 << s) - 1);
                     }
                 }
                 *types.int_bot
@@ -521,7 +522,7 @@ impl<'t> Node {
                         return *t1;
                     }
                     if let (Some(c1), Some(c2)) = (t1.value(), t2.value()) {
-                        return *types.get_int(c1 << c2);
+                        return *types.get_int(Shl::op(c1, c2));
                     }
                 }
                 *types.int_bot
@@ -536,7 +537,7 @@ impl<'t> Node {
                         return *t1;
                     }
                     if let (Some(c1), Some(c2)) = (t1.value(), t2.value()) {
-                        return *types.get_int((c1 as u64 >> c2 as u64) as i64);
+                        return *types.get_int(Shr::op(c1, c2));
                     }
                 }
                 *types.int_bot
