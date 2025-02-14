@@ -64,6 +64,8 @@ pub fn generate_dot_output(
     separate_control_cluster: bool,
 ) -> Result<String, fmt::Error> {
     let all = find_all(sea, &[Some(**stop), scope.map(|s| s.to_node())]);
+    let mut all = Vec::from_iter(all);
+    all.sort_by_key(Node::index);
 
     let mut sb = String::new();
     writeln!(sb, "digraph \"{}\" {{", source.replace("\"", "\\\""))?;
@@ -71,6 +73,8 @@ pub fn generate_dot_output(
     writeln!(sb, "\trankdir=BT;")?;
     // writeln!(sb, "\tordering=\"in\";")?;
     writeln!(sb, "\tconcentrate=\"true\";")?;
+    writeln!(sb, "\tcompound=\"true\";")?;
+
     do_nodes(&mut sb, &all, separate_control_cluster, sea)?;
     for &scope in x_scopes {
         if !scope.is_dead(sea) {
@@ -90,7 +94,7 @@ pub fn generate_dot_output(
 fn nodes_by_cluster(
     sb: &mut String,
     do_ctrl: bool,
-    all: &HashSet<Node>,
+    all: &[Node],
     separate_control_cluster: bool,
     sea: &Nodes,
 ) -> fmt::Result {
@@ -190,7 +194,7 @@ fn nodes_by_cluster(
     if !separate_control_cluster {
         // Force Region & Phis to line up
         for &n in all {
-            if let Op::Region { .. } | Op::Loop = &sea[n] {
+            if n.is_region(sea) {
                 write!(sb, "\t\t{{ rank=same; {};", n.print(sea))?;
                 for &phi in &sea.outputs[n] {
                     if let Op::Phi(_) = &sea[phi] {
@@ -207,7 +211,7 @@ fn nodes_by_cluster(
 
 fn do_nodes(
     sb: &mut String,
-    all: &HashSet<Node>,
+    all: &[Node],
     separate_control_cluster: bool,
     sea: &Nodes,
 ) -> fmt::Result {
@@ -276,7 +280,7 @@ impl Node {
     }
 }
 
-fn node_edges(sb: &mut String, sea: &Nodes, all: &HashSet<Node>) -> fmt::Result {
+fn node_edges(sb: &mut String, sea: &Nodes, all: &[Node]) -> fmt::Result {
     writeln!(sb, "\tedge [ fontname=Helvetica, fontsize=8 ];")?;
     for &n in all.iter() {
         if n.is_constant(sea)
@@ -355,9 +359,7 @@ fn def_name(sea: &Nodes, def: Node) -> String {
 fn find_all(nodes: &Nodes, leaves: &[Option<Node>]) -> HashSet<Node> {
     let mut all = HashSet::new();
     for &node in leaves.iter().flatten() {
-        for output in &nodes.outputs[node] {
-            walk(nodes, &mut all, Some(*output));
-        }
+        walk(nodes, &mut all, Some(node));
     }
     all
 }
