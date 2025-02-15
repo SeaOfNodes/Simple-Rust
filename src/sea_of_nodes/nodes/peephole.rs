@@ -507,7 +507,7 @@ impl<'t> Node {
                     }
                     if let Some(log) = t2.value() {
                         let s = (63 - log) & 63;
-                        return *types.make_int(-1 << s, (1 << s) - 1);
+                        return *types.make_int(-1 << s, (1i64 << s).wrapping_sub(1));
                     }
                 }
                 *types.int_bot
