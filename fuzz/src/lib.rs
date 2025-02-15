@@ -1,9 +1,9 @@
 pub mod script_generator;
 
-use simple_rust::datastructures::arena ::DroplessArena;
-use simple_rust::sea_of_nodes::tests::evaluator;
-use simple_rust::sea_of_nodes::tests::evaluator::EResult;
+use simple_rust::datastructures::arena::DroplessArena;
 use simple_rust::sea_of_nodes::parser::Parser;
+use simple_rust::sea_of_nodes::tests::evaluator;
+use simple_rust::sea_of_nodes::tests::evaluator::{EResult, HeapObject};
 use simple_rust::sea_of_nodes::types::Types;
 
 pub fn run_and_compare_eval(source: &str, definitely_valid: bool) {
@@ -32,11 +32,23 @@ pub fn run_and_compare_eval(source: &str, definitely_valid: bool) {
 
     let timeout = 1000;
     for arg in [0, 1, 10] {
-        let er1 = evaluator::evaluate_with_result(&parser1.nodes, stop1, arg, timeout);
-        let er2 = evaluator::evaluate_with_result(&parser2.nodes, stop2, arg, timeout);
-        if er1 == EResult::Timeout || er2 == EResult::Timeout {
+        let er1 = evaluator::evaluate_with_result(&parser1.nodes, stop1.to_node(), arg, timeout);
+        let er2 = evaluator::evaluate_with_result(&parser2.nodes, stop2.to_node(), arg, timeout);
+        let EResult::Value(o1) = er1.1 else {
             continue;
-        }
-        assert_eq!(er1, er2);
+        };
+        let EResult::Value(o2) = er2.1 else {
+            continue;
+        };
+        assert_eq!(
+            HeapObject {
+                heap: &er1.0,
+                object: o1,
+            },
+            HeapObject {
+                heap: &er2.0,
+                object: o2,
+            }
+        );
     }
 }

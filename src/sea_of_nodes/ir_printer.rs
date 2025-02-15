@@ -1,5 +1,5 @@
 use crate::datastructures::id_set::IdSet;
-use crate::sea_of_nodes::nodes::{Cfg, Node, Nodes, Op};
+use crate::sea_of_nodes::nodes::{Cfg, Node, Nodes};
 use crate::sea_of_nodes::types::{Ty, Types};
 use std::borrow::Cow;
 use std::collections::HashMap;

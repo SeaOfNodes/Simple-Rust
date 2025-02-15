@@ -61,7 +61,7 @@ impl<'t> Obj<'t> {
 
 impl<'t> Display for ResultObject<'t> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        PrintableObject {
+        HeapObject {
             object: self.object,
             heap: &self.heap,
         }
@@ -69,9 +69,44 @@ impl<'t> Display for ResultObject<'t> {
     }
 }
 
-pub struct PrintableObject<'o, 't> {
+pub struct HeapObject<'o, 't> {
     pub object: Object,
     pub heap: &'o Heap<'t>,
+}
+
+impl fmt::Debug for HeapObject<'_, '_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Display::fmt(&self, f)
+    }
+}
+
+impl<'o, 't> PartialEq<Self> for HeapObject<'o, 't> {
+    fn eq(&self, other: &Self) -> bool {
+        match self.object {
+            Object::Long(_) | Object::Null | Object::Memory | Object::Double(_) => {
+                self.object == other.object
+            }
+            Object::Obj(o) => {
+                if let Object::Obj(o2) = other.object {
+                    let obj = &self.heap.objs[o];
+                    let obj2 = &other.heap.objs[o2];
+                    obj.ty == obj2.ty
+                        && obj.fields.len() == obj2.fields.len()
+                        && obj.fields.iter().zip(obj2.fields.iter()).all(|(&a, &b)| {
+                            HeapObject {
+                                heap: self.heap,
+                                object: a,
+                            } == HeapObject {
+                                heap: other.heap,
+                                object: b,
+                            }
+                        })
+                } else {
+                    false
+                }
+            }
+        }
+    }
 }
 
 fn init(this: ObjId, objs: &mut HashMap<ObjId, i32>, heap: &Heap) {
@@ -102,7 +137,7 @@ fn p1(
     if let Object::Obj(obj) = obj {
         p2(sb, obj, objs, id, indentation, step, sep, heap)
     } else {
-        write!(sb, "{}", PrintableObject { object: obj, heap })?;
+        write!(sb, "{}", HeapObject { object: obj, heap })?;
         Ok(id)
     }
 }
@@ -226,7 +261,7 @@ fn obj_to_string(f: &mut Formatter, this: ObjId, heap: &Heap) -> fmt::Result {
     p3(f, this, "", "", ",", heap)
 }
 
-impl<'a, 't> Display for PrintableObject<'a, 't> {
+impl<'a, 't> Display for HeapObject<'a, 't> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self.object {
             Object::Long(l) => l.fmt(f),
