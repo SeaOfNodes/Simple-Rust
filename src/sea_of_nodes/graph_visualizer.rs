@@ -120,7 +120,7 @@ fn nodes_by_cluster(
 
         write!(sb, "\t\t{} [ ", n.unique_name(sea))?;
         let lab = sea[n].glabel();
-        if sea[n].is_multi_node() {
+        if n.is_multi_node(sea) {
             writeln!(sb, "shape=plaintext label=<")?;
             writeln!(
                 sb,

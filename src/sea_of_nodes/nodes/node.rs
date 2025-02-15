@@ -46,6 +46,11 @@ impl Node {
     pub fn to_node(self) -> Node {
         self
     }
+
+    /// implements the MultiNode interface
+    pub fn is_multi_node(self, sea: &Nodes) -> bool {
+        self.is_start(sea) || self.is_if(sea) || self.is_new(sea)
+    }
 }
 
 impl Id for Node {
@@ -429,11 +434,6 @@ impl<'t> Op<'t> {
             | Op::XCtrl => self.label(),
             Op::Cfg => unreachable!(),
         }
-    }
-
-    // implements the MultiNode interface
-    pub fn is_multi_node(&self) -> bool {
-        matches!(self, Op::Start(_) | Op::If(_) | Op::New(_))
     }
 
     pub fn operation(&self) -> usize {

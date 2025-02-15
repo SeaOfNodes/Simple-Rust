@@ -1,11 +1,10 @@
+use crate::datastructures::id_set::IdSet;
+use crate::sea_of_nodes::nodes::{Cfg, Node, Nodes, Op};
+use crate::sea_of_nodes::types::{Ty, Types};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Write;
-
-use crate::datastructures::id_set::IdSet;
-use crate::sea_of_nodes::nodes::{Cfg, Node, Nodes, Op};
-use crate::sea_of_nodes::types::{Ty, Types};
 
 pub fn pretty_print_llvm(node: impl Into<Node>, depth: usize, sea: &Nodes) -> String {
     pretty_print_(node.into(), depth, true, sea)
@@ -343,14 +342,26 @@ fn pretty_print_scheduled(
 ) -> Result<String, fmt::Error> {
     // Backwards DFS walk to depth.
     let mut ds = HashMap::new();
-    walk_(&mut ds, node, depth, sea);
+    let mut ns = vec![];
+    walk_(&mut ds, &mut ns, node, depth, sea);
+    // Remove data projections, these are force-printed behind their multinode head
+    let mut i = 0;
+    while i < ns.len() {
+        if ns[i].is_proj(sea) && !ns[i].inputs(sea)[0].is_some_and(|n| n.is_cfg(sea)) {
+            ds.remove(&ns[i]);
+            ns.swap_remove(i);
+        }
+        i += 1;
+    }
+
     // Print by block with least idepth
     let mut sb = String::new();
     let mut bns = vec![];
 
     while !ds.is_empty() {
         let mut blk: Option<Cfg> = None;
-        for &n in ds.keys() {
+        let mut blk_i = 0;
+        for (i, &n) in ns.iter().enumerate() {
             let mut cfg = n.to_cfg(sea);
             if cfg.is_none() || !cfg.unwrap().block_head(sea) {
                 cfg = Some(n.cfg0(sea));
@@ -358,19 +369,21 @@ fn pretty_print_scheduled(
             let cfg = cfg.unwrap();
             if blk.is_none() || sea.cfg[cfg].idepth < sea.cfg[blk.unwrap()].idepth {
                 blk = Some(cfg);
+                blk_i = i;
             }
         }
         let blk = blk.unwrap();
         ds.remove(&blk);
+        ns.remove(blk_i);
 
         // Print block header
         write!(sb, "{:<13.13}:                     [[  ", blk.label(sea))?;
-
-        if blk.is_region(sea) || blk.is_stop(sea) {
+        if blk.is_start(sea) {
+        } else if blk.is_region(sea) || blk.is_stop(sea) {
             for i in if blk.is_stop(sea) { 0 } else { 1 }..blk.inputs(sea).len() {
                 label(&mut sb, blk.cfg(i, sea).unwrap(), sea)?
             }
-        } else if !blk.is_start(sea) {
+        } else {
             label(&mut sb, blk.cfg(0, sea).unwrap(), sea)?;
         }
         sb += " ]]  \n";
@@ -392,10 +405,19 @@ fn pretty_print_scheduled(
             let mut i = 0;
             while i < bns.len() {
                 if let Some(phi) = bns[i].to_phi(sea) {
-                    print_line_2(*phi, &mut sb, llvm_format, &mut bns, i, &mut ds, sea)?;
-                    i -= 1;
+                    print_line_2(
+                        *phi,
+                        &mut sb,
+                        llvm_format,
+                        &mut bns,
+                        Some(i),
+                        &mut ds,
+                        &mut ns,
+                        sea,
+                    )?;
+                } else {
+                    i += 1;
                 }
-                i += 1;
             }
         }
 
@@ -403,11 +425,36 @@ fn pretty_print_scheduled(
         while !bns.is_empty() {
             let mut i = 0;
             while i < bns.len() {
-                if ds.get(&bns[i]) == Some(&xd) {
-                    print_line_2(bns[i], &mut sb, llvm_format, &mut bns, i, &mut ds, sea)?;
-                    i -= 1;
+                let n = bns[i];
+                if ds.get(&n) == Some(&xd) {
+                    print_line_2(
+                        n,
+                        &mut sb,
+                        llvm_format,
+                        &mut bns,
+                        Some(i),
+                        &mut ds,
+                        &mut ns,
+                        sea,
+                    )?;
+                    if n.is_multi_node(sea) && !n.is_cfg(sea) {
+                        for &use_ in sea.outputs[n].iter().filter(|n| **n != Node::DUMMY) {
+                            let bi = bns.iter().position(|n| *n == use_);
+                            print_line_2(
+                                use_,
+                                &mut sb,
+                                llvm_format,
+                                &mut bns,
+                                bi,
+                                &mut ds,
+                                &mut ns,
+                                sea,
+                            )?;
+                        }
+                    }
+                } else {
+                    i += 1;
                 }
-                i += 1;
             }
             xd += 1;
         }
@@ -417,19 +464,19 @@ fn pretty_print_scheduled(
     Ok(sb)
 }
 
-fn walk_(ds: &mut HashMap<Node, usize>, node: Node, d: usize, sea: &Nodes) {
+fn walk_(ds: &mut HashMap<Node, usize>, ns: &mut Vec<Node>, node: Node, d: usize, sea: &Nodes) {
     let nd = ds.get(&node);
     if nd.is_some_and(|&nd| d <= nd) {
         return; // Been there, done that
     }
-    ds.insert(node, d);
+    if ds.insert(node, d).is_none() {
+        ns.push(node);
+    }
     if d == 0 {
         return; // Depth cutoff
     }
-    for def in node.inputs(sea) {
-        if let Some(def) = def {
-            walk_(ds, *def, d - 1, sea);
-        }
+    for &def in node.inputs(sea).iter().flatten() {
+        walk_(ds, ns, def, d - 1, sea);
     }
 }
 
@@ -457,12 +504,16 @@ fn print_line_2(
     sb: &mut String,
     llvm_format: bool,
     bns: &mut Vec<Node>,
-    i: usize,
+    i: Option<usize>,
     ds: &mut HashMap<Node, usize>,
+    ns: &mut Vec<Node>,
     sea: &Nodes,
 ) -> fmt::Result {
     print_line(sea, n, sb, llvm_format)?;
-    bns.swap_remove(i);
+    if let Some(i) = i {
+        bns.swap_remove(i);
+    }
     ds.remove(&n);
+    ns.remove(ns.iter().position(|x| *x == n).unwrap());
     Ok(())
 }

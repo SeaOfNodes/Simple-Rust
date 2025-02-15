@@ -656,9 +656,8 @@ impl<'s, 't> Parser<'s, 't> {
         Ok(())
     }
 
-    /// Dumps out the node graph
-    pub fn show_graph(&mut self) {
-        let dot = graph_visualizer::generate_dot_output(
+    pub fn generate_graph(&mut self) -> String {
+        graph_visualizer::generate_dot_output(
             &self.nodes,
             self.stop,
             Some(self.scope),
@@ -666,7 +665,12 @@ impl<'s, 't> Parser<'s, 't> {
             self.lexer.source,
             false,
         )
-        .unwrap();
+        .unwrap()
+    }
+
+    /// Dumps out the node graph
+    pub fn show_graph(&mut self) {
+        let dot = self.generate_graph();
         if !self.disable_show_graph_println {
             println!("{dot}");
             // uncomment to open in browser:
