@@ -14,7 +14,7 @@ pub struct CfgData {
     /// change the CFG incrementally.
     ///
     /// See <a href="https://en.wikipedia.org/wiki/Dominator_(graph_theory)">Wikipedia: Dominator</a>
-    pub idepth: u32,
+    idepth: u32,
     /// Anti-dependence field support
     pub anti: Option<Load>,
     ltree: Option<LoopTree>,

@@ -598,9 +598,137 @@ L170:                             [[  L150      L153       ]]
 L3:                               [[  L194       ]]  
 
 "#;
-    let actual_pretty_print_scheduled = ir_printer::pretty_print(stop, 1000, &parser.nodes);
+    let actual_pretty_print_scheduled = ir_printer::pretty_print(stop, 1000, &mut parser.nodes);
     assert_eq!(
         actual_pretty_print_scheduled,
         expected_pretty_print_scheduled
+    );
+
+    let expected_pretty_print_scheduled_llvm = r#"
+%2: [Ctrl,MEM#BOT,IntBot] = Start(_, _, _)
+%8.1: MEM#BOT = $mem(%2)
+%9.2: IntBot = arg(%2)
+%7: Ctrl = $ctrl(%2)
+%45: Int = #1(%7)
+%30: Int = #2(%7)
+%20: Int = #3(%7)
+
+%21: IntBot = Shl(%7, %9.2, %20)
+%10: Int = #8(%7)
+%22: IntBot = Add(%7, %21, %10)
+%13: IntBot = Add(%7, %9.2, %10)
+%4: Int = #0(%7)
+%24: [Ctrl,*[int] {int #; int ![]; },MEM#4:int,MEM#5:0] = new_ary_int(%7, %22, %8.1, %8.1, %9.2, %4)
+%27.1: *[int] {int #; int ![]; } = [int](%24)
+%26.3: MEM#5:0 = $5(%24)
+%25.2: MEM#4:int = $4(%24)
+%15: [Ctrl,*[bool] {int #; bool ![]; },MEM#2:int,MEM#3:0] = new_ary_bool(%7, %13, %8.1, %8.1, %9.2, %4)
+%18.1: *[bool] {int #; bool ![]; } = [bool](%15)
+%17.3: MEM#3:0 = $3(%15)
+%16.2: MEM#2:int = $2(%15)
+
+%31: Ctrl = Loop(_, %7, %100)
+
+%38: [Ctrl,Ctrl] = If(%31, %36)
+%40: Ctrl = False(%38)
+%39: Ctrl = True(%38)
+
+%50: Ctrl = Loop(_, %39, %64)
+%56: IntBot = Phi_p(%50, %34, %74)
+
+%59: IntBot = Add(%50, %56, %10)
+%74: IntBot = Add(%50, %56, %45)
+%34: IntBot = Phi_p(%31, %30, %74)
+%35: IntBot = Mul(%31, %34, %34)
+%36: Int = LT(%31, %35, %9.2)
+
+%63: [Ctrl,Ctrl] = If(%50, %62)
+%65: Ctrl = False(%63)
+
+%87: IntBot = Mul(%65, %56, %30)
+
+%88: Ctrl = Loop(_, %65, %99)
+
+%98: [Ctrl,Ctrl] = If(%88, %92)
+%100: Ctrl = False(%98)
+
+%79: IntBot = Add(%100, %77, %45)
+%77: IntBot = Phi_nprimes(%31, %4, %79)
+%81: IntBot = Shl(%100, %77, %20)
+%82: IntBot = Add(%100, %81, %10)
+%84: MEM#5:Bot = st_ary(%100, %83, %27.1, %82, %56)
+%83: MEM#5:Bot = Phi_$5(%31, %26.3, %84)
+
+%99: Ctrl = True(%98)
+
+%117: IntBot = Add(%99, %91, %56)
+%91: IntBot = Phi_i(%88, %87, %117)
+%92: Int = LT(%88, %91, %9.2)
+%113: IntBot = Add(%99, %91, %10)
+%116: MEM#3:Bot = st_ary(%99, %115, %18.1, %113, %45)
+%115: MEM#BOT = Phi_$3(%88, %60, %116)
+%60: MEM#BOT = Phi_$3(%31, %17.3, %115)
+%62: IntBot = ld_ary(%50, %60, %18.1, %59)
+%145: IntBot = ld_ary(%128, %60, %18.1, %143)
+
+%149: [Ctrl,Ctrl] = If(%128, %145)
+%153: Ctrl = True(%149)
+%150: Ctrl = False(%149)
+
+%170: Ctrl = Region(_, %150, %153)
+
+%121: Ctrl = Loop(_, %40, %170)
+%162: IntBot = Phi_nprimes(%121, %77, %173)
+
+%166: IntBot = Shl(%121, %162, %20)
+%167: IntBot = Add(%121, %166, %10)
+%164: IntBot = Add(%150, %162, %45)
+%173: IntBot = Phi_nprimes(%170, %164, %162)
+%124: IntBot = Phi_p(%121, %34, %175)
+%125: Int = LT(%121, %124, %9.2)
+%175: IntBot = Add(%170, %124, %45)
+%168: MEM#BOT = Phi_$5(%121, %83, %171)
+%169: MEM#5:Bot = st_ary(%150, %168, %27.1, %167, %124)
+%171: MEM#BOT = Phi_$5(%170, %169, %168)
+
+%127: [Ctrl,Ctrl] = If(%121, %125)
+%129: Ctrl = False(%127)
+
+%181: [Ctrl,*[int] {int #; int ![]; },MEM#4:int,MEM#5:Bot] = new_ary_int(%129, %167, %25.2, %168, %162, %4)
+%184.1: *[int] {int #; int ![]; } = [int](%181)
+%183.3: MEM#5:Bot = $5(%181)
+%182.2: MEM#4:int = $4(%181)
+
+%186: Ctrl = Loop(_, %129, %193)
+
+%192: [Ctrl,Ctrl] = If(%186, %190)
+%193: Ctrl = True(%192)
+
+%218: IntBot = Add(%193, %189, %45)
+%189: IntBot = Phi_j(%186, %4, %218)
+%190: Int = LT(%186, %189, %162)
+%207: IntBot = Shl(%193, %189, %20)
+%208: IntBot = Add(%193, %207, %10)
+%215: IntBot = ld_ary(%193, %214, %27.1, %208)
+%216: MEM#5:Bot = st_ary(%193, %214, %184.1, %208, %215)
+%214: MEM#5:Bot = Phi_$5(%186, %183.3, %216)
+
+%194: Ctrl = False(%192)
+
+%219: [Ctrl,*[int] {int #; int ![]; }] = Return(%194, %184.1, %16.2, %60, %182.2, %214)
+
+%3: Bot = Stop(%219)
+%128: Ctrl = True(%127)
+
+%143: IntBot = Add(%128, %124, %10)
+
+%64: Ctrl = True(%63)
+
+"#;
+    let actual_pretty_print_scheduled_llvm =
+        ir_printer::pretty_print_llvm(stop, 1000, &mut parser.nodes);
+    assert_eq!(
+        actual_pretty_print_scheduled_llvm,
+        expected_pretty_print_scheduled_llvm
     );
 }

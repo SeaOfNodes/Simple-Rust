@@ -11,7 +11,7 @@ pub fn pretty_print_llvm(node: impl Into<Node>, depth: usize, sea: &Nodes) -> St
 }
 
 /// Another bulk pretty-printer.  Makes more effort at basic-block grouping.
-pub fn pretty_print(node: impl Into<Node>, depth: usize, sea: &Nodes) -> String {
+pub fn pretty_print(node: impl Into<Node>, depth: usize, sea: &mut Nodes) -> String {
     if sea.scheduled {
         pretty_print_scheduled(node.into(), depth, false, sea).unwrap()
     } else {
@@ -43,7 +43,7 @@ fn pretty_print_(node: Node, depth: usize, llvm_format: bool, sea: &Nodes) -> St
             };
             print_line(sea, n, &mut sb, llvm_format).unwrap(); // Print head
             while let Some(&&t) = iter.peek() {
-                if t.is_multi_tail(sea) {
+                if !t.is_multi_tail(sea) {
                     break;
                 }
                 iter.next();
@@ -189,13 +189,11 @@ impl Node {
     }
 
     pub fn is_multi_tail(self, sea: &Nodes) -> bool {
-        match &sea[self] {
-            Op::Constant(_) | Op::XCtrl | Op::Phi(_) => true,
-            Op::Proj(_) | Op::CProj(_) => {
-                let ctrl = self.inputs(sea)[0].unwrap();
-                ctrl.is_multi_head(sea)
-            }
-            _ => false,
+        if self.is_proj(sea) || self.is_cproj(sea) {
+            let ctrl = self.inputs(sea)[0].unwrap();
+            ctrl.is_multi_head(sea)
+        } else {
+            self.is_constant(sea) || self.is_phi(sea)
         }
     }
 }
@@ -221,6 +219,7 @@ fn post_ord(
             if use_ != Node::DUMMY
                 && use_.is_cfg(sea)
                 && sea.outputs[use_].len() >= 1
+                && sea.outputs[use_][0] != Node::DUMMY
                 && !sea.outputs[use_][0].is_loop(sea)
             {
                 post_ord(use_, rpos, visit, bfs, sea);
@@ -338,7 +337,7 @@ fn pretty_print_scheduled(
     node: Node,
     depth: usize,
     llvm_format: bool,
-    sea: &Nodes,
+    sea: &mut Nodes,
 ) -> Result<String, fmt::Error> {
     // Backwards DFS walk to depth.
     let mut ds = HashMap::new();
@@ -350,8 +349,9 @@ fn pretty_print_scheduled(
         if ns[i].is_proj(sea) && !ns[i].inputs(sea)[0].is_some_and(|n| n.is_cfg(sea)) {
             ds.remove(&ns[i]);
             ns.swap_remove(i);
+        } else {
+            i += 1;
         }
-        i += 1;
     }
 
     // Print by block with least idepth
@@ -360,24 +360,27 @@ fn pretty_print_scheduled(
 
     while !ds.is_empty() {
         let mut blk: Option<Cfg> = None;
-        let mut blk_i = 0;
-        for (i, &n) in ns.iter().enumerate() {
-            let mut cfg = n.to_cfg(sea);
-            if cfg.is_none() || !cfg.unwrap().block_head(sea) {
-                cfg = Some(n.cfg0(sea));
-            }
-            let cfg = cfg.unwrap();
-            if blk.is_none() || sea.cfg[cfg].idepth < sea.cfg[blk.unwrap()].idepth {
+        for &n in &ns {
+            let cfg = n
+                .to_cfg(sea)
+                .filter(|c| c.block_head(sea))
+                .unwrap_or_else(|| n.cfg0(sea));
+            if blk.is_none_or(|blk| cfg.idepth(sea) < blk.idepth(sea)) {
                 blk = Some(cfg);
-                blk_i = i;
             }
         }
         let blk = blk.unwrap();
         ds.remove(&blk);
-        ns.remove(blk_i);
+        if let Some(p) = ns.iter().position(|n| *n == *blk) {
+            ns.remove(p);
+        }
 
         // Print block header
-        write!(sb, "{:<13.13}:                     [[  ", blk.label(sea))?;
+        write!(
+            sb,
+            "{:<13.13}                     [[  ",
+            format!("{}:", blk.label(sea))
+        )?;
         if blk.is_start(sea) {
         } else if blk.is_region(sea) || blk.is_stop(sea) {
             for i in if blk.is_stop(sea) { 0 } else { 1 }..blk.inputs(sea).len() {
@@ -485,7 +488,7 @@ impl Cfg {
         if self.is_start(sea) {
             Cow::Borrowed("START")
         } else if self.is_loop(sea) {
-            Cow::Borrowed("LOOP")
+            Cow::Owned(format!("LOOP{}", self))
         } else {
             Cow::Owned(format!("L{}", self))
         }
@@ -493,7 +496,7 @@ impl Cfg {
 }
 
 fn label(sb: &mut String, mut blk: Cfg, sea: &Nodes) -> fmt::Result {
-    if blk.block_head(sea) {
+    if !blk.block_head(sea) {
         blk = blk.cfg(0, sea).unwrap();
     }
     write!(sb, "{:<9.9} ", blk.label(sea))
@@ -514,6 +517,8 @@ fn print_line_2(
         bns.swap_remove(i);
     }
     ds.remove(&n);
-    ns.remove(ns.iter().position(|x| *x == n).unwrap());
+    if let Some(p) = ns.iter().position(|x| *x == n) {
+        ns.remove(p);
+    }
     Ok(())
 }
