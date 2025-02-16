@@ -972,14 +972,6 @@ impl<'s, 't> Parser<'s, 't> {
         Ok(tary)
     }
 
-    /// Fixup forward refs lazily.  Basically a Union-Find flavored read
-    /// barrier.
-    fn lazy_f_ref(&mut self, _t: Ty<'t>) -> PResult<Ty<'t>> {
-        //if( !t.isFRef() ) return t;
-        //Type def = Parser.TYPES.get(((TypeMemPtr)t)._obj._name);
-        Err("Not yet implemented".to_string())
-    }
-
     /// <pre>
     ///     expr : bitwise [? expr [: expr]]
     /// </pre>
@@ -1717,15 +1709,6 @@ impl<'a> Lexer<'a> {
         self.remaining.chars().next()
     }
 
-    // Just crash if misused
-    fn peek_offset(&self, offset: isize) -> u8 {
-        debug_assert_eq!(
-            self.source[self.remaining.len()..].as_ptr(),
-            self.remaining.as_ptr()
-        );
-        self.source.as_bytes()[self.remaining.len().checked_add_signed(offset).unwrap()]
-    }
-
     fn next_char(&mut self) -> Option<char> {
         self.peek()
             .inspect(|c| self.remaining = &self.remaining[c.len_utf8()..])
@@ -1749,12 +1732,6 @@ impl<'a> Lexer<'a> {
                 break;
             }
         }
-    }
-
-    /// Next non-white-space character, or EOF
-    fn next_x_char(&mut self) -> Option<char> {
-        self.skip_whitespace();
-        self.next_char()
     }
 
     /// skips a prefix if present

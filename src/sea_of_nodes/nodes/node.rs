@@ -148,6 +148,7 @@ macro_rules! define_id {
                 self
             }
 
+            #[allow(unused)]
             fn create<$t>($(op: $op,)? inputs: Vec<Option<Node>>, sea: &mut Nodes<$t>) -> Self {
                 let op = Op::$Id$((first!(op, $op)))?;
                 Self::from_node_unchecked(sea.create((op, inputs)))

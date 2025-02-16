@@ -176,6 +176,7 @@ impl<'t> TyStruct<'t> {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn test_data(
         tys: &Types<'t>,
     ) -> (TyStruct<'t>, TyStruct<'t>, TyStruct<'t>, TyStruct<'t>) {

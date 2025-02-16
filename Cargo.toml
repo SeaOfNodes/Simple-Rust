@@ -3,3 +3,6 @@ name = "simple-rust"
 version = "0.1.0"
 authors = ["Robert Obkircher <robert.obkircher@gmail.com>"]
 edition = "2021"
+
+[features]
+fuzzing = []
