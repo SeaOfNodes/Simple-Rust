@@ -3,7 +3,7 @@ use crate::sea_of_nodes::nodes::node::{Scope, Stop};
 use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
 use crate::sea_of_nodes::types::Ty;
 use fmt::Write;
-use std::collections::HashSet;
+use hashbrown::HashSet;
 use std::fmt;
 use std::process::{Command, Stdio};
 use std::sync::Mutex;

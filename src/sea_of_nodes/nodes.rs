@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::num::NonZeroU32;
 
 use crate::datastructures::id_set::IdSet;

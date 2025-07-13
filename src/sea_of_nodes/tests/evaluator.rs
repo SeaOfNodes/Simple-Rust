@@ -7,7 +7,7 @@ use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes};
 use crate::sea_of_nodes::tests::scheduler;
 use crate::sea_of_nodes::tests::scheduler::{Block, BlockId};
 use crate::sea_of_nodes::types::{TyStruct, Type};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::ops::{Add, BitAnd, BitOr, BitXor, Mul, Neg, Sub};

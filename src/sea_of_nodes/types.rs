@@ -8,8 +8,8 @@ pub use crate::sea_of_nodes::types::type_mem::Mem;
 pub use crate::sea_of_nodes::types::type_mem_ptr::MemPtr;
 pub use crate::sea_of_nodes::types::type_struct::Struct;
 pub use crate::sea_of_nodes::types::type_tuple::Tuple;
+use hashbrown::{HashMap, HashSet};
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
 
 mod field;
 mod ty;
@@ -33,7 +33,7 @@ mod type_tuple;
 ///     # use simple_rust::datastructures::arena ::DroplessArena;
 ///     # use simple_rust::sea_of_nodes::types::{Ty, Types};
 ///
-///     fn get_t<'t>(types: &'t Types<'t>) -> Ty<'t> {types.ty_bot};
+///     fn get_t<'t>(types: &'t Types<'t>) -> Ty<'t> {types.bot};
 ///
 ///     let arena = DroplessArena::new();
 ///     let types = Types::new(&arena);

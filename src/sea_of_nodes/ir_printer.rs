@@ -1,8 +1,8 @@
 use crate::datastructures::id_set::IdSet;
 use crate::sea_of_nodes::nodes::{Cfg, Node, Nodes};
 use crate::sea_of_nodes::types::{Ty, Types};
+use hashbrown::HashMap;
 use std::borrow::Cow;
-use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Write;
 
@@ -370,7 +370,7 @@ fn pretty_print_scheduled(
             }
         }
         let blk = blk.unwrap();
-        ds.remove(&blk);
+        ds.remove(&*blk);
         if let Some(p) = ns.iter().position(|n| *n == *blk) {
             ns.remove(p);
         }

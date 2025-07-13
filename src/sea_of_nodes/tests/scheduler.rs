@@ -23,7 +23,7 @@
 
 use crate::sea_of_nodes::nodes::node::{Phi, Start, TypedNode};
 use crate::sea_of_nodes::nodes::{Node, Nodes, Op};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 /// A basic block with a schedule of the containing nodes.
 pub struct Block {
@@ -599,7 +599,7 @@ impl Scheduler {
                 None => {}
                 Some(n) if n.is_if(sea) => {
                     for p in sea.outputs[n].iter().filter_map(|n| n.to_cproj(sea)) {
-                        block.next[sea[p].index] = blocks[&*p];
+                        block.next[sea[p].index] = blocks[&p];
                     }
                 }
                 Some(n) if n.is_region(sea) => {

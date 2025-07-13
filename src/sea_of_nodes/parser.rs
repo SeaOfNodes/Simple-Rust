@@ -5,7 +5,7 @@ use crate::sea_of_nodes::nodes::node::{
 };
 use crate::sea_of_nodes::nodes::{BoolOp, Node, Nodes, Op, Phi};
 use crate::sea_of_nodes::types::{Field, Ty, TyMemPtr, TyStruct, Types};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 /// Converts a Simple source program to the Sea of Nodes intermediate representation in one pass.
 pub struct Parser<'s, 't> {

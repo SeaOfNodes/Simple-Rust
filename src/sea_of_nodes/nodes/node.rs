@@ -1,5 +1,5 @@
+use hashbrown::{Equivalent, HashMap};
 use std::borrow::Cow;
-use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Debug, Display};
 use std::num::NonZeroU32;
@@ -127,6 +127,11 @@ macro_rules! define_id {
         impl From<$Id> for TypedNode {
             fn from(value: $Id) -> Self {
                 Self::$Id(value)
+            }
+        }
+        impl Equivalent<Node> for $Id {
+            fn equivalent(&self, key: &Node) -> bool {
+                self.to_node() == *key
             }
         }
         impl fmt::Display for $Id {
@@ -328,7 +333,7 @@ define_ids!(<'t>
 
 impl<'t> Op<'t> {
     /// Easy reading label for debugger
-    pub fn label(&self) -> Cow<str> {
+    pub fn label(&self) -> Cow<'t, str> {
         fn mlabel(name: &str) -> &str {
             match name {
                 "[]" => "ary",
@@ -389,7 +394,7 @@ impl<'t> Op<'t> {
     }
 
     // Graphical label, e.g. "+" or "Region" or "=="
-    pub fn glabel(&self) -> Cow<str> {
+    pub fn glabel(&self) -> Cow<'t, str> {
         match self {
             Op::Add | Op::AddF => Borrowed("+"),
             Op::Sub | Op::SubF => Borrowed("-"),

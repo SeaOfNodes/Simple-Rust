@@ -1,6 +1,6 @@
 use crate::datastructures::id_vec::IdVec;
 use crate::sea_of_nodes::nodes::{Node, Nodes, Op, OpVec};
-use std::collections::hash_map::RawEntryMut;
+use hashbrown::hash_map::RawEntryMut;
 use std::hash::{BuildHasher, DefaultHasher, Hash, Hasher};
 use std::num::NonZeroU32;
 
