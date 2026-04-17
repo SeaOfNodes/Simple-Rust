@@ -387,10 +387,7 @@ impl<'a, 't> Evaluator<'a, 't> {
             body = vec![init; n as usize + 1]; // Array body
 
             // Length value
-            body[0] = self
-                .vall(alloc.inputs(self.sea)[2 + 2].unwrap())
-                .try_into()
-                .unwrap();
+            body[0] = self.vall(alloc.inputs(self.sea)[2 + 2].unwrap()).into();
         } else {
             let num = ty.fields().len();
             body = (0..num)
@@ -407,8 +404,8 @@ impl<'a, 't> Evaluator<'a, 't> {
     }
 
     fn load(&self, load: Load) -> Object {
-        let from = self.valo(load.ptr(&self.sea).unwrap());
-        let off = self.vall(load.off(&self.sea).unwrap());
+        let from = self.valo(load.ptr(self.sea).unwrap());
+        let off = self.vall(load.off(self.sea).unwrap());
         let idx = get_field_index(from.ty, load.to_mem_name(self.sea).unwrap(), off);
         if idx == from.ty.fields().len() - 1 && from.ty.is_ary() {
             let len = from.fields.len() - from.ty.fields().len() + 1;
@@ -423,10 +420,10 @@ impl<'a, 't> Evaluator<'a, 't> {
     }
 
     fn store(&mut self, store: Store) -> Object {
-        let ptr = store.ptr(&self.sea).unwrap();
+        let ptr = store.ptr(self.sea).unwrap();
         let to = self.valo(ptr);
-        let off = self.vall(store.off(&self.sea).unwrap());
-        let val = self.val(store.val(&self.sea).unwrap());
+        let off = self.vall(store.off(self.sea).unwrap());
+        let val = self.val(store.val(self.sea).unwrap());
         let idx = get_field_index(to.ty, store.to_mem_name(self.sea).unwrap(), off);
 
         if idx == to.ty.fields().len() - 1 && to.ty.is_ary() {
@@ -525,14 +522,14 @@ impl<'a, 't> Evaluator<'a, 't> {
             TypedNode::Div(n) => self.div(n).into(),
             TypedNode::DivF(n) => self.divf(n).into(),
             TypedNode::Minus(_) => self
-                .vall(node.inputs(&self.sea)[1].unwrap())
+                .vall(node.inputs(self.sea)[1].unwrap())
                 .wrapping_neg()
                 .into(),
-            TypedNode::MinusF(_) => self.vald(node.inputs(&self.sea)[1].unwrap()).neg().into(),
+            TypedNode::MinusF(_) => self.vald(node.inputs(self.sea)[1].unwrap()).neg().into(),
             TypedNode::Mul(_) => self.binaryl(node, i64::wrapping_mul),
             TypedNode::MulF(_) => self.binaryd(node, f64::mul),
             TypedNode::Not(_) => Object::Long(
-                if self.is_true(self.val(node.inputs(&self.sea)[1].unwrap())) {
+                if self.is_true(self.val(node.inputs(self.sea)[1].unwrap())) {
                     0
                 } else {
                     1
@@ -546,19 +543,19 @@ impl<'a, 't> Evaluator<'a, 't> {
             TypedNode::And(_) => self.binaryl(node, i64::bitand),
             TypedNode::Or(_) => self.binaryl(node, i64::bitor),
             TypedNode::Xor(_) => self.binaryl(node, i64::bitxor),
-            TypedNode::Cast(_) => self.val(node.inputs(&self.sea)[1].unwrap()),
-            TypedNode::ToFloat(_) => (self.vall(node.inputs(&self.sea)[1].unwrap()) as f64).into(),
+            TypedNode::Cast(_) => self.val(node.inputs(self.sea)[1].unwrap()),
+            TypedNode::ToFloat(_) => (self.vall(node.inputs(self.sea)[1].unwrap()) as f64).into(),
             TypedNode::Load(n) => self.load(n),
             TypedNode::Store(n) => self.store(n),
             TypedNode::New(n) => self.alloc(n),
             TypedNode::CProj(n) => {
-                self.valo(n.inputs(&self.sea)[0].unwrap()).fields[self.sea[n].index]
+                self.valo(n.inputs(self.sea)[0].unwrap()).fields[self.sea[n].index]
             }
             TypedNode::Proj(n) => {
-                self.valo(n.inputs(&self.sea)[0].unwrap()).fields[self.sea[n].index]
+                self.valo(n.inputs(self.sea)[0].unwrap()).fields[self.sea[n].index]
             }
             TypedNode::ScopeMin(_) => Object::Null,
-            TypedNode::ReadOnly(n) => self.val(n.inputs(&self.sea)[1].unwrap()),
+            TypedNode::ReadOnly(n) => self.val(n.inputs(self.sea)[1].unwrap()),
             n => unreachable!("Unexpected node {n:?}"),
         }
     }
@@ -593,10 +590,10 @@ impl<'a, 't> Evaluator<'a, 't> {
 
             match exit_node.downcast(&self.sea.ops) {
                 TypedNode::Return(n) => {
-                    return EResult::Value(self.val(n.inputs(&self.sea)[1].unwrap()))
+                    return EResult::Value(self.val(n.inputs(self.sea)[1].unwrap()))
                 }
                 TypedNode::If(n) => {
-                    let condition = self.is_true(self.val(n.inputs(&self.sea)[1].unwrap()));
+                    let condition = self.is_true(self.val(n.inputs(self.sea)[1].unwrap()));
                     block = self.blocks[block].next[if condition { 0 } else { 1 }];
                     // if (block == null) return Status.FALLTHROUGH;
                 }
@@ -607,12 +604,12 @@ impl<'a, 't> Evaluator<'a, 't> {
                     loops -= 1;
 
                     let exit = self.blocks[block].exit_id.unwrap();
-                    debug_assert!(exit > 0 && exit_node.inputs(&self.sea).len() > exit);
+                    debug_assert!(exit > 0 && exit_node.inputs(self.sea).len() > exit);
                     block = self.blocks[block].next[0];
                     // assert block != null;
                     while i < self.blocks[block].nodes.len() {
-                        if let Some(phi) = self.blocks[block].nodes[i].to_phi(&self.sea) {
-                            let exit_node = phi.inputs(&self.sea)[exit].unwrap();
+                        if let Some(phi) = self.blocks[block].nodes[i].to_phi(self.sea) {
+                            let exit_node = phi.inputs(self.sea)[exit].unwrap();
                             self.phi_cache.push(self.val(exit_node))
                         } else {
                             break;

@@ -881,8 +881,5 @@ return rez;
     };
     let primes = [2, 3, 5, 7, 11, 13, 17, 19];
     assert_eq!(nprimes as usize, primes.len());
-    assert_eq!(
-        primes.map(|p| Object::Long(p)),
-        result.heap.objs[obj].fields[1..]
-    );
+    assert_eq!(primes.map(Object::Long), result.heap.objs[obj].fields[1..]);
 }

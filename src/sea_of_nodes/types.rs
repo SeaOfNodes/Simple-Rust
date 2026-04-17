@@ -234,7 +234,7 @@ impl<'a> Types<'a> {
         body: Ty<'a>,
         body_alias: u32,
     ) -> TyStruct<'a> {
-        debug_assert!(!body.to_mem_ptr().is_some_and(|t| !t.data().nil));
+        debug_assert!(body.to_mem_ptr().is_none_or(|t| t.data().nil));
         let name = self.get_str(&format!("[{}]", body.str()));
         let fields = self.interner.arena.alloc([
             Field {

@@ -10,7 +10,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 pub fn run_graphviz_and_chromium(input: String) {
-    let child = Command::new(&"bash")
+    let child = Command::new("bash")
         .args(["-c", "dot -Tsvg | base64"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -44,7 +44,7 @@ pub fn run_graphviz_and_chromium(input: String) {
     let _guard = LOCK.lock().unwrap();
 
     // using chromium becasue firefox only displays it after manually selecting the address hitting enter
-    Command::new(&"chromium")
+    Command::new("chromium")
         .arg(url)
         .stdin(Stdio::null())
         .stdout(Stdio::null())

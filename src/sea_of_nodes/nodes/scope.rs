@@ -241,7 +241,7 @@ impl Scope {
         sea: &mut Nodes<'t>,
     ) -> Result<(), ()> {
         debug_assert!(
-            name.chars().next() != Some('$') || sea[self].lex_size.len() == 1,
+            !name.starts_with('$') || sea[self].lex_size.len() == 1,
             "Later scopes do not define memory"
         );
         if sea[self].lex_size.len() > 1 {

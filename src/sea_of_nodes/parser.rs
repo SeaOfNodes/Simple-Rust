@@ -489,11 +489,11 @@ impl<'s, 't> Parser<'s, 't> {
         // they are ALSO valid at the break.  It is the intersection of
         // conditions here, not the union.
         let break_scope = self.break_scope.unwrap();
-        break_scope.remove_guards(break_scope.ctrl(&mut self.nodes).unwrap(), &mut self.nodes);
+        break_scope.remove_guards(break_scope.ctrl(&self.nodes).unwrap(), &mut self.nodes);
         self.break_scope = Some(self.jump_to(self.break_scope));
         self.require(";")?;
         self.break_scope.unwrap().add_guards(
-            self.break_scope.unwrap().ctrl(&mut self.nodes).unwrap(),
+            self.break_scope.unwrap().ctrl(&self.nodes).unwrap(),
             None,
             false,
             &mut self.nodes,
@@ -585,7 +585,7 @@ impl<'s, 't> Parser<'s, 't> {
             (true, false) => Some(self.parse_asgn()?),
             (false, true) => None,
             (false, false) => {
-                Some(*self.con(lhs.unwrap().ty(&self.nodes).unwrap().make_zero(&self.types)))
+                Some(*self.con(lhs.unwrap().ty(&self.nodes).unwrap().make_zero(self.types)))
             }
         };
         self.scope.remove_guards(if_false, &mut self.nodes);
@@ -874,7 +874,7 @@ impl<'s, 't> Parser<'s, 't> {
             type_name,
             s.peephole(&mut self.nodes)
                 .keep(&mut self.nodes)
-                .to_struct(&mut self.nodes)
+                .to_struct(&self.nodes)
                 .unwrap(),
         );
 
@@ -1352,7 +1352,7 @@ impl<'s, 't> Parser<'s, 't> {
         let size = Add::new(*con_base, shl, &mut self.nodes).peep(self);
         self.altmp.clear();
         self.altmp.push(Some(len.unkeep(&mut self.nodes)));
-        let init = *self.con(ary.fields()[1].ty.make_init(&self.types));
+        let init = *self.con(ary.fields()[1].ty.make_init(self.types));
         self.altmp.push(Some(init));
         self.new_struct(ary, size)
     }
@@ -1802,7 +1802,7 @@ impl<'a> Lexer<'a> {
     fn parse_number<'t>(&mut self, types: &Types<'t>) -> PResult<Ty<'t>> {
         let (flt, snum) = self.is_long_or_double();
         if !flt {
-            if snum.len() > 1 && snum.chars().next() == Some('0') {
+            if snum.len() > 1 && snum.starts_with('0') {
                 Err("Syntax error: integer values cannot start with '0'".to_string())
             } else {
                 snum.parse().map(|i| *types.get_int(i)).map_err(|_| {

@@ -726,7 +726,7 @@ L3:                               [[  L194       ]]
 
 "#;
     let actual_pretty_print_scheduled_llvm =
-        ir_printer::pretty_print_llvm(stop, 1000, &mut parser.nodes);
+        ir_printer::pretty_print_llvm(stop, 1000, &parser.nodes);
     assert_eq!(
         actual_pretty_print_scheduled_llvm,
         expected_pretty_print_scheduled_llvm
