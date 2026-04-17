@@ -9,15 +9,7 @@ use crate::sea_of_nodes::types::Types;
 fn test_jig() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);
-    let mut parser = Parser::new(
-        "\
-int i = 0;
-i=i=1;
-return i;
-                                   //return 3.14;
-",
-        &types,
-    );
+    let mut parser = Parser::new("return 1;", &types);
     let stop = parser.parse().unwrap();
     parser.iterate(stop);
     parser.type_check(stop).unwrap();

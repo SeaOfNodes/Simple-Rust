@@ -169,6 +169,16 @@ return n.i;
 }
 
 #[test]
+fn test_null_ref_4() {
+    test_error_iterate("-null-5/null-5;", "Cannot 'Add' null");
+}
+
+#[test]
+fn test_null_ref_5() {
+    test_error_iterate("return null+42;", "Cannot 'Add' null");
+}
+
+#[test]
 fn test_empty() {
     let arena = DroplessArena::new();
     let types = Types::new(&arena);

@@ -59,6 +59,9 @@ impl Add {
     fn idealize_add(self, sea: &mut Nodes) -> Option<Node> {
         let lhs = self.inputs(sea)[1]?;
         let rhs = self.inputs(sea)[2]?;
+        if rhs.err(sea).is_some() {
+            return None;
+        }
         let t2 = rhs.ty(sea)?;
 
         // Add of 0.  We do not check for (0+x) because this will already

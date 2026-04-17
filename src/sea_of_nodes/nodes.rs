@@ -357,6 +357,8 @@ impl Node {
         };
         match self.downcast(&sea.ops) {
             TypedNode::And(_) => binary_ints("&"),
+            TypedNode::Add(_) => binary_ints(&sea[self].label()),
+            TypedNode::Mul(_) => binary_ints(&sea[self].label()),
             TypedNode::Or(_) => binary_ints("|"),
             TypedNode::Xor(_) => binary_ints("^"),
             TypedNode::Sar(_) => binary_ints(">>"),
