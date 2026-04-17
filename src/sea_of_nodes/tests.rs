@@ -1,3 +1,4 @@
+#![allow(clippy::approx_constant)]
 use crate::datastructures::arena::DroplessArena;
 use crate::sea_of_nodes::nodes::node::Stop;
 use crate::sea_of_nodes::nodes::{Nodes, Op};
