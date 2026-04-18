@@ -658,3 +658,19 @@ pub fn evaluate_with_result<'t>(
     let result = evaluator.evaluate(parameter, loops);
     (evaluator.heap, result)
 }
+
+pub fn evaluate2<'t>(
+    nodes: &Nodes<'t>,
+    graph: impl Into<Node>,
+    parameter: i64,
+    loops: Option<usize>,
+) -> Option<String> {
+    let loops = loops.unwrap_or(1000);
+    let (heap, res) = evaluate_with_result(nodes, graph.into(), parameter, loops);
+
+    match res {
+        EResult::Value(object) => Some(ResultObject { heap, object }.to_string()),
+        EResult::Fallthrough => panic!("fallthrough"),
+        EResult::Timeout => None,
+    }
+}
